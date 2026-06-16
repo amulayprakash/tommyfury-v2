@@ -1,0 +1,41 @@
+# ---- Dependencies ----
+node_modules/
+
+# ---- Build output ----
+dist/
+dist-ssr/
+build/
+*.tsbuildinfo
+
+# ---- Env: ignore local & secret env files; keep .env.example and committed per-env templates ----
+.env
+.env.local
+.env.*.local
+
+# ---- Prisma generated client (regenerated via prisma generate) ----
+**/prisma/generated/
+
+# ---- Logs ----
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ---- Test coverage ----
+coverage/
+
+# ---- OS / Editor ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+dev-down.ps1
+dev-up.ps1

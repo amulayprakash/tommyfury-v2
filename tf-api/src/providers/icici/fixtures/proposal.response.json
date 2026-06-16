@@ -1,0 +1,13 @@
+{
+  "PolicyReferenceId": "epn_4joxtUAXmlKNQR3oF4",
+  "Status": "ISSUED",
+  "PolicyNo": "3005/52846255/00/B00",
+  "StartDate": "2024-08-13T12:49:41.946188",
+  "EndDate": "2025-08-13T23:59:58",
+  "PaymentLink": "https://janus.icicilombard.com/pay/epn_4joxtUAXmlKNQR3oF4",
+  "InspectionId": null,
+  "isKycSuccess": true,
+  "Success": true,
+  "ErrorCode": 0,
+  "ErrorMessage": null
+}

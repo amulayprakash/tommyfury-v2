@@ -1,0 +1,14 @@
+{
+  "PolicyReferenceId": "epn_4joxtUAXmlKNQR3oF4",
+  "Status": "ISSUED",
+  "PolicyNo": "3001/52846255/00/B00",
+  "StartDate": "2024-08-13T12:49:41.946188",
+  "EndDate": "2025-08-13T23:59:58",
+  "PaymentLink": null,
+  "InspectionId": null,
+  "isKycSuccess": true,
+  "ErrorId": null,
+  "Success": true,
+  "StatusCode": 0,
+  "Message": null
+}

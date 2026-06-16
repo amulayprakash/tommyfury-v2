@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Providers ──────────────────────────────────────────────────────────────
+
+model Provider {
+  id           Int      @id @default(autoincrement())
+  slug         String   @unique @db.VarChar(64)
+  displayName  String   @db.VarChar(255)
+  isActive     Boolean  @default(true)
+  capabilities Json     // string[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  quotes       Quote[]
+
+  @@map("providers")
+}
+
+// ─── Quotes ─────────────────────────────────────────────────────────────────
+
+model Quote {
+  id              Int      @id @default(autoincrement())
+  requestId       String   @unique @db.VarChar(64)
+  providerSlug    String   @db.VarChar(64)
+  provider        Provider @relation(fields: [providerSlug], references: [slug])
+  vehicleCategory String   @db.VarChar(32)
+  status          String   @db.VarChar(32) @default("pending")
+
+  // Quote identity
+  quoteNo                String?  @db.VarChar(128)
+  providerTransactionId  String?  @db.VarChar(128)
+  policyType             String   @db.VarChar(32)
+
+  // Lifecycle (populated by proposal / KYC / status)
+  kycId           String?  @db.VarChar(128)
+  policyNumber    String?  @db.VarChar(128)
+  policyStatus    String?  @db.VarChar(32)
+  paymentLink     String?  @db.VarChar(512)
+
+  // Policy holder (populated on full-quote)
+  holderName      String?  @db.VarChar(255)
+  holderEmail     String?  @db.VarChar(255)
+  holderMobile    String?  @db.VarChar(20)
+
+  // Vehicle
+  makeModel       String?  @db.VarChar(255)
+  registrationNo  String?  @db.VarChar(32)
+  engineNumber    String?  @db.VarChar(64)
+  chassisNumber   String?  @db.VarChar(64)
+
+  // Premium (stored as integers in paise to avoid float rounding)
+  idvValue        Int?
+  netPremium      Int?
+  grossPremium    Int?
+
+  // JSON blobs for full audit
+  contractDetails Json?
+  addonPremiums   Json?
+  discounts       Json?
+  rawRequest      Json?
+  rawFullQuote    Json?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([providerSlug])
+  @@index([status])
+  @@index([createdAt])
+  @@index([providerTransactionId])
+  @@map("quotes")
+}
+
+// ─── Masters ─────────────────────────────────────────────────────────────────
+
+model RtoMaster {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique @db.VarChar(16)
+  city        String   @db.VarChar(128)
+  state       String   @db.VarChar(128)
+  stateCode   String   @db.VarChar(8)
+  isActive    Boolean  @default(true)
+
+  providerCodes ProviderRtoCode[]
+
+  @@index([state])
+  @@map("rto_master")
+}
+
+model MmvMaster {
+  id          Int      @id @default(autoincrement())
+  makeId      String   @db.VarChar(32)
+  makeName    String   @db.VarChar(128)
+  modelId     String   @db.VarChar(32)
+  modelName   String   @db.VarChar(128)
+  variantId   String?  @db.VarChar(32)
+  variantName String?  @db.VarChar(128)
+  fuelType    String   @db.VarChar(32)
+  engineCC    Int?
+  category    String   @db.VarChar(32) // fourWheeler | twoWheeler | commercial
+  isActive    Boolean  @default(true)
+
+  providerCodes ProviderMmvCode[]
+
+  @@unique([makeId, modelId, variantId, fuelType])
+  @@index([makeName])
+  @@index([modelName])
+  @@map("mmv_master")
+}
+
+model InsurerMaster {
+  id           Int      @id @default(autoincrement())
+  code         String   @unique @db.VarChar(32)
+  name         String   @db.VarChar(255)
+  shortName    String?  @db.VarChar(64)
+  logoUrl      String?  @db.VarChar(512)
+  isActive     Boolean  @default(true)
+
+  providerCodes ProviderInsurerCode[]
+
+  @@map("insurer_master")
+}
+
+// ─── Provider Code Mappings ──────────────────────────────────────────────────
+
+model ProviderRtoCode {
+  id           Int       @id @default(autoincrement())
+  providerSlug String    @db.VarChar(64)
+  rtoId        Int
+  rto          RtoMaster @relation(fields: [rtoId], references: [id])
+  providerCode String    @db.VarChar(64)
+
+  @@unique([providerSlug, rtoId])
+  @@map("provider_rto_codes")
+}
+
+model ProviderMmvCode {
+  id           Int       @id @default(autoincrement())
+  providerSlug String    @db.VarChar(64)
+  mmvId        Int
+  mmv          MmvMaster @relation(fields: [mmvId], references: [id])
+  providerMakeCode    String?  @db.VarChar(64)
+  providerModelCode   String?  @db.VarChar(64)
+  providerVariantCode String?  @db.VarChar(64)
+
+  @@unique([providerSlug, mmvId])
+  @@map("provider_mmv_codes")
+}
+
+model ProviderInsurerCode {
+  id           Int           @id @default(autoincrement())
+  providerSlug String        @db.VarChar(64)
+  insurerId    Int
+  insurer      InsurerMaster @relation(fields: [insurerId], references: [id])
+  providerCode String        @db.VarChar(64)
+
+  @@unique([providerSlug, insurerId])
+  @@map("provider_insurer_codes")
+}
