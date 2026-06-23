@@ -3,6 +3,8 @@ dist/
 .env
 .env.local
 .env.production
+# Holds live FG UAT secrets — kept local only (.env.example is the committed template).
+.env.development
 *.tsbuildinfo
 prisma/generated/
 coverage/

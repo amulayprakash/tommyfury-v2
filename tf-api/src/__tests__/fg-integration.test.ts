@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach } from "vitest";
 import request from "supertest";
 import { createApp } from "@/app.ts";
 import { registerProvider, clearRegistry } from "@/providers/provider-registry.ts";
-import { MockProvider } from "@/providers/mock/mock.provider.ts";
 import { FgProvider } from "@/providers/fg/fg.provider.ts";
 import type { FgTransport } from "@/providers/fg/http.ts";
 import type { FgConfig } from "@/providers/fg/config.ts";
@@ -82,7 +81,6 @@ const quoteBody = {
 
 beforeEach(() => {
   clearRegistry();
-  registerProvider(new MockProvider());
   registerFg(new FixtureTransport());
 });
 
@@ -179,7 +177,6 @@ describe("FG integration (fixtures)", () => {
       (r) => r.providerSlug,
     );
     expect(slugs).toContain("fg");
-    expect(slugs).toContain("mock");
   });
 
   it("422s an unsupported vehicle category (twoWheeler)", async () => {
@@ -191,7 +188,6 @@ describe("FG integration (fixtures)", () => {
 
   it("surfaces an FG business failure as a 502 provider error", async () => {
     clearRegistry();
-    registerProvider(new MockProvider());
     registerFg(new FixtureTransport({ Client: { Status: "Failed", ErrorMessage: "no quote" } }));
     const res = await request(app).post("/api/v1/fg/motor/quote").send(quoteBody);
     expect(res.status).toBe(502);

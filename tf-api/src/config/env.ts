@@ -15,10 +15,6 @@ const envSchema = z.object({
     .string()
     .default("false")
     .transform((v) => v === "true"),
-  MOCK_PROVIDER_ENABLED: z
-    .string()
-    .default("true")
-    .transform((v) => v === "true"),
 
   // ── ICICI Lombard (credentials env-only, never in DB/code) ──
   ICICI_ENABLED: z

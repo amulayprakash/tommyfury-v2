@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach } from "vitest";
 import request from "supertest";
 import { createApp } from "@/app.ts";
 import { registerProvider, clearRegistry } from "@/providers/provider-registry.ts";
-import { MockProvider } from "@/providers/mock/mock.provider.ts";
 import { IciciProvider } from "@/providers/icici/icici.provider.ts";
 import type { IciciTransport } from "@/providers/icici/http.ts";
 import type { IciciConfig } from "@/providers/icici/config.ts";
@@ -66,7 +65,6 @@ const quoteBody = {
 
 beforeEach(() => {
   clearRegistry();
-  registerProvider(new MockProvider());
   registerIcici(new FixtureTransport());
 });
 
@@ -157,10 +155,8 @@ describe("ICICI integration (fixtures)", () => {
     expect(res.status).toBe(422);
   });
 
-  it("422s an unsupported operation on a provider (mock has no CKYC)", async () => {
-    const res = await request(app)
-      .post("/api/v1/mock/kyc/ckyc")
-      .send({ transactionId: "x", dob: "1990-01-01", panNumber: "ABCDE1234F" });
+  it("422s an unsupported operation on a provider (icici has no inspection)", async () => {
+    const res = await request(app).get("/api/v1/icici/inspection/some-ref/status");
     expect(res.status).toBe(422);
   });
 

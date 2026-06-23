@@ -28,7 +28,7 @@ export const MotorQuoteRequestSchema = z.object({
   idvPercent: z.coerce.number().min(0).max(100).optional(),
 
   // Commercial-vehicle attributes (only meaningful for commercial/newCommercial).
-  // Optional so 4W/2W journeys and existing providers (mock/icici) are unaffected.
+  // Optional so 4W/2W journeys and existing providers (icici) are unaffected.
   commercialSubType: z.enum(["goods", "passenger"]).optional(),
   grossVehicleWeight: z.coerce.number().positive().optional(),
   carryingCapacity: z.coerce.number().positive().optional(),

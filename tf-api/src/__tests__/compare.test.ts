@@ -6,10 +6,8 @@ import {
   clearRegistry,
   getAllProviders,
 } from "@/providers/provider-registry.ts";
-import { MockProvider } from "@/providers/mock/mock.provider.ts";
 import { compareQuotes } from "@/services/compare.service.ts";
 import { MotorQuoteRequestSchema } from "@/contracts/quote-request.ts";
-import { ADDON_METADATA } from "@/contracts/enums.ts";
 import { ICICI_MOTOR_CAPABILITIES } from "@/providers/icici/config.ts";
 import type { InsuranceProvider, ProviderContext } from "@/providers/insurance-provider.ts";
 import type { MotorQuoteRequest } from "@/contracts/quote-request.ts";
@@ -73,15 +71,18 @@ class StubProvider implements InsuranceProvider {
   }
 }
 
-describe("capability matrix", () => {
-  it("mock advertises all plan types and add-ons for every category", () => {
-    const cap = new MockProvider().motorCapabilities.fourWheeler;
-    expect(cap?.policyTypes).toEqual(
-      expect.arrayContaining(["comprehensive", "thirdParty", "standAloneOD"]),
-    );
-    expect(cap?.addons).toEqual(ADDON_METADATA.map((a) => a.key));
-  });
+/** A baseline eligible provider (4W, all plan types) used as the registry default. */
+function baseProvider(): StubProvider {
+  return new StubProvider(
+    "base",
+    "Base Insurer",
+    new Set(["fourWheeler"]),
+    new Set(["quote"]),
+    { fourWheeler: { policyTypes: ["comprehensive", "thirdParty", "standAloneOD"], addons: [] } },
+  );
+}
 
+describe("capability matrix", () => {
   it("ICICI matrix is derived from its product + addon code maps", () => {
     const fw = ICICI_MOTOR_CAPABILITIES.fourWheeler;
     const tw = ICICI_MOTOR_CAPABILITIES.twoWheeler;
@@ -102,13 +103,13 @@ describe("capability matrix", () => {
 describe("compareQuotes service", () => {
   beforeEach(() => {
     clearRegistry();
-    registerProvider(new MockProvider());
+    registerProvider(baseProvider());
   });
 
   it("returns a success result for an eligible provider", async () => {
     const results = await compareQuotes(req);
     expect(results).toHaveLength(1);
-    expect(results[0]!.providerSlug).toBe("mock");
+    expect(results[0]!.providerSlug).toBe("base");
     expect(results[0]!.status).toBe("success");
     expect(results[0]!.quote?.grossPremium).toBeGreaterThan(0);
   });
@@ -123,13 +124,13 @@ describe("compareQuotes service", () => {
         { fourWheeler: { policyTypes: ["thirdParty"], addons: [] } },
       ),
     );
-    // comprehensive → tponly filtered out, only mock remains
+    // comprehensive → tponly filtered out, only the baseline remains
     const comp = await compareQuotes(req);
-    expect(comp.map((r) => r.providerSlug)).toEqual(["mock"]);
+    expect(comp.map((r) => r.providerSlug)).toEqual(["base"]);
 
     // thirdParty → both eligible
     const tp = await compareQuotes({ ...req, selectedPolicy: "thirdParty" });
-    expect(tp.map((r) => r.providerSlug).sort()).toEqual(["mock", "tponly"]);
+    expect(tp.map((r) => r.providerSlug).sort()).toEqual(["base", "tponly"]);
   });
 
   it("honours the providers allow-list", async () => {
@@ -150,13 +151,13 @@ describe("compareQuotes service", () => {
     );
     const results = await compareQuotes(req);
     const bySlug = Object.fromEntries(results.map((r) => [r.providerSlug, r]));
-    expect(bySlug.mock!.status).toBe("success");
+    expect(bySlug.base!.status).toBe("success");
     expect(bySlug.boom!.status).toBe("error");
     expect(bySlug.boom!.error?.message).toContain("upstream exploded");
   });
 
   it("getAllProviders reflects the registry", () => {
-    expect(getAllProviders().map((p) => p.slug)).toContain("mock");
+    expect(getAllProviders().map((p) => p.slug)).toContain("base");
   });
 });
 
@@ -165,14 +166,14 @@ describe("compare + providers endpoints", () => {
 
   beforeEach(() => {
     clearRegistry();
-    registerProvider(new MockProvider());
+    registerProvider(baseProvider());
   });
 
   it("GET /providers exposes the motor capability matrix", async () => {
     const res = await request(app).get("/api/v1/providers");
     expect(res.status).toBe(200);
-    const mock = res.body.providers.find((p: { slug: string }) => p.slug === "mock");
-    expect(mock.motorCapabilities.fourWheeler.policyTypes).toContain("comprehensive");
+    const base = res.body.providers.find((p: { slug: string }) => p.slug === "base");
+    expect(base.motorCapabilities.fourWheeler.policyTypes).toContain("comprehensive");
   });
 
   it("POST /motor/quotes/compare returns per-provider results", async () => {
@@ -180,7 +181,7 @@ describe("compare + providers endpoints", () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("success");
     const results = res.body.response.results as Array<{ providerSlug: string; status: string }>;
-    expect(results.some((r) => r.providerSlug === "mock" && r.status === "success")).toBe(true);
+    expect(results.some((r) => r.providerSlug === "base" && r.status === "success")).toBe(true);
   });
 
   it("422s a malformed compare request", async () => {

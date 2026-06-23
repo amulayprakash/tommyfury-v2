@@ -115,7 +115,9 @@ function normalise(raw: RcRaw, fallbackRcNumber: string): RcDetails {
     vehicleClass: raw.vehicle_class || undefined,
     fuelType: mapFuel(raw.fuel_type),
     color: raw.color || undefined,
-    cubicCapacity: Number.isFinite(cc) ? cc : undefined,
+    // Round to a whole cc — the quote contract requires an integer engineCC, and
+    // some RCs report a fractional capacity (e.g. "97.2" for an HF Deluxe).
+    cubicCapacity: Number.isFinite(cc) ? Math.round(cc as number) : undefined,
     seatCapacity: raw.seat_capacity ? Number.parseInt(raw.seat_capacity, 10) || undefined : undefined,
     manufacturingDate: toYearMonth(raw.manufacturing_date),
     registeredAt: raw.registered_at || undefined,
@@ -141,39 +143,23 @@ function extractRaw(body: unknown): RcRaw | null {
 }
 
 /**
- * Looks up RC details. Tries the third-party regtech API directly (per product
- * decision), and falls back to the Laravel proxy when the browser call fails
- * (e.g. CORS) so the journey keeps working.
+ * Looks up RC details via the third-party regtech API (per product decision).
  */
 export async function lookupRc(rcNumber: string): Promise<RcDetails> {
   const normalised = rcNumber.trim().toUpperCase().replace(/\s+/g, "");
 
-  let raw: RcRaw | null;
-  try {
-    const res = await axios.post(
-      env.VITE_RC_API_URL,
-      { rc_number: normalised },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          AccessToken: env.VITE_RC_API_TOKEN,
-        },
-        timeout: 20_000,
+  const res = await axios.post(
+    env.VITE_RC_API_URL,
+    { rc_number: normalised },
+    {
+      headers: {
+        "Content-Type": "application/json",
+        AccessToken: env.VITE_RC_API_TOKEN,
       },
-    );
-    raw = extractRaw(res.data);
-  } catch {
-    raw = null; // fall through to the Laravel proxy
-  }
-
-  if (!raw) {
-    const form = new FormData();
-    form.append("rc_number", normalised);
-    const res = await axios.post(`${env.VITE_LEGACY_API_URL}/api/rcvalidation`, form, {
       timeout: 20_000,
-    });
-    raw = extractRaw(res.data);
-  }
+    },
+  );
+  const raw = extractRaw(res.data);
 
   if (!raw) {
     throw new Error("We couldn't fetch details for this vehicle number. Please check and retry.");

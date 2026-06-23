@@ -16,14 +16,9 @@ import { mastersRouter } from "@/routes/v1/masters.routes.ts";
 import { providersRouter } from "@/routes/v1/providers.routes.ts";
 
 // Register providers once at startup
-import { registerProvider } from "@/providers/provider-registry.ts";
-import { MockProvider } from "@/providers/mock/mock.provider.ts";
 import { registerIciciProvider } from "@/providers/icici/index.ts";
 import { registerFgProvider } from "@/providers/fg/index.ts";
 
-if (env.MOCK_PROVIDER_ENABLED) {
-  registerProvider(new MockProvider());
-}
 registerIciciProvider();
 registerFgProvider();
 

@@ -15,17 +15,6 @@ const prisma = new PrismaClient();
 async function main() {
   // ── Providers ──
   await prisma.provider.upsert({
-    where: { slug: "mock" },
-    update: {},
-    create: {
-      slug: "mock",
-      displayName: "Mock Insurer (Dev)",
-      isActive: true,
-      capabilities: ["fourWheeler", "twoWheeler", "commercial", "newVehicle", "newCommercial"],
-    },
-  });
-
-  await prisma.provider.upsert({
     where: { slug: "icici" },
     update: { capabilities: ["fourWheeler", "twoWheeler"] },
     create: {
