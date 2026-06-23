@@ -3,6 +3,7 @@ import { prisma, persistenceDisabled } from "@/lib/prisma.ts";
 import { logger } from "@/lib/logger.ts";
 import type { MotorQuoteRequest, MotorFullQuoteRequest } from "@/contracts/quote-request.ts";
 import type { CanonicalQuoteResult } from "@/contracts/quote-result.ts";
+import type { PolicyIssuanceRequest, PolicyIssuanceResult } from "@/contracts/policy.ts";
 
 /** Strips `undefined` so values are valid Prisma JSON. */
 function toJson(value: unknown): Prisma.InputJsonValue {
@@ -77,6 +78,7 @@ export async function recordProposal(
       policyNumber: result.policyNumber ?? null,
       policyStatus: (result.contractDetails?.status as string | undefined) ?? null,
       paymentLink: result.paymentUrl ?? null,
+      clientId: (result.contractDetails?.clientId as string | undefined) ?? null,
       addonPremiums: toJson(result.addonPremiums),
       discounts: toJson(result.discounts),
       contractDetails: toJson(result.contractDetails),
@@ -90,6 +92,15 @@ export async function recordProposal(
   } catch (err) {
     logger.error({ err, providerSlug, requestId: result.requestId }, "Failed to persist proposal");
   }
+}
+
+/** Reads the persisted proposal row keyed by the FG QuotationNo (for issuance on callback). */
+export async function findQuoteByTransactionId(providerSlug: string, transactionId: string) {
+  if (persistenceDisabled) return null;
+  return prisma.quote.findFirst({
+    where: { providerSlug, providerTransactionId: transactionId },
+    orderBy: { createdAt: "desc" },
+  });
 }
 
 export async function attachKyc(
@@ -122,5 +133,36 @@ export async function updatePolicyStatus(
     });
   } catch (err) {
     logger.error({ err, providerSlug, transactionId }, "Failed to update policy status");
+  }
+}
+
+/**
+ * Records the issuance outcome against the proposal row keyed by the FG
+ * QuotationNo (providerTransactionId). Persists the real PolicyNo, ApplicationNo,
+ * ReceiptNo and the payment receipt that produced them.
+ */
+export async function recordIssuance(
+  providerSlug: string,
+  req: PolicyIssuanceRequest,
+  result: PolicyIssuanceResult,
+): Promise<void> {
+  if (persistenceDisabled) return;
+  try {
+    await prisma.quote.updateMany({
+      where: { providerSlug, providerTransactionId: req.quoteNo },
+      data: {
+        status: result.policyNumber ? "issued" : "pending",
+        policyStatus: result.status,
+        ...(result.policyNumber ? { policyNumber: result.policyNumber } : {}),
+        applicationNo: result.applicationNo ?? null,
+        receiptNo: result.receiptNo ?? null,
+        clientId: result.clientId ?? req.clientId,
+        paymentTranKey: req.receipt.uniqueTranKey,
+        paymentRefNo: req.receipt.tranRefNo,
+        pgType: req.receipt.pgType,
+      },
+    });
+  } catch (err) {
+    logger.error({ err, providerSlug, quoteNo: req.quoteNo }, "Failed to persist issuance");
   }
 }

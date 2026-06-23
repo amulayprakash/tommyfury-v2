@@ -7,8 +7,43 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useMmvSearch } from "../api/hooks";
+import { COMMERCIAL_SUBTYPE_LABELS, type CommercialSubType } from "../api/types";
 import { WizardSteps } from "../components/wizard-steps";
 import { useVehicleQuoteStore, type ResolvedVehicle } from "../vehicle-quote-store";
+
+const tokenize = (s: string): string[] =>
+  s.toUpperCase().replace(/[^A-Z0-9 ]/g, " ").split(/\s+/).filter((t) => t.length > 1);
+
+/**
+ * Picks the master variant that best matches the RC: same fuel, closest cubic
+ * capacity, and the most variant-name token overlap with the RC's model string
+ * (e.g. "Grand I10 Magna AT" → prefers the AT Magna variant). Falls back to 0.
+ */
+function pickBestVariant(
+  variants: { fuelType: string; engineCC?: number | null; variantName?: string | null }[],
+  rc: { fuelType?: string; cubicCapacity?: number; makerModel?: string } | null,
+): number {
+  if (variants.length === 0) return 0;
+  const rcTokens = tokenize(rc?.makerModel ?? "");
+  let bestIdx = 0;
+  let bestScore = -1;
+  variants.forEach((v, i) => {
+    let score = 0;
+    if (rc?.fuelType && v.fuelType === rc.fuelType) score += 3;
+    if (rc?.cubicCapacity && v.engineCC) {
+      const d = Math.abs(v.engineCC - rc.cubicCapacity);
+      if (d === 0) score += 3;
+      else if (d <= 50) score += 1;
+    }
+    const vTokens = new Set(tokenize(v.variantName ?? ""));
+    score += rcTokens.filter((t) => vTokens.has(t)).length;
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = i;
+    }
+  });
+  return bestIdx;
+}
 
 function DetailRow({ label, value }: { label: string; value?: string }) {
   return (
@@ -27,14 +62,26 @@ export function VehicleDetailsPage() {
   const setVehicle = useVehicleQuoteStore((s) => s.setVehicle);
 
   const make = rc?.makerDescription?.split(/\s+/)[0];
+  // RC model is the full variant string (e.g. "Bolt Xt 1.2Rt") which won't match
+  // the master's model name ("BOLT") — search by the leading model word instead.
+  const modelTerm = rc?.makerModel?.trim().split(/\s+/)[0];
   const mmv = useMmvSearch(
-    { make, model: rc?.makerModel, category: category ?? undefined },
+    { make, model: modelTerm, category: category ?? undefined },
     Boolean(rc && category),
   );
 
-  const variants = mmv.data ?? [];
-  const [variantIdx, setVariantIdx] = useState(0);
+  const variants = useMemo(() => mmv.data ?? [], [mmv.data]);
+  // Auto-select the closest variant once results load; user can still override.
+  const bestVariantIdx = useMemo(() => pickBestVariant(variants, rc), [variants, rc]);
+  const [variantOverride, setVariantOverride] = useState<number | null>(null);
+  const variantIdx = variantOverride ?? bestVariantIdx;
   const [regDate, setRegDate] = useState(rc?.registrationDate ?? "");
+
+  // Commercial-only inputs (RC lookup can't supply these).
+  const isCommercial = category === "commercial";
+  const [subType, setSubType] = useState<CommercialSubType>("goods");
+  const [grossWeight, setGrossWeight] = useState("");
+  const [seating, setSeating] = useState(rc?.seatCapacity ? String(rc.seatCapacity) : "");
 
   const rtoCode = useMemo(
     () => rc?.rtoCode || rc?.rcNumber.slice(0, 4) || "",
@@ -63,8 +110,10 @@ export function VehicleDetailsPage() {
       modelName: chosen?.modelName ?? rc.makerModel ?? "Unknown",
       variantId: chosen?.variantId ?? undefined,
       variantName: chosen?.variantName ?? undefined,
-      fuelType: rc.fuelType,
+      // Use the chosen master variant's fuel so it matches the resolved MMV row.
+      fuelType: (chosen?.fuelType as ResolvedVehicle["fuelType"]) ?? rc.fuelType,
       engineCC: chosen?.engineCC ?? rc.cubicCapacity ?? undefined,
+      seatingCapacity: seating ? Number(seating) : (rc.seatCapacity ?? undefined),
       rtoCode,
       registrationNumber: rc.rcNumber,
       registrationDate: regDate,
@@ -78,6 +127,12 @@ export function VehicleDetailsPage() {
       previousPolicyNumber: rc.previousPolicyNumber,
       previousPolicyExpiryDate: rc.previousPolicyExpiryDate,
       isPreviousPolicyExpired: rc.isPreviousPolicyExpired,
+      ...(isCommercial
+        ? {
+            commercialSubType: subType,
+            grossVehicleWeight: grossWeight ? Number(grossWeight) : undefined,
+          }
+        : {}),
     };
     setVehicle(vehicle);
     void navigate(ROUTES.vehicle.quotes);
@@ -90,7 +145,15 @@ export function VehicleDetailsPage() {
       <WizardSteps current={0} />
       <Card className="mx-auto max-w-xl">
         <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Your {category === "twoWheeler" ? "two wheeler" : "car"} details</CardTitle>
+          <CardTitle>
+            Your{" "}
+            {category === "twoWheeler"
+              ? "two wheeler"
+              : category === "commercial"
+                ? "commercial vehicle"
+                : "car"}{" "}
+            details
+          </CardTitle>
           <Button asChild variant="ghost" size="sm">
             <Link to={ROUTES.vehicle.start}>
               <Pencil className="size-3.5" /> Edit
@@ -114,7 +177,7 @@ export function VehicleDetailsPage() {
                 <span className="text-sm font-medium">Confirm variant</span>
                 <select
                   value={variantIdx}
-                  onChange={(e) => setVariantIdx(Number(e.target.value))}
+                  onChange={(e) => setVariantOverride(Number(e.target.value))}
                   className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {variants.map((v, i) => (
@@ -132,6 +195,47 @@ export function VehicleDetailsPage() {
                 <span className="text-sm font-medium">Registration date</span>
                 <Input type="date" value={regDate} onChange={(e) => setRegDate(e.target.value)} />
               </label>
+            ) : null}
+
+            {isCommercial ? (
+              <>
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium">Vehicle type</span>
+                  <select
+                    value={subType}
+                    onChange={(e) => setSubType(e.target.value as CommercialSubType)}
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {Object.entries(COMMERCIAL_SUBTYPE_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium">Gross weight (kg)</span>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      value={grossWeight}
+                      onChange={(e) => setGrossWeight(e.target.value)}
+                      placeholder="e.g. 7500"
+                    />
+                  </label>
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium">Seating capacity</span>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      value={seating}
+                      onChange={(e) => setSeating(e.target.value)}
+                      placeholder="e.g. 2"
+                    />
+                  </label>
+                </div>
+              </>
             ) : null}
           </div>
 

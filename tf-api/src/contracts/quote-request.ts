@@ -27,6 +27,12 @@ export const MotorQuoteRequestSchema = z.object({
   idvValue: z.coerce.number().nonnegative().optional(),
   idvPercent: z.coerce.number().min(0).max(100).optional(),
 
+  // Commercial-vehicle attributes (only meaningful for commercial/newCommercial).
+  // Optional so 4W/2W journeys and existing providers (mock/icici) are unaffected.
+  commercialSubType: z.enum(["goods", "passenger"]).optional(),
+  grossVehicleWeight: z.coerce.number().positive().optional(),
+  carryingCapacity: z.coerce.number().positive().optional(),
+
   // Registration
   rtoCode: z.string().min(1),
   registrationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD"),
@@ -37,9 +43,15 @@ export const MotorQuoteRequestSchema = z.object({
   previousPolicyNumber: z.string().optional(),
   previousInsurerId: z.string().optional(),
   previousInsurerName: z.string().optional(),
+  previousPolicyStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   previousPolicyExpiryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   isPreviousPolicyExpired: z.boolean().default(false),
   previousPolicyType: PolicyTypeSchema.optional(),
+
+  // Previous third-party policy details (required by FG for standalone OD).
+  previousTpPolicyNumber: z.string().optional(),
+  previousTpStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  previousTpExpiryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 
   // NCB
   claimInPreviousPolicy: z.boolean().default(false),
@@ -60,6 +72,11 @@ export const MotorQuoteRequestSchema = z.object({
   paOwner: z.boolean().default(true),
   paUnnamedPassenger: z.boolean().default(false),
   legalLiabilityPaidDriver: z.boolean().default(false),
+
+  // Provider-specific add-on cover codes chosen from a vendor's own catalog
+  // (e.g. FG's master "Add On Covers"). Passed through verbatim to that vendor;
+  // providers that use the canonical boolean flags above simply ignore this.
+  providerAddonCodes: z.array(z.string().min(1)).optional(),
 });
 
 export type MotorQuoteRequest = z.infer<typeof MotorQuoteRequestSchema>;

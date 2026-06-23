@@ -19,11 +19,13 @@ import { providersRouter } from "@/routes/v1/providers.routes.ts";
 import { registerProvider } from "@/providers/provider-registry.ts";
 import { MockProvider } from "@/providers/mock/mock.provider.ts";
 import { registerIciciProvider } from "@/providers/icici/index.ts";
+import { registerFgProvider } from "@/providers/fg/index.ts";
 
 if (env.MOCK_PROVIDER_ENABLED) {
   registerProvider(new MockProvider());
 }
 registerIciciProvider();
+registerFgProvider();
 
 export function createApp(): express.Application {
   const app = express();
@@ -36,7 +38,7 @@ export function createApp(): express.Application {
     cors({
       origin: env.ALLOWED_ORIGINS,
       methods: ["GET", "POST", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization", "X-Request-Id"],
+      allowedHeaders: ["Content-Type", "Authorization", "X-Request-Id", "X-Signup-Id"],
       credentials: true,
     }),
   );

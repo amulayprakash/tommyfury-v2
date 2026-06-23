@@ -1,0 +1,46 @@
+{
+  "Client": {
+    "Status": "Successful",
+    "ClientId": "59181900",
+    "QuotationNo": "0000621254",
+    "ErrorMessage": ""
+  },
+  "Receipt": {
+    "Status": "Successful",
+    "ReceiptNo": "",
+    "ErrorMessage": ""
+  },
+  "Policy": {
+    "Status": "Successful",
+    "PolicyNo": "",
+    "ErrorMessage": "",
+    "NewDataSet": {
+      "Table": [{ "LdrErrLvl": "0", "PolNo": "Successful" }],
+      "Table1": [
+        { "RskNo": "1", "Code": "ZCETR", "Description": "Zero Dep+Con+Eng+Tyre+RTI", "Type": "OD", "BOValue": "3658.33", "DBValue": "0" },
+        { "RskNo": "1", "Code": "OD", "Description": "Less: Total Special Discount", "Type": "OD", "BOValue": "11086.39", "DBValue": "0" },
+        { "RskNo": "1", "Code": "OD", "Description": "Total Basic OD Premium", "Type": "OD", "BOValue": "7390.93", "DBValue": "0" },
+        { "RskNo": "1", "Code": "NEA", "Description": "Total Non-Electrical Accessories Premium (NEA)", "Type": "OD", "BOValue": "328.3", "DBValue": "0" },
+        { "RskNo": "1", "Code": "IMT24", "Description": "Total Electrical Accessories Premium (IMT24)", "Type": "OD", "BOValue": "400", "DBValue": "0" },
+        { "RskNo": "1", "Code": "CNG", "Description": "Total CNG Kit Fittings Premium (IMT25)", "Type": "OD", "BOValue": "400", "DBValue": "0" },
+        { "RskNo": "1", "Code": "STNCB", "Description": "Premium for Protection of NCB(CV15)", "Type": "OD", "BOValue": "900.51", "DBValue": "0" },
+        { "RskNo": "1", "Code": "STINC", "Description": "Premium for Inconvenience Allowance(CV25)", "Type": "OD", "BOValue": "3400", "DBValue": "0" },
+        { "RskNo": "1", "Code": "TOTALADDON", "Description": "Total ADDON Premium", "Type": "OD", "BOValue": "7958.84", "DBValue": "0" },
+        { "RskNo": "1", "Code": "Gross Premium", "Description": "Gross Premium", "Type": "OD", "BOValue": "16478.06", "DBValue": "0" },
+        { "RskNo": "1", "Code": "ServTax", "Description": "ServTax", "Type": "OD", "BOValue": "2966.0508", "DBValue": "0" },
+        { "RskNo": "1", "Code": "TP", "Description": "Total Basic TP  Premium (TP)", "Type": "TP", "BOValue": "10640.01", "DBValue": "0" },
+        { "RskNo": "1", "Code": "CNG", "Description": "Total CNG Kit Fittings Premium (IMT25)", "Type": "TP", "BOValue": "180", "DBValue": "0" },
+        { "RskNo": "1", "Code": "CPA", "Description": "CPA", "Type": "TP", "BOValue": "890", "DBValue": "0" },
+        { "RskNo": "1", "Code": "IMT16", "Description": "Add: Total Unnamed Passenger PA Premium (IMT16)", "Type": "TP", "BOValue": "1500", "DBValue": "0" },
+        { "RskNo": "1", "Code": "IMT29", "Description": "Add: Total LL for employees other than driver and cleaner Premium (IMT29)", "Type": "TP", "BOValue": "150", "DBValue": "0" },
+        { "RskNo": "1", "Code": "IMT28", "Description": "Add: Total LL for paid driver and / or cleaner Premium (IMT28)", "Type": "TP", "BOValue": "150", "DBValue": "0" },
+        { "RskNo": "1", "Code": "Gross Premium", "Description": "Gross Premium", "Type": "TP", "BOValue": "13509.99", "DBValue": "0" },
+        { "RskNo": "1", "Code": "ServTax", "Description": "ServTax", "Type": "TP", "BOValue": "2431.7982", "DBValue": "0" },
+        { "RskNo": "1", "Code": "DISCPERC", "Description": "DISCPERC", "Type": "OD", "BOValue": "60", "DBValue": "0" }
+      ]
+    },
+    "VehicleIDV": "562,818",
+    "AppliedDiscount": "",
+    "ProductUINNo": ""
+  }
+}

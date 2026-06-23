@@ -6,9 +6,12 @@ import {
   completeCkyc,
   fetchFullQuote,
   getPolicyStatus,
+  getProviderAddons,
   getProviders,
+  initiatePayment,
   listInsurers,
   searchMmv,
+  type PaymentInitiateBody,
 } from "./vehicle-api";
 import type { CkycRequest, CompareQuotesRequest, MotorFullQuoteRequest } from "./types";
 
@@ -38,6 +41,21 @@ export function useMmvSearch(
 
 export function useInsurers() {
   return useQuery({ queryKey: ["insurers"], queryFn: listInsurers, staleTime: 10 * 60_000 });
+}
+
+/** A selected provider's own add-on catalog (enabled once a provider is chosen). */
+export function useProviderAddons(
+  slug: string | null,
+  category: string,
+  fuel: string,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: ["provider-addons", slug, category, fuel],
+    queryFn: () => getProviderAddons(slug as string, { category, fuel }),
+    enabled: enabled && Boolean(slug),
+    staleTime: 5 * 60_000,
+  });
 }
 
 export function useCompareQuotes() {
@@ -72,5 +90,12 @@ export function usePolicyStatus() {
   return useMutation({
     mutationFn: ({ provider, transactionId }: { provider: string; transactionId: string }) =>
       getPolicyStatus(provider, transactionId),
+  });
+}
+
+export function useInitiatePayment() {
+  return useMutation({
+    mutationFn: ({ provider, body }: { provider: string; body: PaymentInitiateBody }) =>
+      initiatePayment(provider, body),
   });
 }

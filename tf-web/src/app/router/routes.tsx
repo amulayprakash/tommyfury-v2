@@ -43,6 +43,11 @@ const VehicleKycPage = lazy(() =>
 const VehiclePaymentPage = lazy(() =>
   import("@/features/vehicle/pages/payment-page").then((m) => ({ default: m.PaymentPage })),
 );
+const VehiclePolicySuccessPage = lazy(() =>
+  import("@/features/vehicle/pages/policy-success-page").then((m) => ({
+    default: m.PolicySuccessPage,
+  })),
+);
 
 /** Shorthand for a legacy route whose flow is rebuilt in a later phase. */
 function placeholder(path: string, title: string, vertical?: string): RouteObject {
@@ -132,8 +137,8 @@ export const routes: RouteObject[] = [
           placeholder(ROUTES.vehicle.newQuotes, "Compare New Vehicle Quotes", VEHICLE),
           placeholder(ROUTES.vehicle.newCreateQuote, "New Vehicle Proposal", VEHICLE),
           placeholder(ROUTES.vehicle.newKyc, "New Vehicle KYC", VEHICLE),
-          // New commercial journey
-          placeholder(ROUTES.vehicle.newCommercial, "Commercial Vehicle Insurance", VEHICLE),
+          // Commercial journey — shares the confirm/quotes/proposal steps below.
+          { path: ROUTES.vehicle.newCommercial, element: <VehicleNumberPage category="commercial" /> },
           placeholder(ROUTES.vehicle.newCommercialDetails, "Commercial Vehicle Details", VEHICLE),
           placeholder(ROUTES.vehicle.newCommercialQuotes, "Compare Commercial Quotes", VEHICLE),
           placeholder(ROUTES.vehicle.newCommercialCreateQuote, "Commercial Proposal", VEHICLE),
@@ -200,7 +205,7 @@ export const routes: RouteObject[] = [
           placeholder(ROUTES.checkout.paymentSuccess, "Payment Successful", CHECKOUT),
           placeholder(ROUTES.checkout.paymentSummary, "Payment Summary", CHECKOUT),
           placeholder(ROUTES.checkout.paymentDone, "Payment Complete", CHECKOUT),
-          placeholder(ROUTES.checkout.insurancePaymentSuccess, "Payment Successful", CHECKOUT),
+          { path: ROUTES.checkout.insurancePaymentSuccess, element: <VehiclePolicySuccessPage /> },
           placeholder(ROUTES.checkout.hdfcSuccess, "Payment Successful", CHECKOUT),
           placeholder(ROUTES.checkout.hdfcFailure, "Payment Failed", CHECKOUT),
           placeholder(ROUTES.checkout.bajajPaymentSuccess, "Payment Successful", CHECKOUT),

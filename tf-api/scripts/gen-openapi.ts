@@ -26,8 +26,18 @@ const { ProvidersResponseSchema, CompareResponseDataSchema } = await import(
 const { CkycRequestObjectSchema, KycResultSchema, OvdResultSchema } = await import(
   "@/contracts/kyc.ts"
 );
-const { PolicyStatusRequestSchema, PolicyStatusResultSchema, CertificateResultSchema } =
-  await import("@/contracts/policy.ts");
+const {
+  PolicyStatusRequestSchema,
+  PolicyStatusResultSchema,
+  CertificateResultSchema,
+  PolicyIssuanceRequestSchema,
+  PolicyIssuanceResultSchema,
+  PaymentInitiateRequestSchema,
+} = await import("@/contracts/policy.ts");
+const { RenewalQuoteRequestSchema, RenewalCreatePolicyRequestSchema } = await import(
+  "@/contracts/renewal.ts"
+);
+const { InspectionRequestSchema, InspectionResultSchema } = await import("@/contracts/inspection.ts");
 
 const registry = new OpenAPIRegistry();
 
@@ -43,6 +53,13 @@ registry.register("OvdResult", OvdResultSchema);
 registry.register("PolicyStatusRequest", PolicyStatusRequestSchema);
 registry.register("PolicyStatusResult", PolicyStatusResultSchema);
 registry.register("CertificateResult", CertificateResultSchema);
+registry.register("PolicyIssuanceRequest", PolicyIssuanceRequestSchema);
+registry.register("PolicyIssuanceResult", PolicyIssuanceResultSchema);
+registry.register("PaymentInitiateRequest", PaymentInitiateRequestSchema);
+registry.register("RenewalQuoteRequest", RenewalQuoteRequestSchema);
+registry.register("RenewalCreatePolicyRequest", RenewalCreatePolicyRequestSchema);
+registry.register("InspectionRequest", InspectionRequestSchema);
+registry.register("InspectionResult", InspectionResultSchema);
 
 const providerParam = z.object({ provider: z.string().openapi({ example: "icici" }) });
 
@@ -167,6 +184,85 @@ registry.registerPath({
   },
   responses: {
     200: { description: "COI", content: { "application/json": { schema: CertificateResultSchema } } },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/v1/{provider}/policy/issue",
+  summary: "Issue the policy — bind payment to the proposal (FG PolicyIssuance)",
+  request: {
+    params: providerParam,
+    body: { content: { "application/json": { schema: PolicyIssuanceRequestSchema } } },
+  },
+  responses: {
+    200: { description: "Issuance result", content: { "application/json": { schema: PolicyIssuanceResultSchema } } },
+    422: { description: "Validation / unsupported operation" },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/v1/{provider}/payment/initiate",
+  summary: "Build the checksum-signed payment-gateway form",
+  request: {
+    params: providerParam,
+    body: { content: { "application/json": { schema: PaymentInitiateRequestSchema } } },
+  },
+  responses: {
+    200: { description: "Signed gateway form (url + fields)" },
+    501: { description: "Provider has no payment integration" },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/v1/{provider}/motor/renewal/quote",
+  summary: "Renewal quote — price an existing policy (FG motorRenewal)",
+  request: {
+    params: providerParam,
+    body: { content: { "application/json": { schema: RenewalQuoteRequestSchema } } },
+  },
+  responses: {
+    200: { description: "Renewal quote", content: { "application/json": { schema: CanonicalQuoteResultSchema } } },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/v1/{provider}/motor/renewal/create",
+  summary: "Renewal create — issue the renewed policy with the payment receipt",
+  request: {
+    params: providerParam,
+    body: { content: { "application/json": { schema: RenewalCreatePolicyRequestSchema } } },
+  },
+  responses: {
+    200: { description: "Issuance result", content: { "application/json": { schema: PolicyIssuanceResultSchema } } },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/v1/{provider}/inspection",
+  summary: "Create a break-in / pre-inspection request",
+  request: {
+    params: providerParam,
+    body: { content: { "application/json": { schema: InspectionRequestSchema } } },
+  },
+  responses: {
+    200: { description: "Inspection created", content: { "application/json": { schema: InspectionResultSchema } } },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/v1/{provider}/inspection/{refId}/status",
+  summary: "Poll a break-in inspection's status",
+  request: {
+    params: z.object({ provider: z.string(), refId: z.string() }),
+  },
+  responses: {
+    200: { description: "Inspection status", content: { "application/json": { schema: InspectionResultSchema } } },
   },
 });
 

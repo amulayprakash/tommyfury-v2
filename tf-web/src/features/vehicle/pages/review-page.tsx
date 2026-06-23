@@ -1,12 +1,10 @@
 import { ArrowRight, Loader2, ShieldCheck } from "lucide-react";
-import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 
 import { ROUTES } from "@/app/router/paths";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { useFullQuote } from "../api/hooks";
 import type { MotorFullQuoteRequest } from "../api/types";
 import { PremiumBreakdown } from "../components/premium-breakdown";
@@ -17,9 +15,8 @@ import { buildQuoteRequest, useVehicleQuoteStore } from "../vehicle-quote-store"
 export function ReviewPage() {
   const navigate = useNavigate();
   const store = useVehicleQuoteStore();
-  const { vehicle, selected, proposal } = store;
+  const { vehicle, selected, proposal, panNumber, ckyc, kycRefId } = store;
   const fullQuote = useFullQuote();
-  const [pan, setPan] = useState(store.panNumber ?? "");
 
   if (!vehicle || !selected || !proposal) {
     return (
@@ -32,12 +29,12 @@ export function ReviewPage() {
     );
   }
 
-  const panValid = PAN_REGEX.test(pan.trim().toUpperCase());
+  const panUpper = (panNumber ?? "").trim().toUpperCase();
+  const panValid = PAN_REGEX.test(panUpper);
 
   const onProceed = () => {
     const base = buildQuoteRequest(store);
     if (!base) return;
-    const panUpper = pan.trim().toUpperCase();
 
     const req: MotorFullQuoteRequest = {
       ...base,
@@ -67,6 +64,9 @@ export function ReviewPage() {
       nomineeName: proposal.nomineeName,
       nomineeRelation: proposal.nomineeRelation,
       nomineeAge: proposal.nomineeAge ? Number(proposal.nomineeAge) : undefined,
+      // CKYC captured before this step flows into CreateProposal (Client block).
+      ...(ckyc ? { ckyc } : {}),
+      ...(kycRefId ? { kycRefId } : {}),
       isProposalOnly: false,
       isVehicleUnderLoan: proposal.financeType !== "none",
       successUrl: `${window.location.origin}${ROUTES.checkout.insurancePaymentSuccess}`,
@@ -77,9 +77,8 @@ export function ReviewPage() {
       { provider: selected.providerSlug, req },
       {
         onSuccess: (quote) => {
-          store.setPan(panUpper);
           store.setFullQuote(quote.transactionId ?? quote.quoteNo ?? req.quoteId, quote);
-          void navigate(ROUTES.vehicle.kycStatus);
+          void navigate(ROUTES.vehicle.paymentPage);
         },
         onError: (err) =>
           toast.error(err instanceof Error ? err.message : "Could not generate the full quote."),
@@ -110,25 +109,17 @@ export function ReviewPage() {
             <p className="text-sm text-muted-foreground">
               {proposal.firstName} {proposal.lastName} · {proposal.mobile}
             </p>
-            <label className="block space-y-2">
-              <span className="text-sm font-medium">PAN card number</span>
-              <Input
-                value={pan}
-                onChange={(e) => setPan(e.target.value.toUpperCase())}
-                placeholder="ABCDE1234F"
-                maxLength={10}
-                className="uppercase"
-              />
-              {pan && !panValid ? (
-                <span className="text-xs text-destructive">Enter a valid PAN (ABCDE1234F).</span>
-              ) : null}
-            </label>
+            {panUpper ? (
+              <p className="text-sm text-muted-foreground">
+                PAN: <span className="font-medium text-foreground">{panUpper}</span>
+              </p>
+            ) : null}
 
             <Button
               size="lg"
               className="w-full"
               onClick={onProceed}
-              disabled={fullQuote.isPending || !panValid}
+              disabled={fullQuote.isPending}
             >
               {fullQuote.isPending ? (
                 <>
@@ -136,7 +127,7 @@ export function ReviewPage() {
                 </>
               ) : (
                 <>
-                  <ShieldCheck /> Proceed to KYC <ArrowRight />
+                  <ShieldCheck /> Confirm &amp; proceed to payment <ArrowRight />
                 </>
               )}
             </Button>

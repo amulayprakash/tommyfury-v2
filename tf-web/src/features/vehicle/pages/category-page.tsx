@@ -1,4 +1,4 @@
-import { Bike, Car, Loader2, Search } from "lucide-react";
+import { Bike, Car, Loader2, Search, Truck } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -23,11 +23,18 @@ export function CategoryPage({ category }: CategoryPageProps) {
   const navigate = useNavigate();
   const setRc = useVehicleQuoteStore((s) => s.setRc);
   const setCategory = useVehicleQuoteStore((s) => s.setCategory);
+  const reset = useVehicleQuoteStore((s) => s.reset);
   const rcLookup = useRcLookup();
 
   const [rcNumber, setRcNumber] = useState("");
+  const isCommercial = category === "commercial";
   const isCar = category === "fourWheeler";
-  const Icon = isCar ? Car : Bike;
+  const Icon = isCommercial ? Truck : isCar ? Car : Bike;
+  const title = isCommercial
+    ? "Commercial Vehicle Insurance"
+    : isCar
+      ? "Car Insurance"
+      : "Two Wheeler Insurance";
   const normalized = rcNumber.trim().toUpperCase().replace(/\s+/g, "");
 
   const onSubmit = (e: React.FormEvent) => {
@@ -38,8 +45,11 @@ export function CategoryPage({ category }: CategoryPageProps) {
     }
     rcLookup.mutate(normalized, {
       onSuccess: (rc) => {
-        // Trust the detected category when the RC tells us something different.
-        setCategory(rc.category ?? category);
+        // Clear any prior journey state so a new search starts fresh.
+        reset();
+        // RC lookup can't detect commercial vehicles, so honour an explicit
+        // commercial choice; otherwise trust the detected 2W/4W category.
+        setCategory(isCommercial ? "commercial" : (rc.category ?? category));
         setRc(rc);
         void navigate(ROUTES.vehicle.confirmDetails);
       },
@@ -56,7 +66,7 @@ export function CategoryPage({ category }: CategoryPageProps) {
           <div className="mb-2 flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
             <Icon className="size-6" />
           </div>
-          <CardTitle>{isCar ? "Car Insurance" : "Two Wheeler Insurance"}</CardTitle>
+          <CardTitle>{title}</CardTitle>
           <CardDescription>
             Enter your vehicle number and we’ll fetch the registration details.
           </CardDescription>

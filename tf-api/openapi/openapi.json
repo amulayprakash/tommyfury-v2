@@ -94,6 +94,23 @@
             "minimum": 0,
             "maximum": 100
           },
+          "commercialSubType": {
+            "type": "string",
+            "enum": [
+              "goods",
+              "passenger"
+            ]
+          },
+          "grossVehicleWeight": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "carryingCapacity": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
           "rtoCode": {
             "type": "string",
             "minLength": 1
@@ -119,6 +136,10 @@
           "previousInsurerName": {
             "type": "string"
           },
+          "previousPolicyStartDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
           "previousPolicyExpiryDate": {
             "type": "string",
             "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
@@ -134,6 +155,17 @@
               "thirdParty",
               "standAloneOD"
             ]
+          },
+          "previousTpPolicyNumber": {
+            "type": "string"
+          },
+          "previousTpStartDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "previousTpExpiryDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           },
           "claimInPreviousPolicy": {
             "type": "boolean",
@@ -193,6 +225,13 @@
           "legalLiabilityPaidDriver": {
             "type": "boolean",
             "default": false
+          },
+          "providerAddonCodes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         },
         "required": [
@@ -291,6 +330,23 @@
             "minimum": 0,
             "maximum": 100
           },
+          "commercialSubType": {
+            "type": "string",
+            "enum": [
+              "goods",
+              "passenger"
+            ]
+          },
+          "grossVehicleWeight": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "carryingCapacity": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
           "rtoCode": {
             "type": "string",
             "minLength": 1
@@ -316,6 +372,10 @@
           "previousInsurerName": {
             "type": "string"
           },
+          "previousPolicyStartDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
           "previousPolicyExpiryDate": {
             "type": "string",
             "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
@@ -331,6 +391,17 @@
               "thirdParty",
               "standAloneOD"
             ]
+          },
+          "previousTpPolicyNumber": {
+            "type": "string"
+          },
+          "previousTpStartDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "previousTpExpiryDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           },
           "claimInPreviousPolicy": {
             "type": "boolean",
@@ -390,6 +461,13 @@
           "legalLiabilityPaidDriver": {
             "type": "boolean",
             "default": false
+          },
+          "providerAddonCodes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
           },
           "quoteId": {
             "type": "string",
@@ -698,6 +776,23 @@
             "minimum": 0,
             "maximum": 100
           },
+          "commercialSubType": {
+            "type": "string",
+            "enum": [
+              "goods",
+              "passenger"
+            ]
+          },
+          "grossVehicleWeight": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "carryingCapacity": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
           "rtoCode": {
             "type": "string",
             "minLength": 1
@@ -723,6 +818,10 @@
           "previousInsurerName": {
             "type": "string"
           },
+          "previousPolicyStartDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
           "previousPolicyExpiryDate": {
             "type": "string",
             "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
@@ -738,6 +837,17 @@
               "thirdParty",
               "standAloneOD"
             ]
+          },
+          "previousTpPolicyNumber": {
+            "type": "string"
+          },
+          "previousTpStartDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "previousTpExpiryDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           },
           "claimInPreviousPolicy": {
             "type": "boolean",
@@ -797,6 +907,13 @@
           "legalLiabilityPaidDriver": {
             "type": "boolean",
             "default": false
+          },
+          "providerAddonCodes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
           },
           "providers": {
             "type": "array",
@@ -1086,6 +1203,9 @@
                       "proposal",
                       "ckyc",
                       "ovd",
+                      "issuance",
+                      "renewal",
+                      "inspection",
                       "policyStatus",
                       "coi"
                     ]
@@ -1619,6 +1739,17 @@
               "sme"
             ],
             "default": "motor"
+          },
+          "fullName": {
+            "type": "string"
+          },
+          "mobile": {
+            "type": "string",
+            "pattern": "^[6-9]\\d{9}$"
+          },
+          "redirectUrl": {
+            "type": "string",
+            "format": "uri"
           }
         },
         "required": [
@@ -1658,6 +1789,21 @@
           },
           "displayMessage": {
             "type": "string"
+          },
+          "ckycNumber": {
+            "type": "string"
+          },
+          "ckycRefId": {
+            "type": "string"
+          },
+          "proposalId": {
+            "type": "string"
+          },
+          "redirectUrl": {
+            "type": "string"
+          },
+          "requiresRedirect": {
+            "type": "boolean"
           },
           "_rawResponse": {
             "nullable": true
@@ -1763,6 +1909,397 @@
         "required": [
           "coiBase64"
         ]
+      },
+      "PolicyIssuanceRequest": {
+        "type": "object",
+        "properties": {
+          "quoteNo": {
+            "type": "string",
+            "minLength": 1
+          },
+          "clientId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "vehicleCategory": {
+            "type": "string",
+            "enum": [
+              "fourWheeler",
+              "twoWheeler",
+              "commercial",
+              "newVehicle",
+              "newCommercial"
+            ]
+          },
+          "policyType": {
+            "type": "string",
+            "enum": [
+              "comprehensive",
+              "thirdParty",
+              "standAloneOD"
+            ]
+          },
+          "policyStartDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "policyEndDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "receipt": {
+            "type": "object",
+            "properties": {
+              "uniqueTranKey": {
+                "type": "string",
+                "minLength": 1
+              },
+              "transactionDate": {
+                "type": "string",
+                "minLength": 1
+              },
+              "receiptType": {
+                "type": "string",
+                "default": "IVR"
+              },
+              "amount": {
+                "type": "number",
+                "minimum": 0,
+                "exclusiveMinimum": true
+              },
+              "tranRefNo": {
+                "type": "string",
+                "minLength": 1
+              },
+              "tranRefNoDate": {
+                "type": "string",
+                "minLength": 1
+              },
+              "pgType": {
+                "type": "string",
+                "default": "PAYU"
+              },
+              "tcsAmount": {
+                "type": "string"
+              },
+              "checkType": {
+                "type": "string"
+              },
+              "bsbCode": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "uniqueTranKey",
+              "transactionDate",
+              "amount",
+              "tranRefNo",
+              "tranRefNoDate"
+            ]
+          }
+        },
+        "required": [
+          "quoteNo",
+          "clientId",
+          "vehicleCategory",
+          "receipt"
+        ]
+      },
+      "PolicyIssuanceResult": {
+        "type": "object",
+        "properties": {
+          "providerSlug": {
+            "type": "string"
+          },
+          "insurerName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ISSUED",
+              "IN_PROGRESS",
+              "REJECTED",
+              "INSPECTION_PENDING",
+              "INSPECTION_REJECTED",
+              "INSPECTION_APPROVED",
+              "INSPECTION_CLOSED",
+              "UNKNOWN"
+            ]
+          },
+          "policyNumber": {
+            "type": "string"
+          },
+          "applicationNo": {
+            "type": "string"
+          },
+          "receiptNo": {
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "quoteNo": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "_rawResponse": {
+            "nullable": true
+          }
+        },
+        "required": [
+          "providerSlug",
+          "status"
+        ]
+      },
+      "PaymentInitiateRequest": {
+        "type": "object",
+        "properties": {
+          "quoteNo": {
+            "type": "string",
+            "minLength": 1
+          },
+          "premiumAmount": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "firstName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "lastName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mobile": {
+            "type": "string",
+            "pattern": "^[6-9]\\d{9}$"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          }
+        },
+        "required": [
+          "quoteNo",
+          "premiumAmount",
+          "firstName",
+          "lastName",
+          "mobile",
+          "email"
+        ]
+      },
+      "RenewalQuoteRequest": {
+        "type": "object",
+        "properties": {
+          "policyNo": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expiryDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "registrationNo": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "policyNo"
+        ]
+      },
+      "RenewalCreatePolicyRequest": {
+        "type": "object",
+        "properties": {
+          "policyNo": {
+            "type": "string",
+            "minLength": 1
+          },
+          "quoteNo": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expiryDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "registrationNo": {
+            "type": "string"
+          },
+          "ckycNo": {
+            "type": "string"
+          },
+          "ckycRefNo": {
+            "type": "string"
+          },
+          "receipt": {
+            "type": "object",
+            "properties": {
+              "uniqueTranKey": {
+                "type": "string",
+                "minLength": 1
+              },
+              "transactionDate": {
+                "type": "string",
+                "minLength": 1
+              },
+              "receiptType": {
+                "type": "string",
+                "default": "IVR"
+              },
+              "amount": {
+                "type": "number",
+                "minimum": 0,
+                "exclusiveMinimum": true
+              },
+              "tranRefNo": {
+                "type": "string",
+                "minLength": 1
+              },
+              "tranRefNoDate": {
+                "type": "string",
+                "minLength": 1
+              },
+              "pgType": {
+                "type": "string",
+                "default": "PAYU"
+              },
+              "tcsAmount": {
+                "type": "string"
+              },
+              "checkType": {
+                "type": "string"
+              },
+              "bsbCode": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "uniqueTranKey",
+              "transactionDate",
+              "amount",
+              "tranRefNo",
+              "tranRefNoDate"
+            ]
+          }
+        },
+        "required": [
+          "policyNo",
+          "quoteNo",
+          "receipt"
+        ]
+      },
+      "InspectionRequest": {
+        "type": "object",
+        "properties": {
+          "refId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "mobileNumber": {
+            "type": "string",
+            "pattern": "^[6-9]\\d{9}$"
+          },
+          "address": {
+            "type": "string"
+          },
+          "regNumber": {
+            "type": "string",
+            "minLength": 1
+          },
+          "vehicleCategory": {
+            "type": "string",
+            "minLength": 1
+          },
+          "vehicleSubCategory": {
+            "type": "string"
+          },
+          "make": {
+            "type": "string",
+            "minLength": 1
+          },
+          "brand": {
+            "type": "string",
+            "minLength": 1
+          },
+          "modelYear": {
+            "type": "string"
+          },
+          "fuelType": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "odometer": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "regType": {
+            "type": "string"
+          },
+          "appUserId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "refId",
+          "name",
+          "mobileNumber",
+          "regNumber",
+          "vehicleCategory",
+          "make",
+          "brand"
+        ]
+      },
+      "InspectionResult": {
+        "type": "object",
+        "properties": {
+          "refId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ISSUED",
+              "IN_PROGRESS",
+              "REJECTED",
+              "INSPECTION_PENDING",
+              "INSPECTION_REJECTED",
+              "INSPECTION_APPROVED",
+              "INSPECTION_CLOSED",
+              "UNKNOWN"
+            ]
+          },
+          "rawStatus": {
+            "type": "string"
+          },
+          "inspectionId": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "_rawResponse": {
+            "nullable": true
+          }
+        },
+        "required": [
+          "refId",
+          "status"
+        ]
       }
     },
     "parameters": {}
@@ -1819,6 +2356,9 @@
                                 "proposal",
                                 "ckyc",
                                 "ovd",
+                                "issuance",
+                                "renewal",
+                                "inspection",
                                 "policyStatus",
                                 "coi"
                               ]
@@ -2130,6 +2670,23 @@
                     "minimum": 0,
                     "maximum": 100
                   },
+                  "commercialSubType": {
+                    "type": "string",
+                    "enum": [
+                      "goods",
+                      "passenger"
+                    ]
+                  },
+                  "grossVehicleWeight": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
+                  "carryingCapacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
                   "rtoCode": {
                     "type": "string",
                     "minLength": 1
@@ -2155,6 +2712,10 @@
                   "previousInsurerName": {
                     "type": "string"
                   },
+                  "previousPolicyStartDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
                   "previousPolicyExpiryDate": {
                     "type": "string",
                     "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
@@ -2170,6 +2731,17 @@
                       "thirdParty",
                       "standAloneOD"
                     ]
+                  },
+                  "previousTpPolicyNumber": {
+                    "type": "string"
+                  },
+                  "previousTpStartDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "previousTpExpiryDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
                   },
                   "claimInPreviousPolicy": {
                     "type": "boolean",
@@ -2229,6 +2801,13 @@
                   "legalLiabilityPaidDriver": {
                     "type": "boolean",
                     "default": false
+                  },
+                  "providerAddonCodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
                   },
                   "providers": {
                     "type": "array",
@@ -2642,6 +3221,23 @@
                     "minimum": 0,
                     "maximum": 100
                   },
+                  "commercialSubType": {
+                    "type": "string",
+                    "enum": [
+                      "goods",
+                      "passenger"
+                    ]
+                  },
+                  "grossVehicleWeight": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
+                  "carryingCapacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
                   "rtoCode": {
                     "type": "string",
                     "minLength": 1
@@ -2667,6 +3263,10 @@
                   "previousInsurerName": {
                     "type": "string"
                   },
+                  "previousPolicyStartDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
                   "previousPolicyExpiryDate": {
                     "type": "string",
                     "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
@@ -2682,6 +3282,17 @@
                       "thirdParty",
                       "standAloneOD"
                     ]
+                  },
+                  "previousTpPolicyNumber": {
+                    "type": "string"
+                  },
+                  "previousTpStartDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "previousTpExpiryDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
                   },
                   "claimInPreviousPolicy": {
                     "type": "boolean",
@@ -2741,6 +3352,13 @@
                   "legalLiabilityPaidDriver": {
                     "type": "boolean",
                     "default": false
+                  },
+                  "providerAddonCodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
                   }
                 },
                 "required": [
@@ -3369,6 +3987,23 @@
                     "minimum": 0,
                     "maximum": 100
                   },
+                  "commercialSubType": {
+                    "type": "string",
+                    "enum": [
+                      "goods",
+                      "passenger"
+                    ]
+                  },
+                  "grossVehicleWeight": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
+                  "carryingCapacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
                   "rtoCode": {
                     "type": "string",
                     "minLength": 1
@@ -3394,6 +4029,10 @@
                   "previousInsurerName": {
                     "type": "string"
                   },
+                  "previousPolicyStartDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
                   "previousPolicyExpiryDate": {
                     "type": "string",
                     "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
@@ -3409,6 +4048,17 @@
                       "thirdParty",
                       "standAloneOD"
                     ]
+                  },
+                  "previousTpPolicyNumber": {
+                    "type": "string"
+                  },
+                  "previousTpStartDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "previousTpExpiryDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
                   },
                   "claimInPreviousPolicy": {
                     "type": "boolean",
@@ -3468,6 +4118,13 @@
                   "legalLiabilityPaidDriver": {
                     "type": "boolean",
                     "default": false
+                  },
+                  "providerAddonCodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
                   },
                   "quoteId": {
                     "type": "string",
@@ -3991,6 +4648,17 @@
                       "sme"
                     ],
                     "default": "motor"
+                  },
+                  "fullName": {
+                    "type": "string"
+                  },
+                  "mobile": {
+                    "type": "string",
+                    "pattern": "^[6-9]\\d{9}$"
+                  },
+                  "redirectUrl": {
+                    "type": "string",
+                    "format": "uri"
                   }
                 },
                 "required": [
@@ -4038,6 +4706,21 @@
                     },
                     "displayMessage": {
                       "type": "string"
+                    },
+                    "ckycNumber": {
+                      "type": "string"
+                    },
+                    "ckycRefId": {
+                      "type": "string"
+                    },
+                    "proposalId": {
+                      "type": "string"
+                    },
+                    "redirectUrl": {
+                      "type": "string"
+                    },
+                    "requiresRedirect": {
+                      "type": "boolean"
                     },
                     "_rawResponse": {
                       "nullable": true
@@ -4231,6 +4914,896 @@
                   },
                   "required": [
                     "coiBase64"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/{provider}/policy/issue": {
+      "post": {
+        "summary": "Issue the policy — bind payment to the proposal (FG PolicyIssuance)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "icici"
+            },
+            "required": true,
+            "name": "provider",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "quoteNo": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "clientId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "vehicleCategory": {
+                    "type": "string",
+                    "enum": [
+                      "fourWheeler",
+                      "twoWheeler",
+                      "commercial",
+                      "newVehicle",
+                      "newCommercial"
+                    ]
+                  },
+                  "policyType": {
+                    "type": "string",
+                    "enum": [
+                      "comprehensive",
+                      "thirdParty",
+                      "standAloneOD"
+                    ]
+                  },
+                  "policyStartDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "policyEndDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "receipt": {
+                    "type": "object",
+                    "properties": {
+                      "uniqueTranKey": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "transactionDate": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "receiptType": {
+                        "type": "string",
+                        "default": "IVR"
+                      },
+                      "amount": {
+                        "type": "number",
+                        "minimum": 0,
+                        "exclusiveMinimum": true
+                      },
+                      "tranRefNo": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "tranRefNoDate": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "pgType": {
+                        "type": "string",
+                        "default": "PAYU"
+                      },
+                      "tcsAmount": {
+                        "type": "string"
+                      },
+                      "checkType": {
+                        "type": "string"
+                      },
+                      "bsbCode": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "uniqueTranKey",
+                      "transactionDate",
+                      "amount",
+                      "tranRefNo",
+                      "tranRefNoDate"
+                    ]
+                  }
+                },
+                "required": [
+                  "quoteNo",
+                  "clientId",
+                  "vehicleCategory",
+                  "receipt"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Issuance result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "providerSlug": {
+                      "type": "string"
+                    },
+                    "insurerName": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ISSUED",
+                        "IN_PROGRESS",
+                        "REJECTED",
+                        "INSPECTION_PENDING",
+                        "INSPECTION_REJECTED",
+                        "INSPECTION_APPROVED",
+                        "INSPECTION_CLOSED",
+                        "UNKNOWN"
+                      ]
+                    },
+                    "policyNumber": {
+                      "type": "string"
+                    },
+                    "applicationNo": {
+                      "type": "string"
+                    },
+                    "receiptNo": {
+                      "type": "string"
+                    },
+                    "clientId": {
+                      "type": "string"
+                    },
+                    "quoteNo": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "_rawResponse": {
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "providerSlug",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation / unsupported operation"
+          }
+        }
+      }
+    },
+    "/api/v1/{provider}/payment/initiate": {
+      "post": {
+        "summary": "Build the checksum-signed payment-gateway form",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "icici"
+            },
+            "required": true,
+            "name": "provider",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "quoteNo": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "premiumAmount": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
+                  "firstName": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "lastName": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "mobile": {
+                    "type": "string",
+                    "pattern": "^[6-9]\\d{9}$"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                },
+                "required": [
+                  "quoteNo",
+                  "premiumAmount",
+                  "firstName",
+                  "lastName",
+                  "mobile",
+                  "email"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Signed gateway form (url + fields)"
+          },
+          "501": {
+            "description": "Provider has no payment integration"
+          }
+        }
+      }
+    },
+    "/api/v1/{provider}/motor/renewal/quote": {
+      "post": {
+        "summary": "Renewal quote — price an existing policy (FG motorRenewal)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "icici"
+            },
+            "required": true,
+            "name": "provider",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "policyNo": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "expiryDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "registrationNo": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "policyNo"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Renewal quote",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "quoteNo": {
+                      "type": "string"
+                    },
+                    "transactionId": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "providerSlug": {
+                      "type": "string"
+                    },
+                    "insurerId": {
+                      "type": "string"
+                    },
+                    "insurerName": {
+                      "type": "string"
+                    },
+                    "insurerLogoUrl": {
+                      "type": "string"
+                    },
+                    "policyType": {
+                      "type": "string"
+                    },
+                    "vehicleCategory": {
+                      "type": "string"
+                    },
+                    "idvValue": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "minIdv": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "maxIdv": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "policyStartDate": {
+                      "type": "string"
+                    },
+                    "policyEndDate": {
+                      "type": "string"
+                    },
+                    "isInspectionRequired": {
+                      "type": "boolean"
+                    },
+                    "basicOdPremium": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "thirdPartyPremium": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "addonPremiums": {
+                      "type": "object",
+                      "properties": {
+                        "zeroDep": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "engineProtect": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "rsa": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "tyreProtect": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "rimProtect": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "rti": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "consumables": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "keyProtect": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "garageCash": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "lossOfBelongings": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "batteryProtect": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "drivingAccessories": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "ncbProtection": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "paOwner": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "paUnnamedPassenger": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "paNamedPassenger": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "legalLiabilityPaidDriver": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      }
+                    },
+                    "discounts": {
+                      "type": "object",
+                      "properties": {
+                        "ncbPercent": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "ncbAmount": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "aaaMembership": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "antiTheft": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "voluntaryDeductible": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "ownDamageDiscount": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "payU": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      }
+                    },
+                    "totalAddonPremium": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "totalDiscount": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "netPremium": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "serviceTaxPercent": {
+                      "type": "number",
+                      "minimum": 0,
+                      "default": 18
+                    },
+                    "serviceTaxAmount": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "grossPremium": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "policyNumber": {
+                      "type": "string"
+                    },
+                    "paymentUrl": {
+                      "type": "string"
+                    },
+                    "contractDetails": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "_rawResponse": {
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "quoteNo",
+                    "requestId",
+                    "providerSlug",
+                    "policyType",
+                    "vehicleCategory",
+                    "idvValue",
+                    "basicOdPremium",
+                    "thirdPartyPremium",
+                    "addonPremiums",
+                    "discounts",
+                    "totalAddonPremium",
+                    "totalDiscount",
+                    "netPremium",
+                    "serviceTaxAmount",
+                    "grossPremium"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/{provider}/motor/renewal/create": {
+      "post": {
+        "summary": "Renewal create — issue the renewed policy with the payment receipt",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "icici"
+            },
+            "required": true,
+            "name": "provider",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "policyNo": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "quoteNo": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "expiryDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "registrationNo": {
+                    "type": "string"
+                  },
+                  "ckycNo": {
+                    "type": "string"
+                  },
+                  "ckycRefNo": {
+                    "type": "string"
+                  },
+                  "receipt": {
+                    "type": "object",
+                    "properties": {
+                      "uniqueTranKey": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "transactionDate": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "receiptType": {
+                        "type": "string",
+                        "default": "IVR"
+                      },
+                      "amount": {
+                        "type": "number",
+                        "minimum": 0,
+                        "exclusiveMinimum": true
+                      },
+                      "tranRefNo": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "tranRefNoDate": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "pgType": {
+                        "type": "string",
+                        "default": "PAYU"
+                      },
+                      "tcsAmount": {
+                        "type": "string"
+                      },
+                      "checkType": {
+                        "type": "string"
+                      },
+                      "bsbCode": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "uniqueTranKey",
+                      "transactionDate",
+                      "amount",
+                      "tranRefNo",
+                      "tranRefNoDate"
+                    ]
+                  }
+                },
+                "required": [
+                  "policyNo",
+                  "quoteNo",
+                  "receipt"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Issuance result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "providerSlug": {
+                      "type": "string"
+                    },
+                    "insurerName": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ISSUED",
+                        "IN_PROGRESS",
+                        "REJECTED",
+                        "INSPECTION_PENDING",
+                        "INSPECTION_REJECTED",
+                        "INSPECTION_APPROVED",
+                        "INSPECTION_CLOSED",
+                        "UNKNOWN"
+                      ]
+                    },
+                    "policyNumber": {
+                      "type": "string"
+                    },
+                    "applicationNo": {
+                      "type": "string"
+                    },
+                    "receiptNo": {
+                      "type": "string"
+                    },
+                    "clientId": {
+                      "type": "string"
+                    },
+                    "quoteNo": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "_rawResponse": {
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "providerSlug",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/{provider}/inspection": {
+      "post": {
+        "summary": "Create a break-in / pre-inspection request",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "icici"
+            },
+            "required": true,
+            "name": "provider",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "refId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "mobileNumber": {
+                    "type": "string",
+                    "pattern": "^[6-9]\\d{9}$"
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "regNumber": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "vehicleCategory": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "vehicleSubCategory": {
+                    "type": "string"
+                  },
+                  "make": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "brand": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "modelYear": {
+                    "type": "string"
+                  },
+                  "fuelType": {
+                    "type": "string"
+                  },
+                  "city": {
+                    "type": "string"
+                  },
+                  "odometer": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "regType": {
+                    "type": "string"
+                  },
+                  "appUserId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "refId",
+                  "name",
+                  "mobileNumber",
+                  "regNumber",
+                  "vehicleCategory",
+                  "make",
+                  "brand"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Inspection created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "refId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ISSUED",
+                        "IN_PROGRESS",
+                        "REJECTED",
+                        "INSPECTION_PENDING",
+                        "INSPECTION_REJECTED",
+                        "INSPECTION_APPROVED",
+                        "INSPECTION_CLOSED",
+                        "UNKNOWN"
+                      ]
+                    },
+                    "rawStatus": {
+                      "type": "string"
+                    },
+                    "inspectionId": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "_rawResponse": {
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "refId",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/{provider}/inspection/{refId}/status": {
+      "get": {
+        "summary": "Poll a break-in inspection's status",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "provider",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "refId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Inspection status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "refId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ISSUED",
+                        "IN_PROGRESS",
+                        "REJECTED",
+                        "INSPECTION_PENDING",
+                        "INSPECTION_REJECTED",
+                        "INSPECTION_APPROVED",
+                        "INSPECTION_CLOSED",
+                        "UNKNOWN"
+                      ]
+                    },
+                    "rawStatus": {
+                      "type": "string"
+                    },
+                    "inspectionId": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "_rawResponse": {
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "refId",
+                    "status"
                   ]
                 }
               }

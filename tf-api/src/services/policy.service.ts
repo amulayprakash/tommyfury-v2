@@ -1,9 +1,23 @@
 import { randomUUID } from "node:crypto";
 import { getProvider, requireOperation } from "@/providers/provider-registry.ts";
-import { supportsPolicyStatus, supportsCertificate } from "@/providers/insurance-provider.ts";
+import {
+  supportsPolicyStatus,
+  supportsCertificate,
+  supportsIssuance,
+} from "@/providers/insurance-provider.ts";
 import { AppError } from "@/errors/app-error.ts";
-import { updatePolicyStatus } from "@/repositories/quote.repository.ts";
-import type { PolicyStatusRequest, PolicyStatusResult, CertificateResult } from "@/contracts/policy.ts";
+import {
+  updatePolicyStatus,
+  recordIssuance,
+  findQuoteByTransactionId,
+} from "@/repositories/quote.repository.ts";
+import type {
+  PolicyStatusRequest,
+  PolicyStatusResult,
+  CertificateResult,
+  PolicyIssuanceRequest,
+  PolicyIssuanceResult,
+} from "@/contracts/policy.ts";
 
 export async function getPolicyStatus(
   providerSlug: string,
@@ -29,4 +43,27 @@ export async function getCertificate(
     throw new AppError(500, `Provider "${providerSlug}" mis-declares coi`, "PROVIDER_MISCONFIG");
   }
   return provider.getCertificate(transactionId, { requestId: randomUUID() });
+}
+
+export async function issuePolicy(
+  providerSlug: string,
+  req: PolicyIssuanceRequest,
+): Promise<PolicyIssuanceResult> {
+  const provider = getProvider(providerSlug);
+  requireOperation(provider, "issuance");
+  if (!supportsIssuance(provider)) {
+    throw new AppError(500, `Provider "${providerSlug}" mis-declares issuance`, "PROVIDER_MISCONFIG");
+  }
+
+  // Break-in gate: if an inspection was started for this quote, it must be
+  // approved/closed before the policy can be issued (no-op when none exists).
+  const existing = await findQuoteByTransactionId(providerSlug, req.quoteNo);
+  const status = existing?.policyStatus ?? "";
+  if (status.startsWith("INSPECTION") && status !== "INSPECTION_APPROVED" && status !== "INSPECTION_CLOSED") {
+    throw new AppError(409, `Inspection not approved (status: ${status})`, "INSPECTION_PENDING");
+  }
+
+  const result = await provider.issuePolicy(req, { requestId: randomUUID() });
+  await recordIssuance(providerSlug, req, result);
+  return result;
 }

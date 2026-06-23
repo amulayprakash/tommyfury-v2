@@ -69,7 +69,8 @@ export function ProposalPage() {
 
   const onSubmit = (values: ProposalValues) => {
     setProposal(values);
-    void navigate(ROUTES.vehicle.coverage);
+    // FG flow: Quote → CKYC → Proposal. KYC runs before the bound proposal.
+    void navigate(ROUTES.vehicle.kycStatus);
   };
 
   const text = (
@@ -173,7 +174,7 @@ export function ProposalPage() {
           </Card>
 
           <Button type="submit" size="lg" className="w-full">
-            Get full quote <ArrowRight />
+            Continue to KYC <ArrowRight />
           </Button>
         </form>
       </Form>

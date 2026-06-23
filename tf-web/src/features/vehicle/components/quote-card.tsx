@@ -11,6 +11,23 @@ interface QuoteCardProps {
   onSelect: (result: CompareResult) => void;
 }
 
+/** Maps a provider's canonical error code to friendly, user-facing copy. */
+const FRIENDLY_ERROR: Record<string, string> = {
+  REFERRAL_DECLINED: "Not available online for this vehicle — try Comprehensive.",
+  PREV_TP_REQUIRED: "Add your previous third-party policy details for an Own-Damage quote.",
+  PREV_TP_EXPIRED: "Own-Damage needs an active third-party policy (the previous one has expired).",
+  VEHICLE_CLASS_REQUIRED: "Commercial vehicle details are incomplete.",
+  ADDON_UNAVAILABLE: "Add-on pricing is temporarily unavailable.",
+  ADDON_INELIGIBLE: "Selected add-on isn't available for this vehicle.",
+  INVALID_POLICY_PERIOD: "Policy period isn't valid for this vehicle.",
+  NOT_FOUND: "This vehicle isn't supported yet.",
+  UPSTREAM_UNAVAILABLE: "Insurer service is temporarily unavailable — please retry.",
+};
+
+function friendlyError(code?: string): string {
+  return (code && FRIENDLY_ERROR[code]) || "Couldn't fetch a quote. Please try again.";
+}
+
 /** A single vendor's quote in the compare list. */
 export function QuoteCard({ result, selected, onSelect }: QuoteCardProps) {
   const name = result.quote?.insurerName ?? result.displayName;
@@ -29,7 +46,7 @@ export function QuoteCard({ result, selected, onSelect }: QuoteCardProps) {
             <p className="text-xs text-muted-foreground">No quote for this selection</p>
           ) : (
             <p className="flex items-center gap-1 text-xs text-destructive">
-              <AlertCircle className="size-3" /> {result.error?.message ?? "Unavailable"}
+              <AlertCircle className="size-3 shrink-0" /> {friendlyError(result.error?.code)}
             </p>
           )}
         </div>

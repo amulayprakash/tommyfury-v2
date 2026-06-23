@@ -28,6 +28,9 @@ export const ProviderOperationSchema = z.enum([
   "proposal",
   "ckyc",
   "ovd",
+  "issuance",
+  "renewal",
+  "inspection",
   "policyStatus",
   "coi",
 ]);

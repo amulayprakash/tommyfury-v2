@@ -122,6 +122,54 @@ export function oauth2ClientCredentialsFetcher(creds: OAuth2Credentials): TokenF
   };
 }
 
+// ─── OAuth2 password-grant fetcher (Future Generali-style) ────────────────────
+
+export interface OAuth2PasswordCredentials {
+  /** Base64 "client_id:client_secret" sent as the Authorization: Basic header. */
+  clientBasic: string;
+  username: string;
+  password: string;
+  tokenUrl: string;
+  scope?: string;
+}
+
+/**
+ * Builds a {@link TokenFetcher} for the OAuth2 resource-owner password grant
+ * with a Basic client header — the scheme FG's APIM gateway uses
+ * (POST grant_type=password, Authorization: Basic <client>).
+ */
+export function oauth2PasswordFetcher(creds: OAuth2PasswordCredentials): TokenFetcher {
+  return async () => {
+    const body = new URLSearchParams({
+      grant_type: "password",
+      username: creds.username,
+      password: creds.password,
+      ...(creds.scope ? { scope: creds.scope } : {}),
+    });
+
+    const response = await fetch(creds.tokenUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Basic ${creds.clientBasic}`,
+      },
+      body,
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`Token fetch failed [${response.status}]: ${text}`);
+    }
+
+    const json = (await response.json()) as OAuth2TokenResponse;
+    const expiresIn = json.expires_in ?? 3600;
+    return {
+      accessToken: json.access_token,
+      expiresAt: Date.now() + expiresIn * 1000 * REFRESH_THRESHOLD,
+    };
+  };
+}
+
 /** Helper for fetchers that receive an absolute expiry timestamp (e.g. ICICI). */
 export function expiryWithThreshold(expiresAtMs: number, now = Date.now()): number {
   const ttl = expiresAtMs - now;

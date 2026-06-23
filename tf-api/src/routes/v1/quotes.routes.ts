@@ -2,10 +2,15 @@ import { Router } from "express";
 import { validate } from "@/middleware/validate.ts";
 import { MotorQuoteRequestSchema, MotorFullQuoteRequestSchema } from "@/contracts/quote-request.ts";
 import {
+  RenewalQuoteRequestSchema,
+  RenewalCreatePolicyRequestSchema,
+} from "@/contracts/renewal.ts";
+import {
   handleGetQuote,
   handleGetFullQuote,
   handleRetrieveQuote,
 } from "@/controllers/quote.controller.ts";
+import { handleRenewalQuote, handleRenewalCreate } from "@/controllers/renewal.controller.ts";
 
 const router = Router();
 
@@ -52,6 +57,18 @@ router.post(
   "/:provider/motor/new-commercial/full-quote",
   validate(MotorFullQuoteRequestSchema),
   handleGetFullQuote,
+);
+
+// Renewal of an existing policy (FG: separate motorRenewal JSON API)
+router.post(
+  "/:provider/motor/renewal/quote",
+  validate(RenewalQuoteRequestSchema),
+  handleRenewalQuote,
+);
+router.post(
+  "/:provider/motor/renewal/create",
+  validate(RenewalCreatePolicyRequestSchema),
+  handleRenewalCreate,
 );
 
 export { router as quotesRouter };

@@ -8,7 +8,18 @@ import type {
   OvdFile,
   OvdResult,
 } from "@/contracts/kyc.ts";
-import type { PolicyStatusRequest, PolicyStatusResult, CertificateResult } from "@/contracts/policy.ts";
+import type {
+  PolicyStatusRequest,
+  PolicyStatusResult,
+  CertificateResult,
+  PolicyIssuanceRequest,
+  PolicyIssuanceResult,
+} from "@/contracts/policy.ts";
+import type {
+  RenewalQuoteRequest,
+  RenewalCreatePolicyRequest,
+} from "@/contracts/renewal.ts";
+import type { InspectionRequest, InspectionResult } from "@/contracts/inspection.ts";
 
 export interface ProviderContext {
   requestId: string;
@@ -45,6 +56,28 @@ export interface KycCapableProvider extends InsuranceProvider {
   initiateOvd(req: OvdRequest, files: OvdFile[], ctx: ProviderContext): Promise<OvdResult>;
 }
 
+export interface IssuanceProvider extends InsuranceProvider {
+  /** Binds payment to the prior proposal and issues the real policy. */
+  issuePolicy(req: PolicyIssuanceRequest, ctx: ProviderContext): Promise<PolicyIssuanceResult>;
+}
+
+export interface RenewalProvider extends InsuranceProvider {
+  /** Prices the renewal of an existing policy (keyed by PolicyNo). */
+  renewalQuote(req: RenewalQuoteRequest, ctx: ProviderContext): Promise<CanonicalQuoteResult>;
+  /** Issues the renewal directly with the collected payment receipt. */
+  renewalCreatePolicy(
+    req: RenewalCreatePolicyRequest,
+    ctx: ProviderContext,
+  ): Promise<PolicyIssuanceResult>;
+}
+
+export interface InspectionProvider extends InsuranceProvider {
+  /** Creates a break-in / pre-inspection request. */
+  createInspection(req: InspectionRequest, ctx: ProviderContext): Promise<InspectionResult>;
+  /** Polls a previously created inspection's status. */
+  getInspectionStatus(refId: string, ctx: ProviderContext): Promise<InspectionResult>;
+}
+
 export interface PolicyStatusProvider extends InsuranceProvider {
   getPolicyStatus(req: PolicyStatusRequest, ctx: ProviderContext): Promise<PolicyStatusResult>;
 }
@@ -62,6 +95,26 @@ export function supportsQuoteRetrieval(p: InsuranceProvider): p is QuoteRetrieva
 export function supportsKyc(p: InsuranceProvider): p is KycCapableProvider {
   const kp = p as KycCapableProvider;
   return typeof kp.completeCkyc === "function" && typeof kp.initiateOvd === "function";
+}
+
+export function supportsIssuance(p: InsuranceProvider): p is IssuanceProvider {
+  return p.operations.has("issuance") && typeof (p as IssuanceProvider).issuePolicy === "function";
+}
+
+export function supportsRenewal(p: InsuranceProvider): p is RenewalProvider {
+  return (
+    p.operations.has("renewal") &&
+    typeof (p as RenewalProvider).renewalQuote === "function" &&
+    typeof (p as RenewalProvider).renewalCreatePolicy === "function"
+  );
+}
+
+export function supportsInspection(p: InsuranceProvider): p is InspectionProvider {
+  return (
+    p.operations.has("inspection") &&
+    typeof (p as InspectionProvider).createInspection === "function" &&
+    typeof (p as InspectionProvider).getInspectionStatus === "function"
+  );
 }
 
 export function supportsPolicyStatus(p: InsuranceProvider): p is PolicyStatusProvider {

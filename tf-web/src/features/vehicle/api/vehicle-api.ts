@@ -49,6 +49,25 @@ export async function getProviders(): Promise<ProviderInfo[]> {
   return data.providers;
 }
 
+/** A provider's own add-on cover (FG: from the master "Add On Covers" sheet). */
+export interface ProviderAddon {
+  code: string;
+  label: string;
+  maxAgeYears?: number | null;
+  requiresZeroDep: boolean;
+}
+
+export async function getProviderAddons(
+  slug: string,
+  params: { category: string; fuel?: string },
+): Promise<ProviderAddon[]> {
+  const { data } = await vendorClient.get<{ addons: ProviderAddon[] }>(
+    `/providers/${slug}/addons`,
+    { params },
+  );
+  return data.addons;
+}
+
 export async function searchMmv(params: {
   make?: string;
   model?: string;
@@ -111,4 +130,34 @@ export async function getPolicyStatus(
     { transactionId },
   );
   return data.response;
+}
+
+// ─── Payment (FG web-aggregator gateway form) ────────────────────────────────
+
+export interface PaymentForm {
+  /** Hosted gateway action URL the browser must POST to. */
+  url: string;
+  /** Signed hidden fields (incl. CheckSum) to submit verbatim. */
+  fields: Record<string, string>;
+}
+
+export interface PaymentInitiateBody {
+  quoteNo: string;
+  premiumAmount: number;
+  firstName: string;
+  lastName: string;
+  mobile: string;
+  email: string;
+}
+
+/** Asks the API to build the checksum-signed gateway form for the browser to auto-submit. */
+export async function initiatePayment(
+  providerSlug: string,
+  body: PaymentInitiateBody,
+): Promise<PaymentForm> {
+  const { data } = await vendorClient.post<{ form: PaymentForm }>(
+    `/${providerSlug}/payment/initiate`,
+    body,
+  );
+  return data.form;
 }

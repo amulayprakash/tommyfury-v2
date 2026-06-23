@@ -34,7 +34,7 @@ export interface paths {
                                 slug: string;
                                 displayName: string;
                                 capabilities: ("fourWheeler" | "twoWheeler" | "commercial" | "newVehicle" | "newCommercial")[];
-                                operations: ("quote" | "retrieveQuote" | "proposal" | "ckyc" | "ovd" | "policyStatus" | "coi")[];
+                                operations: ("quote" | "retrieveQuote" | "proposal" | "ckyc" | "ovd" | "issuance" | "renewal" | "inspection" | "policyStatus" | "coi")[];
                                 motorCapabilities: {
                                     fourWheeler?: {
                                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
@@ -109,6 +109,10 @@ export interface paths {
                         seatingCapacity?: number;
                         idvValue?: number | null;
                         idvPercent?: number | null;
+                        /** @enum {string} */
+                        commercialSubType?: "goods" | "passenger";
+                        grossVehicleWeight?: number;
+                        carryingCapacity?: number;
                         rtoCode: string;
                         registrationDate: string;
                         registrationNumber?: string;
@@ -116,11 +120,15 @@ export interface paths {
                         previousPolicyNumber?: string;
                         previousInsurerId?: string;
                         previousInsurerName?: string;
+                        previousPolicyStartDate?: string;
                         previousPolicyExpiryDate?: string;
                         /** @default false */
                         isPreviousPolicyExpired?: boolean;
                         /** @enum {string} */
                         previousPolicyType?: "comprehensive" | "thirdParty" | "standAloneOD";
+                        previousTpPolicyNumber?: string;
+                        previousTpStartDate?: string;
+                        previousTpExpiryDate?: string;
                         /** @default false */
                         claimInPreviousPolicy?: boolean;
                         /** @default 0 */
@@ -147,6 +155,7 @@ export interface paths {
                         paUnnamedPassenger?: boolean;
                         /** @default false */
                         legalLiabilityPaidDriver?: boolean;
+                        providerAddonCodes?: string[];
                         providers?: string[];
                     };
                 };
@@ -287,6 +296,10 @@ export interface paths {
                         seatingCapacity?: number;
                         idvValue?: number | null;
                         idvPercent?: number | null;
+                        /** @enum {string} */
+                        commercialSubType?: "goods" | "passenger";
+                        grossVehicleWeight?: number;
+                        carryingCapacity?: number;
                         rtoCode: string;
                         registrationDate: string;
                         registrationNumber?: string;
@@ -294,11 +307,15 @@ export interface paths {
                         previousPolicyNumber?: string;
                         previousInsurerId?: string;
                         previousInsurerName?: string;
+                        previousPolicyStartDate?: string;
                         previousPolicyExpiryDate?: string;
                         /** @default false */
                         isPreviousPolicyExpired?: boolean;
                         /** @enum {string} */
                         previousPolicyType?: "comprehensive" | "thirdParty" | "standAloneOD";
+                        previousTpPolicyNumber?: string;
+                        previousTpStartDate?: string;
+                        previousTpExpiryDate?: string;
                         /** @default false */
                         claimInPreviousPolicy?: boolean;
                         /** @default 0 */
@@ -325,6 +342,7 @@ export interface paths {
                         paUnnamedPassenger?: boolean;
                         /** @default false */
                         legalLiabilityPaidDriver?: boolean;
+                        providerAddonCodes?: string[];
                     };
                 };
             };
@@ -566,6 +584,10 @@ export interface paths {
                         seatingCapacity?: number;
                         idvValue?: number | null;
                         idvPercent?: number | null;
+                        /** @enum {string} */
+                        commercialSubType?: "goods" | "passenger";
+                        grossVehicleWeight?: number;
+                        carryingCapacity?: number;
                         rtoCode: string;
                         registrationDate: string;
                         registrationNumber?: string;
@@ -573,11 +595,15 @@ export interface paths {
                         previousPolicyNumber?: string;
                         previousInsurerId?: string;
                         previousInsurerName?: string;
+                        previousPolicyStartDate?: string;
                         previousPolicyExpiryDate?: string;
                         /** @default false */
                         isPreviousPolicyExpired?: boolean;
                         /** @enum {string} */
                         previousPolicyType?: "comprehensive" | "thirdParty" | "standAloneOD";
+                        previousTpPolicyNumber?: string;
+                        previousTpStartDate?: string;
+                        previousTpExpiryDate?: string;
                         /** @default false */
                         claimInPreviousPolicy?: boolean;
                         /** @default 0 */
@@ -604,6 +630,7 @@ export interface paths {
                         paUnnamedPassenger?: boolean;
                         /** @default false */
                         legalLiabilityPaidDriver?: boolean;
+                        providerAddonCodes?: string[];
                         quoteId: string;
                         proposer: {
                             /** @enum {string} */
@@ -780,6 +807,10 @@ export interface paths {
                          * @enum {string}
                          */
                         policyType?: "motor" | "health" | "travel" | "sme";
+                        fullName?: string;
+                        mobile?: string;
+                        /** Format: uri */
+                        redirectUrl?: string;
                     };
                 };
             };
@@ -801,6 +832,11 @@ export interface paths {
                             permanentAddress?: string;
                             correspondenceAddress?: string;
                             displayMessage?: string;
+                            ckycNumber?: string;
+                            ckycRefId?: string;
+                            proposalId?: string;
+                            redirectUrl?: string;
+                            requiresRedirect?: boolean;
                             _rawResponse?: unknown;
                         };
                     };
@@ -955,6 +991,440 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/{provider}/policy/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue the policy — bind payment to the proposal (FG PolicyIssuance) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    provider: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        quoteNo: string;
+                        clientId: string;
+                        /** @enum {string} */
+                        vehicleCategory: "fourWheeler" | "twoWheeler" | "commercial" | "newVehicle" | "newCommercial";
+                        /** @enum {string} */
+                        policyType?: "comprehensive" | "thirdParty" | "standAloneOD";
+                        policyStartDate?: string;
+                        policyEndDate?: string;
+                        receipt: {
+                            uniqueTranKey: string;
+                            transactionDate: string;
+                            /** @default IVR */
+                            receiptType?: string;
+                            amount: number;
+                            tranRefNo: string;
+                            tranRefNoDate: string;
+                            /** @default PAYU */
+                            pgType?: string;
+                            tcsAmount?: string;
+                            checkType?: string;
+                            bsbCode?: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Issuance result */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            providerSlug: string;
+                            insurerName?: string;
+                            /** @enum {string} */
+                            status: "ISSUED" | "IN_PROGRESS" | "REJECTED" | "INSPECTION_PENDING" | "INSPECTION_REJECTED" | "INSPECTION_APPROVED" | "INSPECTION_CLOSED" | "UNKNOWN";
+                            policyNumber?: string;
+                            applicationNo?: string;
+                            receiptNo?: string;
+                            clientId?: string;
+                            quoteNo?: string;
+                            message?: string;
+                            _rawResponse?: unknown;
+                        };
+                    };
+                };
+                /** @description Validation / unsupported operation */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/{provider}/payment/initiate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Build the checksum-signed payment-gateway form */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    provider: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        quoteNo: string;
+                        premiumAmount: number;
+                        firstName: string;
+                        lastName: string;
+                        mobile: string;
+                        /** Format: email */
+                        email: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Signed gateway form (url + fields) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Provider has no payment integration */
+                501: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/{provider}/motor/renewal/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Renewal quote — price an existing policy (FG motorRenewal) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    provider: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        policyNo: string;
+                        expiryDate?: string;
+                        registrationNo?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Renewal quote */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            quoteNo: string;
+                            transactionId?: string;
+                            requestId: string;
+                            providerSlug: string;
+                            insurerId?: string;
+                            insurerName?: string;
+                            insurerLogoUrl?: string;
+                            policyType: string;
+                            vehicleCategory: string;
+                            idvValue: number;
+                            minIdv?: number;
+                            maxIdv?: number;
+                            policyStartDate?: string;
+                            policyEndDate?: string;
+                            isInspectionRequired?: boolean;
+                            basicOdPremium: number;
+                            thirdPartyPremium: number;
+                            addonPremiums: {
+                                zeroDep?: number;
+                                engineProtect?: number;
+                                rsa?: number;
+                                tyreProtect?: number;
+                                rimProtect?: number;
+                                rti?: number;
+                                consumables?: number;
+                                keyProtect?: number;
+                                garageCash?: number;
+                                lossOfBelongings?: number;
+                                batteryProtect?: number;
+                                drivingAccessories?: number;
+                                ncbProtection?: number;
+                                paOwner?: number;
+                                paUnnamedPassenger?: number;
+                                paNamedPassenger?: number;
+                                legalLiabilityPaidDriver?: number;
+                            };
+                            discounts: {
+                                ncbPercent?: number;
+                                ncbAmount?: number;
+                                aaaMembership?: number;
+                                antiTheft?: number;
+                                voluntaryDeductible?: number;
+                                ownDamageDiscount?: number;
+                                payU?: number;
+                            };
+                            totalAddonPremium: number;
+                            totalDiscount: number;
+                            netPremium: number;
+                            /** @default 18 */
+                            serviceTaxPercent: number;
+                            serviceTaxAmount: number;
+                            grossPremium: number;
+                            policyNumber?: string;
+                            paymentUrl?: string;
+                            contractDetails?: {
+                                [key: string]: unknown;
+                            };
+                            _rawResponse?: unknown;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/{provider}/motor/renewal/create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Renewal create — issue the renewed policy with the payment receipt */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    provider: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        policyNo: string;
+                        quoteNo: string;
+                        expiryDate?: string;
+                        registrationNo?: string;
+                        ckycNo?: string;
+                        ckycRefNo?: string;
+                        receipt: {
+                            uniqueTranKey: string;
+                            transactionDate: string;
+                            /** @default IVR */
+                            receiptType?: string;
+                            amount: number;
+                            tranRefNo: string;
+                            tranRefNoDate: string;
+                            /** @default PAYU */
+                            pgType?: string;
+                            tcsAmount?: string;
+                            checkType?: string;
+                            bsbCode?: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Issuance result */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            providerSlug: string;
+                            insurerName?: string;
+                            /** @enum {string} */
+                            status: "ISSUED" | "IN_PROGRESS" | "REJECTED" | "INSPECTION_PENDING" | "INSPECTION_REJECTED" | "INSPECTION_APPROVED" | "INSPECTION_CLOSED" | "UNKNOWN";
+                            policyNumber?: string;
+                            applicationNo?: string;
+                            receiptNo?: string;
+                            clientId?: string;
+                            quoteNo?: string;
+                            message?: string;
+                            _rawResponse?: unknown;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/{provider}/inspection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a break-in / pre-inspection request */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    provider: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        refId: string;
+                        name: string;
+                        /** Format: email */
+                        email?: string;
+                        mobileNumber: string;
+                        address?: string;
+                        regNumber: string;
+                        vehicleCategory: string;
+                        vehicleSubCategory?: string;
+                        make: string;
+                        brand: string;
+                        modelYear?: string;
+                        fuelType?: string;
+                        city?: string;
+                        odometer?: number | null;
+                        regType?: string;
+                        appUserId?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Inspection created */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            refId: string;
+                            /** @enum {string} */
+                            status: "ISSUED" | "IN_PROGRESS" | "REJECTED" | "INSPECTION_PENDING" | "INSPECTION_REJECTED" | "INSPECTION_APPROVED" | "INSPECTION_CLOSED" | "UNKNOWN";
+                            rawStatus?: string;
+                            inspectionId?: string;
+                            message?: string;
+                            _rawResponse?: unknown;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/{provider}/inspection/{refId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Poll a break-in inspection's status */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    provider: string;
+                    refId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Inspection status */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            refId: string;
+                            /** @enum {string} */
+                            status: "ISSUED" | "IN_PROGRESS" | "REJECTED" | "INSPECTION_PENDING" | "INSPECTION_REJECTED" | "INSPECTION_APPROVED" | "INSPECTION_CLOSED" | "UNKNOWN";
+                            rawStatus?: string;
+                            inspectionId?: string;
+                            message?: string;
+                            _rawResponse?: unknown;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -978,6 +1448,10 @@ export interface components {
             seatingCapacity?: number;
             idvValue?: number | null;
             idvPercent?: number | null;
+            /** @enum {string} */
+            commercialSubType?: "goods" | "passenger";
+            grossVehicleWeight?: number;
+            carryingCapacity?: number;
             rtoCode: string;
             registrationDate: string;
             registrationNumber?: string;
@@ -985,11 +1459,15 @@ export interface components {
             previousPolicyNumber?: string;
             previousInsurerId?: string;
             previousInsurerName?: string;
+            previousPolicyStartDate?: string;
             previousPolicyExpiryDate?: string;
             /** @default false */
             isPreviousPolicyExpired: boolean;
             /** @enum {string} */
             previousPolicyType?: "comprehensive" | "thirdParty" | "standAloneOD";
+            previousTpPolicyNumber?: string;
+            previousTpStartDate?: string;
+            previousTpExpiryDate?: string;
             /** @default false */
             claimInPreviousPolicy: boolean;
             /** @default 0 */
@@ -1016,6 +1494,7 @@ export interface components {
             paUnnamedPassenger: boolean;
             /** @default false */
             legalLiabilityPaidDriver: boolean;
+            providerAddonCodes?: string[];
         };
         MotorFullQuoteRequest: {
             /** @enum {string} */
@@ -1036,6 +1515,10 @@ export interface components {
             seatingCapacity?: number;
             idvValue?: number | null;
             idvPercent?: number | null;
+            /** @enum {string} */
+            commercialSubType?: "goods" | "passenger";
+            grossVehicleWeight?: number;
+            carryingCapacity?: number;
             rtoCode: string;
             registrationDate: string;
             registrationNumber?: string;
@@ -1043,11 +1526,15 @@ export interface components {
             previousPolicyNumber?: string;
             previousInsurerId?: string;
             previousInsurerName?: string;
+            previousPolicyStartDate?: string;
             previousPolicyExpiryDate?: string;
             /** @default false */
             isPreviousPolicyExpired: boolean;
             /** @enum {string} */
             previousPolicyType?: "comprehensive" | "thirdParty" | "standAloneOD";
+            previousTpPolicyNumber?: string;
+            previousTpStartDate?: string;
+            previousTpExpiryDate?: string;
             /** @default false */
             claimInPreviousPolicy: boolean;
             /** @default 0 */
@@ -1074,6 +1561,7 @@ export interface components {
             paUnnamedPassenger: boolean;
             /** @default false */
             legalLiabilityPaidDriver: boolean;
+            providerAddonCodes?: string[];
             quoteId: string;
             proposer: {
                 /** @enum {string} */
@@ -1155,6 +1643,10 @@ export interface components {
             seatingCapacity?: number;
             idvValue?: number | null;
             idvPercent?: number | null;
+            /** @enum {string} */
+            commercialSubType?: "goods" | "passenger";
+            grossVehicleWeight?: number;
+            carryingCapacity?: number;
             rtoCode: string;
             registrationDate: string;
             registrationNumber?: string;
@@ -1162,11 +1654,15 @@ export interface components {
             previousPolicyNumber?: string;
             previousInsurerId?: string;
             previousInsurerName?: string;
+            previousPolicyStartDate?: string;
             previousPolicyExpiryDate?: string;
             /** @default false */
             isPreviousPolicyExpired: boolean;
             /** @enum {string} */
             previousPolicyType?: "comprehensive" | "thirdParty" | "standAloneOD";
+            previousTpPolicyNumber?: string;
+            previousTpStartDate?: string;
+            previousTpExpiryDate?: string;
             /** @default false */
             claimInPreviousPolicy: boolean;
             /** @default 0 */
@@ -1193,6 +1689,7 @@ export interface components {
             paUnnamedPassenger: boolean;
             /** @default false */
             legalLiabilityPaidDriver: boolean;
+            providerAddonCodes?: string[];
             providers?: string[];
         };
         CanonicalQuoteResult: {
@@ -1262,7 +1759,7 @@ export interface components {
                 slug: string;
                 displayName: string;
                 capabilities: ("fourWheeler" | "twoWheeler" | "commercial" | "newVehicle" | "newCommercial")[];
-                operations: ("quote" | "retrieveQuote" | "proposal" | "ckyc" | "ovd" | "policyStatus" | "coi")[];
+                operations: ("quote" | "retrieveQuote" | "proposal" | "ckyc" | "ovd" | "issuance" | "renewal" | "inspection" | "policyStatus" | "coi")[];
                 motorCapabilities: {
                     fourWheeler?: {
                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
@@ -1373,6 +1870,10 @@ export interface components {
              * @enum {string}
              */
             policyType: "motor" | "health" | "travel" | "sme";
+            fullName?: string;
+            mobile?: string;
+            /** Format: uri */
+            redirectUrl?: string;
         };
         KycResult: {
             kycId?: string;
@@ -1385,6 +1886,11 @@ export interface components {
             permanentAddress?: string;
             correspondenceAddress?: string;
             displayMessage?: string;
+            ckycNumber?: string;
+            ckycRefId?: string;
+            proposalId?: string;
+            redirectUrl?: string;
+            requiresRedirect?: boolean;
             _rawResponse?: unknown;
         };
         OvdResult: {
@@ -1412,6 +1918,107 @@ export interface components {
         CertificateResult: {
             coiBase64: string;
             status?: string;
+            _rawResponse?: unknown;
+        };
+        PolicyIssuanceRequest: {
+            quoteNo: string;
+            clientId: string;
+            /** @enum {string} */
+            vehicleCategory: "fourWheeler" | "twoWheeler" | "commercial" | "newVehicle" | "newCommercial";
+            /** @enum {string} */
+            policyType?: "comprehensive" | "thirdParty" | "standAloneOD";
+            policyStartDate?: string;
+            policyEndDate?: string;
+            receipt: {
+                uniqueTranKey: string;
+                transactionDate: string;
+                /** @default IVR */
+                receiptType: string;
+                amount: number;
+                tranRefNo: string;
+                tranRefNoDate: string;
+                /** @default PAYU */
+                pgType: string;
+                tcsAmount?: string;
+                checkType?: string;
+                bsbCode?: string;
+            };
+        };
+        PolicyIssuanceResult: {
+            providerSlug: string;
+            insurerName?: string;
+            /** @enum {string} */
+            status: "ISSUED" | "IN_PROGRESS" | "REJECTED" | "INSPECTION_PENDING" | "INSPECTION_REJECTED" | "INSPECTION_APPROVED" | "INSPECTION_CLOSED" | "UNKNOWN";
+            policyNumber?: string;
+            applicationNo?: string;
+            receiptNo?: string;
+            clientId?: string;
+            quoteNo?: string;
+            message?: string;
+            _rawResponse?: unknown;
+        };
+        PaymentInitiateRequest: {
+            quoteNo: string;
+            premiumAmount: number;
+            firstName: string;
+            lastName: string;
+            mobile: string;
+            /** Format: email */
+            email: string;
+        };
+        RenewalQuoteRequest: {
+            policyNo: string;
+            expiryDate?: string;
+            registrationNo?: string;
+        };
+        RenewalCreatePolicyRequest: {
+            policyNo: string;
+            quoteNo: string;
+            expiryDate?: string;
+            registrationNo?: string;
+            ckycNo?: string;
+            ckycRefNo?: string;
+            receipt: {
+                uniqueTranKey: string;
+                transactionDate: string;
+                /** @default IVR */
+                receiptType: string;
+                amount: number;
+                tranRefNo: string;
+                tranRefNoDate: string;
+                /** @default PAYU */
+                pgType: string;
+                tcsAmount?: string;
+                checkType?: string;
+                bsbCode?: string;
+            };
+        };
+        InspectionRequest: {
+            refId: string;
+            name: string;
+            /** Format: email */
+            email?: string;
+            mobileNumber: string;
+            address?: string;
+            regNumber: string;
+            vehicleCategory: string;
+            vehicleSubCategory?: string;
+            make: string;
+            brand: string;
+            modelYear?: string;
+            fuelType?: string;
+            city?: string;
+            odometer?: number | null;
+            regType?: string;
+            appUserId?: string;
+        };
+        InspectionResult: {
+            refId: string;
+            /** @enum {string} */
+            status: "ISSUED" | "IN_PROGRESS" | "REJECTED" | "INSPECTION_PENDING" | "INSPECTION_REJECTED" | "INSPECTION_APPROVED" | "INSPECTION_CLOSED" | "UNKNOWN";
+            rawStatus?: string;
+            inspectionId?: string;
+            message?: string;
             _rawResponse?: unknown;
         };
     };

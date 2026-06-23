@@ -31,8 +31,9 @@ export class ProviderError extends AppError {
     public readonly upstreamStatus: number,
     message: string,
     details?: unknown,
+    code = "PROVIDER_ERROR",
   ) {
-    super(502, message, "PROVIDER_ERROR", details);
+    super(502, message, code, details);
     this.name = "ProviderError";
   }
 }

@@ -6,6 +6,7 @@ import type {
   AddonKey,
   BusinessType,
   CanonicalQuote,
+  CommercialSubType,
   CompareQuotesRequest,
   FuelType,
   PolicyType,
@@ -28,6 +29,11 @@ export interface ResolvedVehicle {
   variantName?: string;
   fuelType: FuelType;
   engineCC?: number;
+  seatingCapacity?: number;
+  // Commercial-only attributes (goods/passenger sub-type + GVW).
+  commercialSubType?: CommercialSubType;
+  grossVehicleWeight?: number;
+  carryingCapacity?: number;
   rtoCode: string;
   registrationNumber: string;
   registrationDate: string;
@@ -51,6 +57,14 @@ export interface SelectedPlan {
   quote: CanonicalQuote;
 }
 
+/** Previous third-party policy details — required by FG for standalone OD. */
+export interface PreviousTpDetails {
+  insurerName?: string;
+  policyNumber?: string;
+  startDate?: string;
+  expiryDate?: string;
+}
+
 type AddonState = Partial<Record<AddonKey, boolean>>;
 
 interface VehicleQuoteState {
@@ -63,8 +77,12 @@ interface VehicleQuoteState {
   ncbPercent: number;
   claimInPreviousPolicy: boolean;
   addons: AddonState;
+  /** Previous-TP details captured for a standalone-OD quote. */
+  previousTp: PreviousTpDetails;
 
   selected: SelectedPlan | null;
+  /** CoverCodes chosen from the selected provider's own add-on catalog. */
+  providerAddonCodes: string[];
   proposal: ProposalValues | null;
   panNumber: string | null;
 
@@ -72,6 +90,9 @@ interface VehicleQuoteState {
   fullQuote: CanonicalQuote | null;
   transactionId: string | null;
   kycId: string | null;
+  /** CKYC number + ref captured before the proposal (fed into CreateProposal). */
+  ckyc: string | null;
+  kycRefId: string | null;
 
   setCategory: (category: SupportedCategory) => void;
   setRc: (rc: RcDetails) => void;
@@ -80,13 +101,16 @@ interface VehicleQuoteState {
   setIdv: (idv: number | null) => void;
   setNcb: (ncb: number) => void;
   setClaim: (claim: boolean) => void;
+  setPreviousTp: (p: PreviousTpDetails) => void;
   toggleAddon: (key: AddonKey, on: boolean) => void;
   setAddons: (addons: AddonState) => void;
   selectPlan: (plan: SelectedPlan) => void;
+  setProviderAddonCodes: (codes: string[]) => void;
   setProposal: (proposal: ProposalValues) => void;
   setPan: (pan: string) => void;
   setFullQuote: (transactionId: string, quote: CanonicalQuote) => void;
   setKyc: (kycId: string | null) => void;
+  setCkyc: (ckyc: string | null, kycRefId: string | null) => void;
   reset: () => void;
 }
 
@@ -99,12 +123,16 @@ const initial = {
   ncbPercent: 0,
   claimInPreviousPolicy: false,
   addons: {} as AddonState,
+  previousTp: {} as PreviousTpDetails,
   selected: null,
+  providerAddonCodes: [] as string[],
   proposal: null,
   panNumber: null,
   fullQuote: null,
   transactionId: null,
   kycId: null,
+  ckyc: null,
+  kycRefId: null,
 };
 
 export const useVehicleQuoteStore = create<VehicleQuoteState>()(
@@ -118,13 +146,16 @@ export const useVehicleQuoteStore = create<VehicleQuoteState>()(
       setIdv: (idvValue) => set({ idvValue }),
       setNcb: (ncbPercent) => set({ ncbPercent }),
       setClaim: (claimInPreviousPolicy) => set({ claimInPreviousPolicy }),
+      setPreviousTp: (previousTp) => set({ previousTp }),
       toggleAddon: (key, on) => set((s) => ({ addons: { ...s.addons, [key]: on } })),
       setAddons: (addons) => set({ addons }),
       selectPlan: (selected) => set({ selected }),
+      setProviderAddonCodes: (providerAddonCodes) => set({ providerAddonCodes }),
       setProposal: (proposal) => set({ proposal }),
       setPan: (panNumber) => set({ panNumber }),
       setFullQuote: (transactionId, fullQuote) => set({ transactionId, fullQuote }),
       setKyc: (kycId) => set({ kycId }),
+      setCkyc: (ckyc, kycRefId) => set({ ckyc, kycRefId }),
       reset: () => set({ ...initial }),
     }),
     {
@@ -136,7 +167,13 @@ export const useVehicleQuoteStore = create<VehicleQuoteState>()(
 
 type QuoteInputs = Pick<
   VehicleQuoteState,
-  "vehicle" | "planType" | "idvValue" | "ncbPercent" | "claimInPreviousPolicy" | "addons"
+  | "vehicle"
+  | "planType"
+  | "idvValue"
+  | "ncbPercent"
+  | "claimInPreviousPolicy"
+  | "addons"
+  | "previousTp"
 >;
 
 /**
@@ -173,7 +210,20 @@ export function buildQuoteRequest(state: QuoteInputs): CompareQuotesRequest | nu
     isPreviousPolicyExpired: v.isPreviousPolicyExpired,
     claimInPreviousPolicy: state.claimInPreviousPolicy,
     ncbPercent: state.ncbPercent,
+    // Previous-TP details (FG needs an ACTIVE TP policy for standalone OD).
+    ...(state.planType === "standAloneOD"
+      ? {
+          previousInsurerName: state.previousTp.insurerName || v.previousInsurerName,
+          previousTpPolicyNumber: state.previousTp.policyNumber || v.previousPolicyNumber,
+          previousTpStartDate: state.previousTp.startDate,
+          previousTpExpiryDate: state.previousTp.expiryDate,
+        }
+      : {}),
     ...(state.idvValue ? { idvValue: state.idvValue } : {}),
+    ...(v.seatingCapacity ? { seatingCapacity: v.seatingCapacity } : {}),
+    ...(v.commercialSubType ? { commercialSubType: v.commercialSubType } : {}),
+    ...(v.grossVehicleWeight ? { grossVehicleWeight: v.grossVehicleWeight } : {}),
+    ...(v.carryingCapacity ? { carryingCapacity: v.carryingCapacity } : {}),
     ...addonFlags,
   };
 }

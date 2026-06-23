@@ -1,0 +1,37 @@
+{
+  "CreateProposalResult": {
+    "Client": {
+      "Status": "Successful",
+      "ClientId": "72590187",
+      "QuotationNo": "0000771450",
+      "ErrorMessage": ""
+    },
+    "Receipt": {
+      "Status": "Successful",
+      "ReceiptNo": "",
+      "ErrorMessage": ""
+    },
+    "Policy": {
+      "Status": "Successful",
+      "PolicyNo": "",
+      "ErrorMessage": "",
+      "NewDataSet": {
+        "Table": [{ "LdrErrLvl": "0", "PolNo": "Successful" }],
+        "Table1": [
+          { "RskNo": "1", "Code": "ZCETR", "Description": "Zero Dep+Con+Eng+Tyre+RTI", "Type": "OD", "BOValue": "3658.33", "DBValue": "0" },
+          { "RskNo": "1", "Code": "OD", "Description": "Total Basic OD Premium", "Type": "OD", "BOValue": "7390.93", "DBValue": "0" },
+          { "RskNo": "1", "Code": "TOTALADDON", "Description": "Total ADDON Premium", "Type": "OD", "BOValue": "7958.84", "DBValue": "0" },
+          { "RskNo": "1", "Code": "Gross Premium", "Description": "Gross Premium", "Type": "OD", "BOValue": "16478.06", "DBValue": "0" },
+          { "RskNo": "1", "Code": "ServTax", "Description": "ServTax", "Type": "OD", "BOValue": "2966.0508", "DBValue": "0" },
+          { "RskNo": "1", "Code": "TP", "Description": "Total Basic TP  Premium (TP)", "Type": "TP", "BOValue": "10640.01", "DBValue": "0" },
+          { "RskNo": "1", "Code": "CPA", "Description": "CPA", "Type": "TP", "BOValue": "890", "DBValue": "0" },
+          { "RskNo": "1", "Code": "Gross Premium", "Description": "Gross Premium", "Type": "TP", "BOValue": "13509.99", "DBValue": "0" },
+          { "RskNo": "1", "Code": "ServTax", "Description": "ServTax", "Type": "TP", "BOValue": "2431.7982", "DBValue": "0" }
+        ]
+      },
+      "VehicleIDV": "738,908",
+      "AppliedDiscount": "",
+      "ProductUINNo": ""
+    }
+  }
+}

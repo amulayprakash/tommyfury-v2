@@ -13,6 +13,11 @@ export const CkycRequestObjectSchema = z.object({
   nameAsPerAadhaar: z.string().optional(),
   gender: z.enum(["M", "F", "O"]).optional(),
   policyType: z.enum(["motor", "health", "travel", "sme"]).default("motor"),
+  // FG VerifyCKYC mandates these; other vendors ignore them.
+  fullName: z.string().optional(),
+  mobile: z.string().regex(/^[6-9]\d{9}$/).optional(),
+  /** Absolute URL FG returns to after manual KYC document upload. */
+  redirectUrl: z.string().url().optional(),
 });
 
 export const CkycRequestSchema = CkycRequestObjectSchema.refine(
@@ -35,6 +40,13 @@ export const KycResultSchema = z.object({
   permanentAddress: z.string().optional(),
   correspondenceAddress: z.string().optional(),
   displayMessage: z.string().optional(),
+  // FG CKYC extras: the verified CKYC number feeds CreateProposal; proposalId
+  // keys a later GetCKYCStatus poll; redirectUrl is the manual-KYC fallback.
+  ckycNumber: z.string().optional(),
+  ckycRefId: z.string().optional(),
+  proposalId: z.string().optional(),
+  redirectUrl: z.string().optional(),
+  requiresRedirect: z.boolean().optional(),
   _rawResponse: z.unknown().optional(),
 });
 

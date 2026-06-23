@@ -43,6 +43,15 @@ model Quote {
   policyStatus    String?  @db.VarChar(32)
   paymentLink     String?  @db.VarChar(512)
 
+  // Issuance binding (FG: ClientID + QuotationNo → real PolicyNo + ApplicationNo)
+  clientId        String?  @db.VarChar(64)
+  applicationNo   String?  @db.VarChar(128)
+  receiptNo       String?  @db.VarChar(128)
+  // Payment receipt captured on the gateway callback (drives issuance)
+  paymentTranKey  String?  @db.VarChar(128)
+  paymentRefNo    String?  @db.VarChar(128)
+  pgType          String?  @db.VarChar(32)
+
   // Policy holder (populated on full-quote)
   holderName      String?  @db.VarChar(255)
   holderEmail     String?  @db.VarChar(255)
@@ -84,6 +93,9 @@ model RtoMaster {
   city        String   @db.VarChar(128)
   state       String   @db.VarChar(128)
   stateCode   String   @db.VarChar(8)
+  // Motor zone (A/B for private car). No RTO→zone in the FG master, so it is
+  // derived at seed time (metro cities → A, else B).
+  zone        String?  @db.VarChar(4)
   isActive    Boolean  @default(true)
 
   providerCodes ProviderRtoCode[]
@@ -94,15 +106,22 @@ model RtoMaster {
 
 model MmvMaster {
   id          Int      @id @default(autoincrement())
-  makeId      String   @db.VarChar(32)
+  makeId      String   @db.VarChar(64)
   makeName    String   @db.VarChar(128)
+  // For FG, modelId holds the PASIA_CODE (its ModelCode, e.g. "HO0176").
   modelId     String   @db.VarChar(32)
-  modelName   String   @db.VarChar(128)
+  modelName   String   @db.VarChar(191)
   variantId   String?  @db.VarChar(32)
-  variantName String?  @db.VarChar(128)
+  variantName String?  @db.VarChar(191)
   fuelType    String   @db.VarChar(32)
   engineCC    Int?
   category    String   @db.VarChar(32) // fourWheeler | twoWheeler | commercial
+  // Enrichment used to build the FG quote payload (esp. commercial).
+  bodyType         String? @db.VarChar(64)
+  gvw              Int?
+  seatingCapacity  Int?
+  carryingCapacity Int?
+  vehicleType      String? @db.VarChar(191) // FG VEHICLE_TYPE class, e.g. "PV-Private Car"
   isActive    Boolean  @default(true)
 
   providerCodes ProviderMmvCode[]
@@ -110,6 +129,7 @@ model MmvMaster {
   @@unique([makeId, modelId, variantId, fuelType])
   @@index([makeName])
   @@index([modelName])
+  @@index([category])
   @@map("mmv_master")
 }
 
@@ -124,6 +144,44 @@ model InsurerMaster {
   providerCodes ProviderInsurerCode[]
 
   @@map("insurer_master")
+}
+
+// Provider-specific add-on catalog (FG: from the "Add On Covers" master sheet).
+// Each row is a selectable cover/bundle the provider offers for a vehicle class.
+model MotorAddon {
+  id              Int     @id @default(autoincrement())
+  providerSlug    String  @db.VarChar(64)
+  category        String  @db.VarChar(32)  // fourWheeler | commercial
+  fuelClass       String  @db.VarChar(16) @default("standard") // "electric" for the EV section
+  code            String  @db.VarChar(16)  // FG CoverCode, e.g. ZCETR
+  label           String  @db.VarChar(255)
+  maxAgeYears     Float?
+  requiresZeroDep Boolean @default(false)
+  sortOrder       Int     @default(0)
+  isActive        Boolean @default(true)
+
+  @@unique([providerSlug, category, fuelClass, code])
+  @@index([providerSlug, category])
+  @@map("motor_addons")
+}
+
+model PincodeMaster {
+  id      Int    @id @default(autoincrement())
+  pincode String @db.VarChar(8)
+  area    String @db.VarChar(191)
+  city    String @db.VarChar(128)
+  state   String @db.VarChar(128)
+
+  @@index([pincode])
+  @@map("pincode_master")
+}
+
+model OccupationMaster {
+  id          Int    @id @default(autoincrement())
+  code        String @unique @db.VarChar(16)
+  description String @db.VarChar(191)
+
+  @@map("occupation_master")
 }
 
 // ─── Provider Code Mappings ──────────────────────────────────────────────────

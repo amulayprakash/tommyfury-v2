@@ -36,9 +36,16 @@ export interface ApiEnvelope<T> {
   response: T;
 }
 
-/** Categories the wizard currently supports (new/commercial journeys are deferred). */
-export const SUPPORTED_CATEGORIES = ["twoWheeler", "fourWheeler"] as const;
+/** Categories the wizard currently supports (new-vehicle journeys still deferred). */
+export const SUPPORTED_CATEGORIES = ["twoWheeler", "fourWheeler", "commercial"] as const;
 export type SupportedCategory = (typeof SUPPORTED_CATEGORIES)[number];
+
+/** Commercial goods-vs-passenger sub-type (drives FG ContractType FGV vs FPC). */
+export const COMMERCIAL_SUBTYPE_LABELS = {
+  goods: "Goods Carrying (GCV)",
+  passenger: "Passenger Carrying (PCV)",
+} as const;
+export type CommercialSubType = keyof typeof COMMERCIAL_SUBTYPE_LABELS;
 
 export const POLICY_TYPE_LABELS: Record<PolicyType, string> = {
   comprehensive: "Comprehensive",
