@@ -74,6 +74,12 @@ describe("buildGetQuotePayload", () => {
     expect(p.payload.VendorCode).toBe("Webagg");
   });
 
+  it("defaults IDV to 0 (FG computes it) and reprices when a user IDV is given", () => {
+    expect(vehicle(buildGetQuotePayload(baseQuote(), codes, meta, "r")).IDV).toBe("0");
+    const withIdv = buildGetQuotePayload(baseQuote({ idvValue: 650000 }), codes, meta, "r");
+    expect(vehicle(withIdv).IDV).toBe("650000");
+  });
+
   it("maps thirdParty → LO cover", () => {
     const p = buildGetQuotePayload(baseQuote({ selectedPolicy: "thirdParty" }), codes, meta, "r");
     expect(risk(p).Cover).toBe("LO");

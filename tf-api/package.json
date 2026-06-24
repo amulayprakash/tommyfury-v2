@@ -23,6 +23,7 @@
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
     "db:import:fg": "tsx --env-file=.env scripts/import-fg-master.ts",
+    "db:import:icici": "tsx --env-file=.env scripts/import-icici-master.ts",
     "openapi:gen": "tsx scripts/gen-openapi.ts"
   },
   "prisma": {

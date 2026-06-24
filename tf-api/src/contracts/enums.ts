@@ -57,8 +57,8 @@ export type OvdDocType = z.infer<typeof OvdDocTypeSchema>;
 // Canonical, *actionable* add-on keys — i.e. the boolean flags a quote request can
 // actually toggle (see MotorQuoteRequestSchema). The per-provider capability matrix
 // (see MotorCapabilities) declares which of these each vendor honours per category.
-// Vendors expose more cover types internally (key-protect, garage-cash, …); those
-// are added here only once wired into the quote request.
+// Vendors expose more cover types internally; a cover is added here once it is wired
+// into the quote request (the lower block was wired for ICICI Lombard).
 export const AddonKeySchema = z.enum([
   "zeroDep",
   "engineProtect",
@@ -70,6 +70,13 @@ export const AddonKeySchema = z.enum([
   "paOwner",
   "paUnnamedPassenger",
   "legalLiabilityPaidDriver",
+  // Wired for ICICI (see src/providers/icici/config.ts ADDON_CODES_*).
+  "keyProtect",
+  "garageCash",
+  "lossOfBelongings",
+  "batteryProtect",
+  "drivingAccessories",
+  "ncbProtection",
 ]);
 export type AddonKey = z.infer<typeof AddonKeySchema>;
 
@@ -90,6 +97,12 @@ export const ADDON_METADATA: readonly AddonMeta[] = [
   { key: "paOwner", label: "Personal Accident (Owner-Driver)" },
   { key: "paUnnamedPassenger", label: "PA — Unnamed Passenger" },
   { key: "legalLiabilityPaidDriver", label: "Legal Liability to Paid Driver" },
+  { key: "keyProtect", label: "Key & Lock Protect" },
+  { key: "garageCash", label: "Garage Cash" },
+  { key: "lossOfBelongings", label: "Loss of Personal Belongings" },
+  { key: "batteryProtect", label: "Battery Protect" },
+  { key: "drivingAccessories", label: "Driving Accessories" },
+  { key: "ncbProtection", label: "NCB Protection" },
 ];
 
 // ─── Per-provider motor capability matrix ───────────────────────────────────────

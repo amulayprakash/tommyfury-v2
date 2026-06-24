@@ -392,7 +392,10 @@ export function buildGetQuotePayload(
 ): { url: string; payload: Record<string, unknown> } {
   // CPA (compulsory owner-driver PA) needs a nominee, captured at proposal; the
   // quote prices the base cover with CPAReq=N.
-  const vehicle = buildVehicle(req, codes, { idv: "0" });
+  // IDV "0" lets FG compute its default; a user-supplied IDV reprices the OD
+  // cover (mirrors CreateProposal so the IDV control actually moves the quote).
+  const idv = req.idvValue && req.idvValue > 0 ? String(req.idvValue) : "0";
+  const vehicle = buildVehicle(req, codes, { idv });
   const payload = {
     Uid: requestId,
     VendorCode: meta.vendorCode,

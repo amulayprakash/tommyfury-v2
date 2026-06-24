@@ -38,23 +38,23 @@ export interface paths {
                                 motorCapabilities: {
                                     fourWheeler?: {
                                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
-                                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver")[];
+                                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
                                     };
                                     twoWheeler?: {
                                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
-                                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver")[];
+                                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
                                     };
                                     commercial?: {
                                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
-                                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver")[];
+                                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
                                     };
                                     newVehicle?: {
                                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
-                                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver")[];
+                                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
                                     };
                                     newCommercial?: {
                                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
-                                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver")[];
+                                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
                                     };
                                 };
                             }[];
@@ -155,7 +155,40 @@ export interface paths {
                         paUnnamedPassenger?: boolean;
                         /** @default false */
                         legalLiabilityPaidDriver?: boolean;
+                        /** @default false */
+                        keyProtect?: boolean;
+                        /** @default false */
+                        garageCash?: boolean;
+                        /** @default false */
+                        lossOfBelongings?: boolean;
+                        /** @default false */
+                        batteryProtect?: boolean;
+                        /** @default false */
+                        drivingAccessories?: boolean;
+                        /** @default false */
+                        ncbProtection?: boolean;
                         providerAddonCodes?: string[];
+                        voluntaryDeductible?: number | null;
+                        unnamedPaSumInsured?: number | null;
+                        namedPaSumInsured?: number | null;
+                        /** @enum {string} */
+                        bifuelKitType?: "NA" | "CNG" | "LPG" | "FactoryFittedCNG" | "FactoryFittedLPG";
+                        bifuelKitSI?: number | null;
+                        electricalAccessoriesSI?: number | null;
+                        nonElectricalAccessoriesSI?: number | null;
+                        hasAntiTheftDevice?: boolean;
+                        automobileAssociationMembership?: string;
+                        hasPayU?: boolean;
+                        payURange?: number | null;
+                        hasCibil?: boolean;
+                        panNumber?: string;
+                        proposerName?: string;
+                        drivingAccessoriesSI?: number | null;
+                        keyProtectSI?: number | null;
+                        numberOfDrivers?: number | null;
+                        numberOfEmployees?: number | null;
+                        pincode?: string;
+                        previousPolicyHasZdCover?: boolean;
                         providers?: string[];
                     };
                 };
@@ -342,7 +375,40 @@ export interface paths {
                         paUnnamedPassenger?: boolean;
                         /** @default false */
                         legalLiabilityPaidDriver?: boolean;
+                        /** @default false */
+                        keyProtect?: boolean;
+                        /** @default false */
+                        garageCash?: boolean;
+                        /** @default false */
+                        lossOfBelongings?: boolean;
+                        /** @default false */
+                        batteryProtect?: boolean;
+                        /** @default false */
+                        drivingAccessories?: boolean;
+                        /** @default false */
+                        ncbProtection?: boolean;
                         providerAddonCodes?: string[];
+                        voluntaryDeductible?: number | null;
+                        unnamedPaSumInsured?: number | null;
+                        namedPaSumInsured?: number | null;
+                        /** @enum {string} */
+                        bifuelKitType?: "NA" | "CNG" | "LPG" | "FactoryFittedCNG" | "FactoryFittedLPG";
+                        bifuelKitSI?: number | null;
+                        electricalAccessoriesSI?: number | null;
+                        nonElectricalAccessoriesSI?: number | null;
+                        hasAntiTheftDevice?: boolean;
+                        automobileAssociationMembership?: string;
+                        hasPayU?: boolean;
+                        payURange?: number | null;
+                        hasCibil?: boolean;
+                        panNumber?: string;
+                        proposerName?: string;
+                        drivingAccessoriesSI?: number | null;
+                        keyProtectSI?: number | null;
+                        numberOfDrivers?: number | null;
+                        numberOfEmployees?: number | null;
+                        pincode?: string;
+                        previousPolicyHasZdCover?: boolean;
                     };
                 };
             };
@@ -630,7 +696,40 @@ export interface paths {
                         paUnnamedPassenger?: boolean;
                         /** @default false */
                         legalLiabilityPaidDriver?: boolean;
+                        /** @default false */
+                        keyProtect?: boolean;
+                        /** @default false */
+                        garageCash?: boolean;
+                        /** @default false */
+                        lossOfBelongings?: boolean;
+                        /** @default false */
+                        batteryProtect?: boolean;
+                        /** @default false */
+                        drivingAccessories?: boolean;
+                        /** @default false */
+                        ncbProtection?: boolean;
                         providerAddonCodes?: string[];
+                        voluntaryDeductible?: number | null;
+                        unnamedPaSumInsured?: number | null;
+                        namedPaSumInsured?: number | null;
+                        /** @enum {string} */
+                        bifuelKitType?: "NA" | "CNG" | "LPG" | "FactoryFittedCNG" | "FactoryFittedLPG";
+                        bifuelKitSI?: number | null;
+                        electricalAccessoriesSI?: number | null;
+                        nonElectricalAccessoriesSI?: number | null;
+                        hasAntiTheftDevice?: boolean;
+                        automobileAssociationMembership?: string;
+                        hasPayU?: boolean;
+                        payURange?: number | null;
+                        hasCibil?: boolean;
+                        panNumber?: string;
+                        proposerName?: string;
+                        drivingAccessoriesSI?: number | null;
+                        keyProtectSI?: number | null;
+                        numberOfDrivers?: number | null;
+                        numberOfEmployees?: number | null;
+                        pincode?: string;
+                        previousPolicyHasZdCover?: boolean;
                         quoteId: string;
                         proposer: {
                             /** @enum {string} */
@@ -1494,7 +1593,40 @@ export interface components {
             paUnnamedPassenger: boolean;
             /** @default false */
             legalLiabilityPaidDriver: boolean;
+            /** @default false */
+            keyProtect: boolean;
+            /** @default false */
+            garageCash: boolean;
+            /** @default false */
+            lossOfBelongings: boolean;
+            /** @default false */
+            batteryProtect: boolean;
+            /** @default false */
+            drivingAccessories: boolean;
+            /** @default false */
+            ncbProtection: boolean;
             providerAddonCodes?: string[];
+            voluntaryDeductible?: number | null;
+            unnamedPaSumInsured?: number | null;
+            namedPaSumInsured?: number | null;
+            /** @enum {string} */
+            bifuelKitType?: "NA" | "CNG" | "LPG" | "FactoryFittedCNG" | "FactoryFittedLPG";
+            bifuelKitSI?: number | null;
+            electricalAccessoriesSI?: number | null;
+            nonElectricalAccessoriesSI?: number | null;
+            hasAntiTheftDevice?: boolean;
+            automobileAssociationMembership?: string;
+            hasPayU?: boolean;
+            payURange?: number | null;
+            hasCibil?: boolean;
+            panNumber?: string;
+            proposerName?: string;
+            drivingAccessoriesSI?: number | null;
+            keyProtectSI?: number | null;
+            numberOfDrivers?: number | null;
+            numberOfEmployees?: number | null;
+            pincode?: string;
+            previousPolicyHasZdCover?: boolean;
         };
         MotorFullQuoteRequest: {
             /** @enum {string} */
@@ -1561,7 +1693,40 @@ export interface components {
             paUnnamedPassenger: boolean;
             /** @default false */
             legalLiabilityPaidDriver: boolean;
+            /** @default false */
+            keyProtect: boolean;
+            /** @default false */
+            garageCash: boolean;
+            /** @default false */
+            lossOfBelongings: boolean;
+            /** @default false */
+            batteryProtect: boolean;
+            /** @default false */
+            drivingAccessories: boolean;
+            /** @default false */
+            ncbProtection: boolean;
             providerAddonCodes?: string[];
+            voluntaryDeductible?: number | null;
+            unnamedPaSumInsured?: number | null;
+            namedPaSumInsured?: number | null;
+            /** @enum {string} */
+            bifuelKitType?: "NA" | "CNG" | "LPG" | "FactoryFittedCNG" | "FactoryFittedLPG";
+            bifuelKitSI?: number | null;
+            electricalAccessoriesSI?: number | null;
+            nonElectricalAccessoriesSI?: number | null;
+            hasAntiTheftDevice?: boolean;
+            automobileAssociationMembership?: string;
+            hasPayU?: boolean;
+            payURange?: number | null;
+            hasCibil?: boolean;
+            panNumber?: string;
+            proposerName?: string;
+            drivingAccessoriesSI?: number | null;
+            keyProtectSI?: number | null;
+            numberOfDrivers?: number | null;
+            numberOfEmployees?: number | null;
+            pincode?: string;
+            previousPolicyHasZdCover?: boolean;
             quoteId: string;
             proposer: {
                 /** @enum {string} */
@@ -1689,7 +1854,40 @@ export interface components {
             paUnnamedPassenger: boolean;
             /** @default false */
             legalLiabilityPaidDriver: boolean;
+            /** @default false */
+            keyProtect: boolean;
+            /** @default false */
+            garageCash: boolean;
+            /** @default false */
+            lossOfBelongings: boolean;
+            /** @default false */
+            batteryProtect: boolean;
+            /** @default false */
+            drivingAccessories: boolean;
+            /** @default false */
+            ncbProtection: boolean;
             providerAddonCodes?: string[];
+            voluntaryDeductible?: number | null;
+            unnamedPaSumInsured?: number | null;
+            namedPaSumInsured?: number | null;
+            /** @enum {string} */
+            bifuelKitType?: "NA" | "CNG" | "LPG" | "FactoryFittedCNG" | "FactoryFittedLPG";
+            bifuelKitSI?: number | null;
+            electricalAccessoriesSI?: number | null;
+            nonElectricalAccessoriesSI?: number | null;
+            hasAntiTheftDevice?: boolean;
+            automobileAssociationMembership?: string;
+            hasPayU?: boolean;
+            payURange?: number | null;
+            hasCibil?: boolean;
+            panNumber?: string;
+            proposerName?: string;
+            drivingAccessoriesSI?: number | null;
+            keyProtectSI?: number | null;
+            numberOfDrivers?: number | null;
+            numberOfEmployees?: number | null;
+            pincode?: string;
+            previousPolicyHasZdCover?: boolean;
             providers?: string[];
         };
         CanonicalQuoteResult: {
@@ -1763,23 +1961,23 @@ export interface components {
                 motorCapabilities: {
                     fourWheeler?: {
                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
-                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver")[];
+                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
                     };
                     twoWheeler?: {
                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
-                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver")[];
+                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
                     };
                     commercial?: {
                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
-                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver")[];
+                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
                     };
                     newVehicle?: {
                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
-                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver")[];
+                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
                     };
                     newCommercial?: {
                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
-                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver")[];
+                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
                     };
                 };
             }[];

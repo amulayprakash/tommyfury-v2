@@ -3,9 +3,10 @@
  * Run: npm run db:seed
  *
  * Master tables (rto_master, mmv_master, insurer_master) are seeded from the
- * live MySQL dumps (zuno_*) and ICICI's master dumps once those arrive. Until
- * then a tiny dev subset (codes taken from the ICICI sample payloads) keeps the
- * canonical → provider-code pipeline runnable end-to-end.
+ * live MySQL dumps (zuno_*) for FG, and ICICI's full UAT masters via
+ * `npm run db:import:icici` (scripts/import-icici-master.ts). This seed keeps a
+ * tiny dev subset (codes from the ICICI sample payloads) so the canonical →
+ * provider-code pipeline and the test DB stay runnable without the full import.
  */
 
 import { PrismaClient } from "@prisma/client";

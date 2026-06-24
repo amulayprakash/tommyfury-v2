@@ -72,11 +72,52 @@ export const MotorQuoteRequestSchema = z.object({
   paOwner: z.boolean().default(true),
   paUnnamedPassenger: z.boolean().default(false),
   legalLiabilityPaidDriver: z.boolean().default(false),
+  // Additional boolean covers (wired for ICICI; FG ignores per its capability matrix).
+  keyProtect: z.boolean().default(false),
+  garageCash: z.boolean().default(false),
+  lossOfBelongings: z.boolean().default(false),
+  batteryProtect: z.boolean().default(false),
+  drivingAccessories: z.boolean().default(false),
+  ncbProtection: z.boolean().default(false),
 
   // Provider-specific add-on cover codes chosen from a vendor's own catalog
   // (e.g. FG's master "Add On Covers"). Passed through verbatim to that vendor;
   // providers that use the canonical boolean flags above simply ignore this.
   providerAddonCodes: z.array(z.string().min(1)).optional(),
+
+  // ── Optional, provider-agnostic cover/discount inputs ───────────────────────
+  // All optional + default-off so existing callers and providers that don't honour
+  // them are unaffected. Currently consumed by ICICI Lombard (see its mapper).
+  /** Voluntary deductible amount (ICICI: AddOns VD-2500 / VD-5000). */
+  voluntaryDeductible: z.coerce.number().int().nonnegative().optional(),
+  /** PA cover sum-insured (ICICI: UnNamedPaCover / NamedPaCover). */
+  unnamedPaSumInsured: z.coerce.number().nonnegative().optional(),
+  namedPaSumInsured: z.coerce.number().nonnegative().optional(),
+  /** External bi-fuel (CNG/LPG) kit (ICICI: GasKitType / GasKitSI). */
+  bifuelKitType: z.enum(["NA", "CNG", "LPG", "FactoryFittedCNG", "FactoryFittedLPG"]).optional(),
+  bifuelKitSI: z.coerce.number().nonnegative().optional(),
+  /** Electrical / non-electrical accessory sum-insured. */
+  electricalAccessoriesSI: z.coerce.number().nonnegative().optional(),
+  nonElectricalAccessoriesSI: z.coerce.number().nonnegative().optional(),
+  /** Anti-theft device + AAA membership discounts. */
+  hasAntiTheftDevice: z.boolean().optional(),
+  automobileAssociationMembership: z.string().optional(),
+  /** PayU / CIBIL discount drivers (CIBIL needs name + PAN). */
+  hasPayU: z.boolean().optional(),
+  payURange: z.coerce.number().int().nonnegative().optional(),
+  hasCibil: z.boolean().optional(),
+  panNumber: z.string().optional(),
+  proposerName: z.string().optional(),
+  /** 2W cover sum-insured (ICICI: DrivingAccessoriesSI / KeyProtectSI). */
+  drivingAccessoriesSI: z.coerce.number().nonnegative().optional(),
+  keyProtectSI: z.coerce.number().nonnegative().optional(),
+  /** Driver / employee counts (commercial-ish; ICICI optional). */
+  numberOfDrivers: z.coerce.number().int().nonnegative().optional(),
+  numberOfEmployees: z.coerce.number().int().nonnegative().optional(),
+  /** Owner pincode for the quote (ICICI Save-Quote Pincode). */
+  pincode: z.string().regex(/^\d{6}$/).optional(),
+  /** Previous policy carried a Zero-Dep cover (ICICI PreviousPolicyHasZdCover). */
+  previousPolicyHasZdCover: z.boolean().optional(),
 });
 
 export type MotorQuoteRequest = z.infer<typeof MotorQuoteRequestSchema>;

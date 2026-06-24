@@ -127,11 +127,14 @@ export class IciciProvider
       token,
     });
     assertIciciSuccess(body, "get-quote");
-    return normalizeQuote(body, {
+    // The GET-quote response carries no policy-type field, so infer it from the
+    // premium shape (TP-only / OD-only / both) rather than hard-coding it.
+    const result = normalizeQuote(body, {
       requestId: ctx.requestId,
       policyType: "comprehensive",
       vehicleCategory: category,
     });
+    return { ...result, policyType: inferPolicyType(result) };
   }
 
   async getFullQuote(
@@ -154,9 +157,23 @@ export class IciciProvider
       vehicleCategory: req.vehicleType,
     });
 
+    // Break-in gate: when the quote flags inspection-required, never bind payment
+    // until the break-in is approved. Submit a proposal-only request (which creates
+    // the InspectionId) and surface the pending state; the client polls policy-status
+    // and re-submits with payment once approved.
+    // ⚠️ Confirm the exact post-approval re-issue call with ICICI.
+    const wantsPayment = !req.isProposalOnly && (req.amountCollected ?? 0) > 0;
+    let effectiveReq = req;
+    if (base.isInspectionRequired && wantsPayment) {
+      const approved = await this.inspectionApproved(req.quoteId, ctx).catch(() => false);
+      if (!approved) {
+        effectiveReq = { ...req, isProposalOnly: true, amountCollected: 0, paymentTransactionId: undefined };
+      }
+    }
+
     // 2. Submit the proposal.
-    const codes = await this.codeResolver(req);
-    const { url, payload } = buildProposalPayload(req, codes, ctx.requestId);
+    const codes = await this.codeResolver(effectiveReq);
+    const { url, payload } = buildProposalPayload(effectiveReq, codes, ctx.requestId);
     const proposalBody = await this.transport.request({
       method: "POST",
       url: this.url(url),
@@ -175,6 +192,16 @@ export class IciciProvider
       contractDetails: overlay.contractDetails,
       _rawResponse: { quote: quoteBody, proposal: proposalBody },
     };
+  }
+
+  /** True once a break-in inspection has cleared (or the policy already issued). */
+  private async inspectionApproved(transactionId: string, ctx: ProviderContext): Promise<boolean> {
+    const status = await this.getPolicyStatus({ transactionId }, ctx);
+    return (
+      status.status === "INSPECTION_APPROVED" ||
+      status.status === "INSPECTION_CLOSED" ||
+      status.status === "ISSUED"
+    );
   }
 
   async completeCkyc(req: CkycRequest, _ctx: ProviderContext): Promise<KycResult> {
@@ -226,6 +253,15 @@ export class IciciProvider
     assertIciciSuccess(body, "coi");
     return normalizeCertificate(body);
   }
+}
+
+/** Infers the policy type of a retrieved quote from its premium breakdown. */
+function inferPolicyType(result: CanonicalQuoteResult): string {
+  const od = result.basicOdPremium > 0;
+  const tp = result.thirdPartyPremium > 0;
+  if (od && !tp) return "standAloneOD";
+  if (tp && !od) return "thirdParty";
+  return "comprehensive";
 }
 
 /** Factory used at startup — loads + validates env config, DB-backed code resolver. */

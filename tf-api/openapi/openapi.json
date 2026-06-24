@@ -226,12 +226,126 @@
             "type": "boolean",
             "default": false
           },
+          "keyProtect": {
+            "type": "boolean",
+            "default": false
+          },
+          "garageCash": {
+            "type": "boolean",
+            "default": false
+          },
+          "lossOfBelongings": {
+            "type": "boolean",
+            "default": false
+          },
+          "batteryProtect": {
+            "type": "boolean",
+            "default": false
+          },
+          "drivingAccessories": {
+            "type": "boolean",
+            "default": false
+          },
+          "ncbProtection": {
+            "type": "boolean",
+            "default": false
+          },
           "providerAddonCodes": {
             "type": "array",
             "items": {
               "type": "string",
               "minLength": 1
             }
+          },
+          "voluntaryDeductible": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0
+          },
+          "unnamedPaSumInsured": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "namedPaSumInsured": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "bifuelKitType": {
+            "type": "string",
+            "enum": [
+              "NA",
+              "CNG",
+              "LPG",
+              "FactoryFittedCNG",
+              "FactoryFittedLPG"
+            ]
+          },
+          "bifuelKitSI": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "electricalAccessoriesSI": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "nonElectricalAccessoriesSI": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "hasAntiTheftDevice": {
+            "type": "boolean"
+          },
+          "automobileAssociationMembership": {
+            "type": "string"
+          },
+          "hasPayU": {
+            "type": "boolean"
+          },
+          "payURange": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0
+          },
+          "hasCibil": {
+            "type": "boolean"
+          },
+          "panNumber": {
+            "type": "string"
+          },
+          "proposerName": {
+            "type": "string"
+          },
+          "drivingAccessoriesSI": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "keyProtectSI": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "numberOfDrivers": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0
+          },
+          "numberOfEmployees": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0
+          },
+          "pincode": {
+            "type": "string",
+            "pattern": "^\\d{6}$"
+          },
+          "previousPolicyHasZdCover": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -462,12 +576,126 @@
             "type": "boolean",
             "default": false
           },
+          "keyProtect": {
+            "type": "boolean",
+            "default": false
+          },
+          "garageCash": {
+            "type": "boolean",
+            "default": false
+          },
+          "lossOfBelongings": {
+            "type": "boolean",
+            "default": false
+          },
+          "batteryProtect": {
+            "type": "boolean",
+            "default": false
+          },
+          "drivingAccessories": {
+            "type": "boolean",
+            "default": false
+          },
+          "ncbProtection": {
+            "type": "boolean",
+            "default": false
+          },
           "providerAddonCodes": {
             "type": "array",
             "items": {
               "type": "string",
               "minLength": 1
             }
+          },
+          "voluntaryDeductible": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0
+          },
+          "unnamedPaSumInsured": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "namedPaSumInsured": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "bifuelKitType": {
+            "type": "string",
+            "enum": [
+              "NA",
+              "CNG",
+              "LPG",
+              "FactoryFittedCNG",
+              "FactoryFittedLPG"
+            ]
+          },
+          "bifuelKitSI": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "electricalAccessoriesSI": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "nonElectricalAccessoriesSI": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "hasAntiTheftDevice": {
+            "type": "boolean"
+          },
+          "automobileAssociationMembership": {
+            "type": "string"
+          },
+          "hasPayU": {
+            "type": "boolean"
+          },
+          "payURange": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0
+          },
+          "hasCibil": {
+            "type": "boolean"
+          },
+          "panNumber": {
+            "type": "string"
+          },
+          "proposerName": {
+            "type": "string"
+          },
+          "drivingAccessoriesSI": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "keyProtectSI": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "numberOfDrivers": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0
+          },
+          "numberOfEmployees": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0
+          },
+          "pincode": {
+            "type": "string",
+            "pattern": "^\\d{6}$"
+          },
+          "previousPolicyHasZdCover": {
+            "type": "boolean"
           },
           "quoteId": {
             "type": "string",
@@ -908,12 +1136,126 @@
             "type": "boolean",
             "default": false
           },
+          "keyProtect": {
+            "type": "boolean",
+            "default": false
+          },
+          "garageCash": {
+            "type": "boolean",
+            "default": false
+          },
+          "lossOfBelongings": {
+            "type": "boolean",
+            "default": false
+          },
+          "batteryProtect": {
+            "type": "boolean",
+            "default": false
+          },
+          "drivingAccessories": {
+            "type": "boolean",
+            "default": false
+          },
+          "ncbProtection": {
+            "type": "boolean",
+            "default": false
+          },
           "providerAddonCodes": {
             "type": "array",
             "items": {
               "type": "string",
               "minLength": 1
             }
+          },
+          "voluntaryDeductible": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0
+          },
+          "unnamedPaSumInsured": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "namedPaSumInsured": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "bifuelKitType": {
+            "type": "string",
+            "enum": [
+              "NA",
+              "CNG",
+              "LPG",
+              "FactoryFittedCNG",
+              "FactoryFittedLPG"
+            ]
+          },
+          "bifuelKitSI": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "electricalAccessoriesSI": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "nonElectricalAccessoriesSI": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "hasAntiTheftDevice": {
+            "type": "boolean"
+          },
+          "automobileAssociationMembership": {
+            "type": "string"
+          },
+          "hasPayU": {
+            "type": "boolean"
+          },
+          "payURange": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0
+          },
+          "hasCibil": {
+            "type": "boolean"
+          },
+          "panNumber": {
+            "type": "string"
+          },
+          "proposerName": {
+            "type": "string"
+          },
+          "drivingAccessoriesSI": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "keyProtectSI": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "numberOfDrivers": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0
+          },
+          "numberOfEmployees": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0
+          },
+          "pincode": {
+            "type": "string",
+            "pattern": "^\\d{6}$"
+          },
+          "previousPolicyHasZdCover": {
+            "type": "boolean"
           },
           "providers": {
             "type": "array",
@@ -1242,7 +1584,13 @@
                               "consumables",
                               "paOwner",
                               "paUnnamedPassenger",
-                              "legalLiabilityPaidDriver"
+                              "legalLiabilityPaidDriver",
+                              "keyProtect",
+                              "garageCash",
+                              "lossOfBelongings",
+                              "batteryProtect",
+                              "drivingAccessories",
+                              "ncbProtection"
                             ]
                           }
                         }
@@ -1280,7 +1628,13 @@
                               "consumables",
                               "paOwner",
                               "paUnnamedPassenger",
-                              "legalLiabilityPaidDriver"
+                              "legalLiabilityPaidDriver",
+                              "keyProtect",
+                              "garageCash",
+                              "lossOfBelongings",
+                              "batteryProtect",
+                              "drivingAccessories",
+                              "ncbProtection"
                             ]
                           }
                         }
@@ -1318,7 +1672,13 @@
                               "consumables",
                               "paOwner",
                               "paUnnamedPassenger",
-                              "legalLiabilityPaidDriver"
+                              "legalLiabilityPaidDriver",
+                              "keyProtect",
+                              "garageCash",
+                              "lossOfBelongings",
+                              "batteryProtect",
+                              "drivingAccessories",
+                              "ncbProtection"
                             ]
                           }
                         }
@@ -1356,7 +1716,13 @@
                               "consumables",
                               "paOwner",
                               "paUnnamedPassenger",
-                              "legalLiabilityPaidDriver"
+                              "legalLiabilityPaidDriver",
+                              "keyProtect",
+                              "garageCash",
+                              "lossOfBelongings",
+                              "batteryProtect",
+                              "drivingAccessories",
+                              "ncbProtection"
                             ]
                           }
                         }
@@ -1394,7 +1760,13 @@
                               "consumables",
                               "paOwner",
                               "paUnnamedPassenger",
-                              "legalLiabilityPaidDriver"
+                              "legalLiabilityPaidDriver",
+                              "keyProtect",
+                              "garageCash",
+                              "lossOfBelongings",
+                              "batteryProtect",
+                              "drivingAccessories",
+                              "ncbProtection"
                             ]
                           }
                         }
@@ -2395,7 +2767,13 @@
                                         "consumables",
                                         "paOwner",
                                         "paUnnamedPassenger",
-                                        "legalLiabilityPaidDriver"
+                                        "legalLiabilityPaidDriver",
+                                        "keyProtect",
+                                        "garageCash",
+                                        "lossOfBelongings",
+                                        "batteryProtect",
+                                        "drivingAccessories",
+                                        "ncbProtection"
                                       ]
                                     }
                                   }
@@ -2433,7 +2811,13 @@
                                         "consumables",
                                         "paOwner",
                                         "paUnnamedPassenger",
-                                        "legalLiabilityPaidDriver"
+                                        "legalLiabilityPaidDriver",
+                                        "keyProtect",
+                                        "garageCash",
+                                        "lossOfBelongings",
+                                        "batteryProtect",
+                                        "drivingAccessories",
+                                        "ncbProtection"
                                       ]
                                     }
                                   }
@@ -2471,7 +2855,13 @@
                                         "consumables",
                                         "paOwner",
                                         "paUnnamedPassenger",
-                                        "legalLiabilityPaidDriver"
+                                        "legalLiabilityPaidDriver",
+                                        "keyProtect",
+                                        "garageCash",
+                                        "lossOfBelongings",
+                                        "batteryProtect",
+                                        "drivingAccessories",
+                                        "ncbProtection"
                                       ]
                                     }
                                   }
@@ -2509,7 +2899,13 @@
                                         "consumables",
                                         "paOwner",
                                         "paUnnamedPassenger",
-                                        "legalLiabilityPaidDriver"
+                                        "legalLiabilityPaidDriver",
+                                        "keyProtect",
+                                        "garageCash",
+                                        "lossOfBelongings",
+                                        "batteryProtect",
+                                        "drivingAccessories",
+                                        "ncbProtection"
                                       ]
                                     }
                                   }
@@ -2547,7 +2943,13 @@
                                         "consumables",
                                         "paOwner",
                                         "paUnnamedPassenger",
-                                        "legalLiabilityPaidDriver"
+                                        "legalLiabilityPaidDriver",
+                                        "keyProtect",
+                                        "garageCash",
+                                        "lossOfBelongings",
+                                        "batteryProtect",
+                                        "drivingAccessories",
+                                        "ncbProtection"
                                       ]
                                     }
                                   }
@@ -2802,12 +3204,126 @@
                     "type": "boolean",
                     "default": false
                   },
+                  "keyProtect": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "garageCash": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "lossOfBelongings": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "batteryProtect": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "drivingAccessories": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "ncbProtection": {
+                    "type": "boolean",
+                    "default": false
+                  },
                   "providerAddonCodes": {
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1
                     }
+                  },
+                  "voluntaryDeductible": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "unnamedPaSumInsured": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "namedPaSumInsured": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "bifuelKitType": {
+                    "type": "string",
+                    "enum": [
+                      "NA",
+                      "CNG",
+                      "LPG",
+                      "FactoryFittedCNG",
+                      "FactoryFittedLPG"
+                    ]
+                  },
+                  "bifuelKitSI": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "electricalAccessoriesSI": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "nonElectricalAccessoriesSI": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "hasAntiTheftDevice": {
+                    "type": "boolean"
+                  },
+                  "automobileAssociationMembership": {
+                    "type": "string"
+                  },
+                  "hasPayU": {
+                    "type": "boolean"
+                  },
+                  "payURange": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "hasCibil": {
+                    "type": "boolean"
+                  },
+                  "panNumber": {
+                    "type": "string"
+                  },
+                  "proposerName": {
+                    "type": "string"
+                  },
+                  "drivingAccessoriesSI": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "keyProtectSI": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "numberOfDrivers": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "numberOfEmployees": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "pincode": {
+                    "type": "string",
+                    "pattern": "^\\d{6}$"
+                  },
+                  "previousPolicyHasZdCover": {
+                    "type": "boolean"
                   },
                   "providers": {
                     "type": "array",
@@ -3353,12 +3869,126 @@
                     "type": "boolean",
                     "default": false
                   },
+                  "keyProtect": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "garageCash": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "lossOfBelongings": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "batteryProtect": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "drivingAccessories": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "ncbProtection": {
+                    "type": "boolean",
+                    "default": false
+                  },
                   "providerAddonCodes": {
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1
                     }
+                  },
+                  "voluntaryDeductible": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "unnamedPaSumInsured": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "namedPaSumInsured": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "bifuelKitType": {
+                    "type": "string",
+                    "enum": [
+                      "NA",
+                      "CNG",
+                      "LPG",
+                      "FactoryFittedCNG",
+                      "FactoryFittedLPG"
+                    ]
+                  },
+                  "bifuelKitSI": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "electricalAccessoriesSI": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "nonElectricalAccessoriesSI": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "hasAntiTheftDevice": {
+                    "type": "boolean"
+                  },
+                  "automobileAssociationMembership": {
+                    "type": "string"
+                  },
+                  "hasPayU": {
+                    "type": "boolean"
+                  },
+                  "payURange": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "hasCibil": {
+                    "type": "boolean"
+                  },
+                  "panNumber": {
+                    "type": "string"
+                  },
+                  "proposerName": {
+                    "type": "string"
+                  },
+                  "drivingAccessoriesSI": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "keyProtectSI": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "numberOfDrivers": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "numberOfEmployees": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "pincode": {
+                    "type": "string",
+                    "pattern": "^\\d{6}$"
+                  },
+                  "previousPolicyHasZdCover": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -4119,12 +4749,126 @@
                     "type": "boolean",
                     "default": false
                   },
+                  "keyProtect": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "garageCash": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "lossOfBelongings": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "batteryProtect": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "drivingAccessories": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "ncbProtection": {
+                    "type": "boolean",
+                    "default": false
+                  },
                   "providerAddonCodes": {
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1
                     }
+                  },
+                  "voluntaryDeductible": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "unnamedPaSumInsured": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "namedPaSumInsured": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "bifuelKitType": {
+                    "type": "string",
+                    "enum": [
+                      "NA",
+                      "CNG",
+                      "LPG",
+                      "FactoryFittedCNG",
+                      "FactoryFittedLPG"
+                    ]
+                  },
+                  "bifuelKitSI": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "electricalAccessoriesSI": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "nonElectricalAccessoriesSI": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "hasAntiTheftDevice": {
+                    "type": "boolean"
+                  },
+                  "automobileAssociationMembership": {
+                    "type": "string"
+                  },
+                  "hasPayU": {
+                    "type": "boolean"
+                  },
+                  "payURange": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "hasCibil": {
+                    "type": "boolean"
+                  },
+                  "panNumber": {
+                    "type": "string"
+                  },
+                  "proposerName": {
+                    "type": "string"
+                  },
+                  "drivingAccessoriesSI": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "keyProtectSI": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "numberOfDrivers": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "numberOfEmployees": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "pincode": {
+                    "type": "string",
+                    "pattern": "^\\d{6}$"
+                  },
+                  "previousPolicyHasZdCover": {
+                    "type": "boolean"
                   },
                   "quoteId": {
                     "type": "string",

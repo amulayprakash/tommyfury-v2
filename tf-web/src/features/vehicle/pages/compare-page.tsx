@@ -175,6 +175,7 @@ export function ComparePage() {
   const setPlanType = useVehicleQuoteStore((s) => s.setPlanType);
   const setIdv = useVehicleQuoteStore((s) => s.setIdv);
   const setNcb = useVehicleQuoteStore((s) => s.setNcb);
+  const setClaim = useVehicleQuoteStore((s) => s.setClaim);
   const setPreviousTp = useVehicleQuoteStore((s) => s.setPreviousTp);
   const selectPlan = useVehicleQuoteStore((s) => s.selectPlan);
 
@@ -275,7 +276,20 @@ export function ComparePage() {
             {showOdControls ? (
               <>
                 <IdvControl value={idvValue} min={idvBounds.min} max={idvBounds.max} onChange={setIdv} />
-                <NcbSelect value={ncbPercent} onChange={setNcb} />
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={claimInPreviousPolicy}
+                    onChange={(e) => {
+                      setClaim(e.target.checked);
+                      // A claim voids the NCB — keep the request consistent.
+                      if (e.target.checked) setNcb(0);
+                    }}
+                  />
+                  <span>I made a claim in my previous policy</span>
+                </label>
+                <NcbSelect value={ncbPercent} onChange={setNcb} disabled={claimInPreviousPolicy} />
                 {planType === "standAloneOD" ? (
                   <div className="space-y-2 rounded-md border bg-muted/30 p-3">
                     <p className="text-xs font-medium">Previous third-party policy</p>

@@ -95,8 +95,10 @@ describe("capability matrix", () => {
     // 2W exposes RTI; 4W does not.
     expect(tw?.addons).toContain("rti");
     expect(fw?.addons).not.toContain("rti");
-    // Only actionable AddonKeys leak through (no keyProtect/garageCash yet).
-    expect(fw?.addons).not.toContain("keyProtect");
+    // Extended ICICI covers are now actionable AddonKeys: 4W exposes keyProtect /
+    // garageCash / lossOfBelongings; 2W exposes batteryProtect / drivingAccessories.
+    expect(fw?.addons).toEqual(expect.arrayContaining(["keyProtect", "garageCash", "lossOfBelongings"]));
+    expect(tw?.addons).toEqual(expect.arrayContaining(["batteryProtect", "drivingAccessories", "keyProtect"]));
   });
 });
 

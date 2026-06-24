@@ -9,7 +9,9 @@ import {
   IDV_TYPE,
   KYC_POLICY_TYPE,
   PREV_POLICY_TYPE,
+  GAS_KIT_TYPE,
   resolveProductCode,
+  voluntaryDeductibleCode,
   type IciciVehicleLine,
 } from "./config.ts";
 
@@ -63,6 +65,7 @@ function tenureYears(req: MotorQuoteRequest): number {
 
 function buildAddons(req: MotorQuoteRequest, line: IciciVehicleLine): string[] {
   const map = line === "fw" ? ADDON_CODES_4W : ADDON_CODES_2W;
+  // Canonical cover flag → ICICI addon code (only those the line's map supports).
   const flags: Record<string, boolean> = {
     rsa: req.rsa,
     zeroDep: req.zeroDep,
@@ -70,11 +73,22 @@ function buildAddons(req: MotorQuoteRequest, line: IciciVehicleLine): string[] {
     tyreProtect: req.tyreProtect,
     rti: req.rti,
     consumables: req.consumables,
+    keyProtect: req.keyProtect,
+    garageCash: req.garageCash,
+    lossOfBelongings: req.lossOfBelongings,
+    batteryProtect: req.batteryProtect,
+    drivingAccessories: req.drivingAccessories,
+    ncbProtection: req.ncbProtection,
   };
-  return Object.entries(flags)
+  const codes = Object.entries(flags)
     .filter(([, on]) => on)
     .map(([flag]) => map[flag])
     .filter((code): code is string => Boolean(code));
+
+  // Voluntary deductible rides in the same AddOns array (e.g. "VD-2500").
+  const vd = voluntaryDeductibleCode(req.voluntaryDeductible);
+  if (vd) codes.push(vd);
+  return codes;
 }
 
 /** ICICI CKYC DOB format is dd-MMM-yyyy (e.g. 29-Oct-2001). */
@@ -104,6 +118,8 @@ export function buildSaveQuotePayload(
   }
 
   const hasIdv = typeof req.idvValue === "number" && req.idvValue > 0;
+  const gasKitType = req.bifuelKitType ? GAS_KIT_TYPE[req.bifuelKitType] : GAS_KIT_TYPE.NA;
+
   const payload: Record<string, unknown> = {
     ProductCode: productCode,
     OwnerType: 1, // Individual
@@ -113,6 +129,7 @@ export function buildSaveQuotePayload(
     RegistrationNo: req.registrationNumber ?? "",
     RegistrationDate: req.registrationDate,
     ...(hasIdv ? { IDV: req.idvValue } : { IDVType: IDV_TYPE.avg }),
+    Pincode: req.pincode ?? "",
     RequestId: requestId,
     IsLive: true,
     HasExistingPACover: req.paOwner,
@@ -125,13 +142,46 @@ export function buildSaveQuotePayload(
     PreviousPolicyType: req.previousPolicyType
       ? PREV_POLICY_TYPE[req.previousPolicyType as keyof typeof PREV_POLICY_TYPE]
       : PREV_POLICY_TYPE.comprehensive,
-    PreviousPolicyHasZdCover: false,
+    PreviousPolicyHasZdCover: req.previousPolicyHasZdCover ?? false,
+
+    // PA cover sum-insured (separate from the HasExistingPACover flag).
+    UnNamedPaCover: req.unnamedPaSumInsured ?? 0,
+    NamedPaCover: req.namedPaSumInsured ?? 0,
+
+    // Bi-fuel (CNG/LPG) external kit — GasKitSI mandatory when type is CNG/LPG.
+    GasKitType: gasKitType,
+    GasKitSI: req.bifuelKitSI ?? 0,
+
+    // Accessories sum-insured.
+    ElectricalAccessoriesSI: req.electricalAccessoriesSI ?? 0,
+    NonElectricalAccessoriesSI: req.nonElectricalAccessoriesSI ?? 0,
+
+    // Discount drivers.
+    HasAntiTheftDevice: req.hasAntiTheftDevice ?? false,
+    AutomobileAssociationMembershipNumber: req.automobileAssociationMembership ?? null,
+    HasPayU: req.hasPayU ?? false,
+    PayURange: req.payURange ?? 0,
+    HasCIBIL: req.hasCibil ?? false,
+    ...(req.hasCibil
+      ? { ProposerName: req.proposerName ?? null, PanNumber: req.panNumber ?? null }
+      : {}),
+
+    NumberOfDriver: req.numberOfDrivers ?? 0,
+    NumberOfEmployee: req.numberOfEmployees ?? 0,
   };
+
+  // 2W carries dedicated sum-insured fields for these covers.
+  if (line === "tw") {
+    payload.DrivingAccessoriesSI = req.drivingAccessoriesSI ?? 0;
+    payload.KeyProtectSI = req.keyProtectSI ?? 0;
+  }
 
   // Stand-alone OD requires the active TP policy details.
   if (req.selectedPolicy === "standAloneOD") {
-    payload.ActiveTpPolicyNumber = req.previousPolicyNumber ?? null;
+    payload.ActiveTpPolicyNumber = req.previousTpPolicyNumber ?? req.previousPolicyNumber ?? null;
     payload.ActiveTpInsurerCode = codes.previousInsurerCode ?? null;
+    payload.ActiveTpStartDate = req.previousTpStartDate ?? null;
+    payload.ActiveTpEndDate = req.previousTpExpiryDate ?? null;
   }
 
   return { line, url: endpoints.premium(line), payload };
@@ -177,6 +227,14 @@ export function buildProposalPayload(
     OdometerCaptureDate: req.odometerCaptureDate ?? null,
     isProposalOnly: req.isProposalOnly,
   };
+
+  // Stand-alone OD proposal also carries the active TP policy details.
+  if (req.selectedPolicy === "standAloneOD") {
+    payload.ActiveTpPolicyNumber = req.previousTpPolicyNumber ?? req.previousPolicyNumber ?? null;
+    payload.ActiveTpInsurerCode = codes.previousInsurerCode ?? null;
+    payload.ActiveTpStartDate = req.previousTpStartDate ?? null;
+    payload.ActiveTpEndDate = req.previousTpExpiryDate ?? null;
+  }
 
   if (req.spDetail) {
     payload.SpDetail = {

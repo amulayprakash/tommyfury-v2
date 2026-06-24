@@ -45,6 +45,13 @@ export function PremiumBreakdown({ quote }: { quote: CanonicalQuote }) {
         value={formatInr(quote.serviceTaxAmount)}
       />
       <Row label="Total Payable" value={formatInr(quote.grossPremium)} strong />
+
+      {quote.isInspectionRequired ? (
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          A vehicle inspection (break-in) is required before this policy can be issued.
+          Payment is collected only after the inspection is approved.
+        </p>
+      ) : null}
     </div>
   );
 }

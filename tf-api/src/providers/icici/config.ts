@@ -71,14 +71,17 @@ interface ProductKey {
   tenureYears: number;
 }
 
+// Product Master per the partner PDFs ("Generic 2W/4W" → Product Master table).
+// TP uses the dedicated "2W TP" (26) / "4W TP" (29) codes — NOT the 24/25 "Roll
+// Over" rows. ⚠️ Confirm 26/29 against a live UAT TP quote before go-live.
 const PRODUCT_CODES: Record<string, number> = {
   // 2-Wheeler
   "tw|new|comprehensive|1": 10, // Brand New
   "tw|rollover|comprehensive|1": 13, // Roll Over
   "tw|renewal|comprehensive|1": 13,
   "tw|rollover|standAloneOD|1": 16, // Own Damage
-  "tw|rollover|thirdParty|1": 24, // TP
-  "tw|renewal|thirdParty|1": 24,
+  "tw|rollover|thirdParty|1": 26, // 2W TP
+  "tw|renewal|thirdParty|1": 26,
   "tw|rollover|comprehensive|2": 14,
   "tw|rollover|comprehensive|3": 15,
   // 4-Wheeler
@@ -86,8 +89,8 @@ const PRODUCT_CODES: Record<string, number> = {
   "fw|rollover|comprehensive|1": 21,
   "fw|renewal|comprehensive|1": 21,
   "fw|rollover|standAloneOD|1": 22,
-  "fw|rollover|thirdParty|1": 25,
-  "fw|renewal|thirdParty|1": 25,
+  "fw|rollover|thirdParty|1": 29, // 4W TP
+  "fw|renewal|thirdParty|1": 29,
   "fw|rollover|comprehensive|2": 36,
   "fw|rollover|comprehensive|3": 53,
 };
@@ -147,6 +150,31 @@ export const ICICI_MOTOR_CAPABILITIES: MotorCapabilities = {
   fourWheeler: { policyTypes: policyTypesForLine("fw"), addons: addonsFromCodes(ADDON_CODES_4W) },
   twoWheeler: { policyTypes: policyTypesForLine("tw"), addons: addonsFromCodes(ADDON_CODES_2W) },
 };
+
+// ─── Voluntary deductible ─────────────────────────────────────────────────────
+// ICICI passes the voluntary deductible as an AddOns array entry (e.g. "VD-2500").
+// Allowed amounts per the doc: 2500 / 5000 (and the wider PayURange-style set).
+export const VOLUNTARY_DEDUCTIBLE_CODES: Record<number, string> = {
+  2500: "VD-2500",
+  5000: "VD-5000",
+  7500: "VD-7500",
+  10000: "VD-10000",
+};
+
+export function voluntaryDeductibleCode(amount: number | undefined): string | undefined {
+  return amount ? VOLUNTARY_DEDUCTIBLE_CODES[amount] : undefined;
+}
+
+// ─── Bi-fuel (CNG/LPG) kit type ───────────────────────────────────────────────
+// GasKitType numeric codes (Save-Quote field). GasKitSI mandatory for CNG/LPG.
+export const GAS_KIT_TYPE = {
+  NA: 0,
+  CNG: 1,
+  LPG: 2,
+  FactoryFittedCNG: 3,
+  FactoryFittedLPG: 4,
+} as const;
+export type BifuelKitType = keyof typeof GAS_KIT_TYPE;
 
 // ─── IDV type ─────────────────────────────────────────────────────────────────
 

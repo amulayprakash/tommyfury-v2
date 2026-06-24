@@ -44,6 +44,16 @@ function baseQuote(overrides: Partial<MotorQuoteRequest> = {}): MotorQuoteReques
     paOwner: true,
     paUnnamedPassenger: false,
     legalLiabilityPaidDriver: false,
+    keyProtect: false,
+    garageCash: false,
+    lossOfBelongings: false,
+    batteryProtect: false,
+    drivingAccessories: false,
+    ncbProtection: false,
+    hasAntiTheftDevice: false,
+    hasPayU: false,
+    hasCibil: false,
+    previousPolicyHasZdCover: false,
     ...overrides,
   };
 }
@@ -94,7 +104,7 @@ describe("buildSaveQuotePayload", () => {
     );
     expect(line).toBe("tw");
     expect(url).toBe("/generic/motor-tw/generic/premium");
-    expect(payload.ProductCode).toBe(24); // 2W TP rollover
+    expect(payload.ProductCode).toBe(26); // 2W TP rollover (doc Product Master "2W TP")
     expect(payload.IDVType).toBe(3);
     expect(payload.IDV).toBeUndefined();
   });
@@ -103,6 +113,63 @@ describe("buildSaveQuotePayload", () => {
     expect(() =>
       buildSaveQuotePayload(baseQuote({ businessType: "new", selectedPolicy: "standAloneOD" }), codes, "r"),
     ).toThrow(ProviderCapabilityError);
+  });
+
+  it("maps the extended covers, voluntary deductible and discount drivers", () => {
+    const { payload } = buildSaveQuotePayload(
+      baseQuote({
+        keyProtect: true,
+        garageCash: true,
+        lossOfBelongings: true,
+        voluntaryDeductible: 2500,
+        unnamedPaSumInsured: 100000,
+        namedPaSumInsured: 50000,
+        bifuelKitType: "CNG",
+        bifuelKitSI: 30000,
+        electricalAccessoriesSI: 5000,
+        hasAntiTheftDevice: true,
+        automobileAssociationMembership: "AAA-123",
+        hasPayU: true,
+        payURange: 5000,
+        pincode: "421004",
+        previousPolicyHasZdCover: true,
+      }),
+      codes,
+      "req-x",
+    );
+    expect(payload.AddOns).toEqual(expect.arrayContaining(["KP", "GC", "LOPB", "VD-2500"]));
+    expect(payload.UnNamedPaCover).toBe(100000);
+    expect(payload.NamedPaCover).toBe(50000);
+    expect(payload.GasKitType).toBe(1); // CNG
+    expect(payload.GasKitSI).toBe(30000);
+    expect(payload.ElectricalAccessoriesSI).toBe(5000);
+    expect(payload.HasAntiTheftDevice).toBe(true);
+    expect(payload.AutomobileAssociationMembershipNumber).toBe("AAA-123");
+    expect(payload.HasPayU).toBe(true);
+    expect(payload.PayURange).toBe(5000);
+    expect(payload.Pincode).toBe("421004");
+    expect(payload.PreviousPolicyHasZdCover).toBe(true);
+  });
+
+  it("sends 2W cover sum-insured fields and active-TP details for standalone OD", () => {
+    const { payload } = buildSaveQuotePayload(
+      baseQuote({
+        vehicleType: "twoWheeler",
+        selectedPolicy: "standAloneOD",
+        drivingAccessoriesSI: 2000,
+        keyProtectSI: 1500,
+        previousTpPolicyNumber: "TP-999",
+        previousTpStartDate: "2024-04-01",
+        previousTpExpiryDate: "2027-03-31",
+      }),
+      codes,
+      "req-od",
+    );
+    expect(payload.DrivingAccessoriesSI).toBe(2000);
+    expect(payload.KeyProtectSI).toBe(1500);
+    expect(payload.ActiveTpPolicyNumber).toBe("TP-999");
+    expect(payload.ActiveTpStartDate).toBe("2024-04-01");
+    expect(payload.ActiveTpEndDate).toBe("2027-03-31");
   });
 });
 

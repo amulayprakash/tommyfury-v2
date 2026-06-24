@@ -71,6 +71,12 @@ export const ADDON_LABELS: Record<AddonKey, string> = {
   paOwner: "Personal Accident (Owner)",
   paUnnamedPassenger: "PA — Unnamed Passenger",
   legalLiabilityPaidDriver: "Legal Liability to Paid Driver",
+  keyProtect: "Key & Lock Protect",
+  garageCash: "Garage Cash",
+  lossOfBelongings: "Loss of Personal Belongings",
+  batteryProtect: "Battery Protect",
+  drivingAccessories: "Driving Accessories",
+  ncbProtection: "NCB Protection",
 };
 
 /** Every add-on key, in presentation order. */
