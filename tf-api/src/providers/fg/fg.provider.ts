@@ -9,11 +9,19 @@ import type {
 } from "@/contracts/renewal.ts";
 import type { InspectionRequest, InspectionResult } from "@/contracts/inspection.ts";
 import type {
+  HealthQuoteRequest,
+  HealthFullQuoteRequest,
+} from "@/contracts/health/health-quote-request.ts";
+import type { HealthIssuanceRequest } from "@/contracts/health/health-policy.ts";
+import type { HealthQuoteResult } from "@/contracts/health/health-quote-result.ts";
+import type { HealthCapabilities } from "@/contracts/health/health-enums.ts";
+import type {
   InsuranceProvider,
   IssuanceProvider,
   KycCapableProvider,
   RenewalProvider,
   InspectionProvider,
+  HealthProvider,
   ProviderContext,
 } from "@/providers/insurance-provider.ts";
 import { AppError } from "@/errors/app-error.ts";
@@ -44,6 +52,27 @@ import {
 } from "./mapper.ts";
 import { normalizeQuote, normalizeProposal, normalizeIssuance, extractRoot } from "./normalizer.ts";
 import { dbCodeResolver } from "./db-code-resolver.ts";
+import { FG_HEALTH_CAPABILITIES, getFgHealthProduct } from "./health/config.ts";
+import {
+  buildHealthQuotePayload,
+  buildHealthProposalPayload,
+  buildHealthIssuancePayload,
+  buildHealthSoapEnvelope,
+  type FgHealthBuildResult,
+  type FgHealthPayloadMeta,
+} from "./health/mapper.ts";
+import {
+  normalizeHealthQuote,
+  normalizeHealthProposal,
+  normalizeHealthIssuance,
+  extractHealthRoot,
+  assertHealthQuotePriced,
+} from "./health/normalizer.ts";
+import {
+  dbHealthCodeResolver,
+  passthroughHealthResolver,
+  type FgHealthCodeResolver,
+} from "./health/db-code-resolver.ts";
 
 /** Resolves canonical IDs → FG master codes (make label / model / RTO / zone). */
 export type FgCodeResolver = (req: MotorQuoteRequest) => Promise<FgResolvedCodes>;
@@ -70,6 +99,10 @@ export interface FgProviderDeps {
   ckycTokenProvider?: () => Promise<string>;
   /** Override the renewal-product token. */
   renewalTokenProvider?: () => Promise<string>;
+  /** Override the health-product token. */
+  healthTokenProvider?: () => Promise<string>;
+  /** Override health master-code resolution (tests use the pass-through resolver). */
+  healthCodeResolver?: FgHealthCodeResolver;
 }
 
 export class FgProvider
@@ -78,13 +111,15 @@ export class FgProvider
     IssuanceProvider,
     KycCapableProvider,
     RenewalProvider,
-    InspectionProvider
+    InspectionProvider,
+    HealthProvider
 {
   readonly slug = FG_SLUG;
   readonly displayName = FG_DISPLAY_NAME;
   readonly capabilities: ReadonlySet<VehicleCategory> = FG_CAPABILITIES;
   readonly operations: ReadonlySet<ProviderOperation> = FG_OPERATIONS;
   readonly motorCapabilities: MotorCapabilities = FG_MOTOR_CAPABILITIES;
+  readonly healthCapabilities: HealthCapabilities = FG_HEALTH_CAPABILITIES;
 
   private readonly config: FgConfig;
   private readonly transport: FgTransport;
@@ -92,6 +127,8 @@ export class FgProvider
   private readonly tokenProvider: () => Promise<string>;
   private readonly ckycTokenProvider: () => Promise<string>;
   private readonly renewalTokenProvider: () => Promise<string>;
+  private readonly healthTokenProvider: () => Promise<string>;
+  private readonly healthCodeResolver: FgHealthCodeResolver;
 
   constructor(deps: FgProviderDeps) {
     this.config = deps.config;
@@ -118,6 +155,14 @@ export class FgProvider
           `${FG_SLUG}-renewal:${this.config.credentialSetId}`,
           fgProductTokenFetcher(this.config, this.config.renewal),
         ));
+    this.healthTokenProvider =
+      deps.healthTokenProvider ??
+      (() =>
+        tokenManager.getToken(
+          `${FG_SLUG}-health:${this.config.credentialSetId}`,
+          fgProductTokenFetcher(this.config, this.config.health),
+        ));
+    this.healthCodeResolver = deps.healthCodeResolver ?? passthroughHealthResolver;
   }
 
   private url(path: string): string {
@@ -249,9 +294,77 @@ export class FgProvider
   getInspectionStatus(refId: string, _ctx: ProviderContext): Promise<InspectionResult> {
     return getInspectionStatus(this.config, refId);
   }
+
+  // ─── Health line of business (TCS BO Service) ───────────────────────────────
+
+  private get healthMeta(): FgHealthPayloadMeta {
+    return {
+      vendorCode: this.config.vendorCode,
+      agentCode: this.config.health.agentCode,
+      branchCode: this.config.health.branchCode,
+    };
+  }
+
+  /** Single SOAP round-trip for any health op; asserts business success. */
+  private async healthCall(build: FgHealthBuildResult, context: string): Promise<unknown> {
+    const token = await this.healthTokenProvider();
+    const body = await this.transport.request({
+      method: "POST",
+      url: this.config.health.baseUrl,
+      token,
+      xmlBody: buildHealthSoapEnvelope(build.method, build.soapProduct, build.payload),
+      soapAction: build.soapAction,
+    });
+    assertFgSuccess(extractHealthRoot(body), context);
+    return body;
+  }
+
+  async getHealthQuote(req: HealthQuoteRequest, ctx: ProviderContext): Promise<HealthQuoteResult> {
+    const def = getFgHealthProduct(req.product);
+    const codes = await this.healthCodeResolver(req);
+    const build = buildHealthQuotePayload(req, codes, this.healthMeta, ctx.requestId);
+    const body = await this.healthCall(build, "health-quote");
+    const result = normalizeHealthQuote(body, {
+      requestId: ctx.requestId,
+      product: req.product,
+      line: def.line,
+      policyTermYears: req.policyTermYears,
+    });
+    return assertHealthQuotePriced(result, body);
+  }
+
+  async getHealthProposal(
+    req: HealthFullQuoteRequest,
+    ctx: ProviderContext,
+  ): Promise<HealthQuoteResult> {
+    const def = getFgHealthProduct(req.product);
+    const codes = await this.healthCodeResolver(req);
+    const build = buildHealthProposalPayload(req, codes, this.healthMeta, ctx.requestId);
+    const body = await this.healthCall(build, "health-proposal");
+    return normalizeHealthProposal(body, {
+      requestId: ctx.requestId,
+      product: req.product,
+      line: def.line,
+      policyTermYears: req.policyTermYears,
+    });
+  }
+
+  async issueHealthPolicy(
+    req: HealthIssuanceRequest,
+    ctx: ProviderContext,
+  ): Promise<PolicyIssuanceResult> {
+    const codes = await this.healthCodeResolver(req);
+    const build = buildHealthIssuancePayload(req, codes, this.healthMeta, ctx.requestId);
+    const body = await this.healthCall(build, "health-issuance");
+    return normalizeHealthIssuance(body, { requestId: ctx.requestId });
+  }
 }
 
-/** Factory used at startup — loads + validates env config, DB-backed resolver. */
+/** Factory used at startup — loads + validates env config, DB-backed resolvers. */
 export function createFgProvider(): FgProvider {
-  return new FgProvider({ config: loadFgConfig(), codeResolver: dbCodeResolver });
+  return new FgProvider({
+    config: loadFgConfig(),
+    codeResolver: dbCodeResolver,
+    healthCodeResolver: dbHealthCodeResolver,
+  });
 }

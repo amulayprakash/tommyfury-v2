@@ -38,6 +38,13 @@ const { RenewalQuoteRequestSchema, RenewalCreatePolicyRequestSchema } = await im
   "@/contracts/renewal.ts"
 );
 const { InspectionRequestSchema, InspectionResultSchema } = await import("@/contracts/inspection.ts");
+const {
+  HealthQuoteRequestSchema,
+  HealthFullQuoteRequestSchema,
+  HealthCompareRequestSchema,
+} = await import("@/contracts/health/health-quote-request.ts");
+const { HealthIssuanceRequestSchema } = await import("@/contracts/health/health-policy.ts");
+const { HealthQuoteResultSchema } = await import("@/contracts/health/health-quote-result.ts");
 
 const registry = new OpenAPIRegistry();
 
@@ -60,6 +67,11 @@ registry.register("RenewalQuoteRequest", RenewalQuoteRequestSchema);
 registry.register("RenewalCreatePolicyRequest", RenewalCreatePolicyRequestSchema);
 registry.register("InspectionRequest", InspectionRequestSchema);
 registry.register("InspectionResult", InspectionResultSchema);
+registry.register("HealthQuoteRequest", HealthQuoteRequestSchema);
+registry.register("HealthFullQuoteRequest", HealthFullQuoteRequestSchema);
+registry.register("HealthCompareRequest", HealthCompareRequestSchema);
+registry.register("HealthIssuanceRequest", HealthIssuanceRequestSchema);
+registry.register("HealthQuoteResult", HealthQuoteResultSchema);
 
 const providerParam = z.object({ provider: z.string().openapi({ example: "icici" }) });
 
@@ -263,6 +275,61 @@ registry.registerPath({
   },
   responses: {
     200: { description: "Inspection status", content: { "application/json": { schema: InspectionResultSchema } } },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/v1/health/quotes/compare",
+  summary: "Compare health quotes — fan out one member set across products/providers",
+  request: {
+    body: { content: { "application/json": { schema: HealthCompareRequestSchema } } },
+  },
+  responses: {
+    200: { description: "Per-product health quote results" },
+    422: { description: "Validation error" },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/v1/{provider}/health/quote",
+  summary: "Health quote — price a product for the given members",
+  request: {
+    params: providerParam,
+    body: { content: { "application/json": { schema: HealthQuoteRequestSchema } } },
+  },
+  responses: {
+    200: { description: "Health quote", content: { "application/json": { schema: HealthQuoteResultSchema } } },
+    422: { description: "Validation / unsupported product" },
+    404: { description: "Unknown provider" },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/v1/{provider}/health/full-quote",
+  summary: "Health proposal — validate the full proposal (HealthPreCRTValidate)",
+  request: {
+    params: providerParam,
+    body: { content: { "application/json": { schema: HealthFullQuoteRequestSchema } } },
+  },
+  responses: {
+    200: { description: "Proposal result", content: { "application/json": { schema: HealthQuoteResultSchema } } },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/v1/{provider}/health/issue",
+  summary: "Issue the health policy — full payload + payment receipt",
+  request: {
+    params: providerParam,
+    body: { content: { "application/json": { schema: HealthIssuanceRequestSchema } } },
+  },
+  responses: {
+    200: { description: "Issuance result", content: { "application/json": { schema: PolicyIssuanceResultSchema } } },
+    422: { description: "Validation / unsupported operation" },
   },
 });
 

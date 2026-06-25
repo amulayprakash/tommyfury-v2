@@ -20,6 +20,13 @@ import type {
   RenewalCreatePolicyRequest,
 } from "@/contracts/renewal.ts";
 import type { InspectionRequest, InspectionResult } from "@/contracts/inspection.ts";
+import type { HealthCapabilities } from "@/contracts/health/health-enums.ts";
+import type {
+  HealthQuoteRequest,
+  HealthFullQuoteRequest,
+} from "@/contracts/health/health-quote-request.ts";
+import type { HealthQuoteResult } from "@/contracts/health/health-quote-result.ts";
+import type { HealthIssuanceRequest } from "@/contracts/health/health-policy.ts";
 
 export interface ProviderContext {
   requestId: string;
@@ -86,6 +93,22 @@ export interface CertificateProvider extends InsuranceProvider {
   getCertificate(transactionId: string, ctx: ProviderContext): Promise<CertificateResult>;
 }
 
+/**
+ * Health line-of-business capability. A provider opts in by implementing this AND
+ * listing the health ops in `operations`. Entirely separate from the motor
+ * quote/proposal on the base interface — controllers dispatch via supportsHealth().
+ */
+export interface HealthProvider extends InsuranceProvider {
+  /** Per-product cover-type matrix the provider supports for health. */
+  readonly healthCapabilities: HealthCapabilities;
+  getHealthQuote(req: HealthQuoteRequest, ctx: ProviderContext): Promise<HealthQuoteResult>;
+  getHealthProposal(req: HealthFullQuoteRequest, ctx: ProviderContext): Promise<HealthQuoteResult>;
+  issueHealthPolicy(
+    req: HealthIssuanceRequest,
+    ctx: ProviderContext,
+  ): Promise<PolicyIssuanceResult>;
+}
+
 // ─── Type-guards ──────────────────────────────────────────────────────────────
 
 export function supportsQuoteRetrieval(p: InsuranceProvider): p is QuoteRetrievalProvider {
@@ -123,4 +146,14 @@ export function supportsPolicyStatus(p: InsuranceProvider): p is PolicyStatusPro
 
 export function supportsCertificate(p: InsuranceProvider): p is CertificateProvider {
   return p.operations.has("coi") && typeof (p as CertificateProvider).getCertificate === "function";
+}
+
+export function supportsHealth(p: InsuranceProvider): p is HealthProvider {
+  const hp = p as HealthProvider;
+  return (
+    p.operations.has("healthQuote") &&
+    typeof hp.getHealthQuote === "function" &&
+    typeof hp.getHealthProposal === "function" &&
+    typeof hp.issueHealthPolicy === "function"
+  );
 }

@@ -33,6 +33,11 @@ export const ProviderOperationSchema = z.enum([
   "inspection",
   "policyStatus",
   "coi",
+  // Health line-of-business operations (separate from the motor quote/proposal
+  // above; a provider opts in via the HealthProvider capability interface).
+  "healthQuote",
+  "healthProposal",
+  "healthIssuance",
 ]);
 export type ProviderOperation = z.infer<typeof ProviderOperationSchema>;
 

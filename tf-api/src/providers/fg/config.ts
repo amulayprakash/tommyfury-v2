@@ -7,6 +7,7 @@ import type {
   AddonKey,
   MotorCapabilities,
 } from "@/contracts/enums.ts";
+import type { FgHealthAuth } from "./health/config.ts";
 
 export const FG_SLUG = "fg";
 export const FG_DISPLAY_NAME = "Future Generali";
@@ -23,13 +24,26 @@ export const FG_CAPABILITIES: ReadonlySet<VehicleCategory> = new Set([
  * deferred — declaring an operation here without an implementation would make
  * the capability type-guards lie (see insurance-provider.ts).
  */
-export const FG_OPERATIONS: ReadonlySet<ProviderOperation> = new Set([
+const FG_BASE_OPERATIONS: ProviderOperation[] = [
   "quote",
   "proposal",
   "ckyc",
   "issuance",
   "renewal",
   "inspection",
+];
+
+// Health line of business (see providers/fg/health/*). Advertised only when the
+// health gateway is configured, so compare/eligibility skip it otherwise.
+const FG_HEALTH_OPERATIONS: ProviderOperation[] = [
+  "healthQuote",
+  "healthProposal",
+  "healthIssuance",
+];
+
+export const FG_OPERATIONS: ReadonlySet<ProviderOperation> = new Set([
+  ...FG_BASE_OPERATIONS,
+  ...(env.FG_HEALTH_ENABLED ? FG_HEALTH_OPERATIONS : []),
 ]);
 
 /** Per-product gateway credentials (motor / CKYC / renewal each have their own). */
@@ -71,6 +85,8 @@ export interface FgConfig {
   ckyc: FgProductAuth;
   /** Motor renewal product (motorRenewal/1.0.0). */
   renewal: FgProductAuth;
+  /** Health products (TCS BO Service) — own WSO2 subscription + agent code. */
+  health: FgHealthAuth;
   payment: FgPaymentConfig;
   inspection: FgInspectionConfig;
 }
@@ -107,6 +123,13 @@ export function loadFgConfig(): FgConfig {
       baseUrl: env.FG_RENEWAL_BASE_URL.replace(/\/$/, ""),
       tokenUrl: env.FG_RENEWAL_TOKEN_URL ?? env.FG_TOKEN_URL,
       clientBasic: env.FG_RENEWAL_CLIENT_BASIC ?? env.FG_CLIENT_BASIC!,
+    },
+    health: {
+      baseUrl: env.FG_HEALTH_BASE_URL.replace(/\/$/, ""),
+      tokenUrl: env.FG_HEALTH_TOKEN_URL ?? env.FG_TOKEN_URL,
+      clientBasic: env.FG_HEALTH_CLIENT_BASIC ?? env.FG_CLIENT_BASIC!,
+      agentCode: env.FG_HEALTH_AGENT_CODE ?? env.FG_AGENT_CODE,
+      branchCode: env.FG_BRANCH_CODE,
     },
     payment: {
       url: env.FG_PAYMENT_URL,

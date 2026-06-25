@@ -1,0 +1,54 @@
+{
+  "Policy": {
+    "InputParameters": {
+      "PolicyType": "HAI",
+      "Duration": "1",
+      "Installments": "FULL",
+      "IsFgEmployee": "False",
+      "BeneficiaryDetails": {
+        "Member": {
+          "MemberId": "1",
+          "InsuredName": "shiv dayal kumawat",
+          "InsuredDob": "16/08/1993",
+          "InsuredGender": "M",
+          "InsuredOccpn": "SVCM",
+          "Relation": "SELF",
+          "Age": "30",
+          "NomineeName": "Papa PAPA",
+          "NomineeReln": "FATH",
+          "CoverType": "Classic",
+          "SumInsured": "500000",
+          "BeneBasePremium": "8555.00",
+          "FloaterDiscount": "0.00",
+          "DeductibleDiscount": "0.00",
+          "Height": "170",
+          "Weight": "70",
+          "SmokingLoading": "0.00",
+          "BMI": "24.22",
+          "BMILoadAmount": "0.00",
+          "TotalLoadingPercent": "0",
+          "PerPersonPremium": "8555.00"
+        }
+      }
+    },
+    "OutputRes": {
+      "FamilyDiscount": "0",
+      "OnlineDisc": "0",
+      "BasePremium": "8555.00",
+      "EmpDisc": "0.00",
+      "TermPremium": "8555.00",
+      "LngTrmDisc": "0.00",
+      "PremWithoutServTax": "8555.00",
+      "InstallLoad": "0.00",
+      "SmokingLoading": "0",
+      "GutkhaLoading": "0",
+      "PremWithLoad": "8555.00",
+      "PremiumAmt": "8555.00",
+      "ServiceTaxRate": "18.00",
+      "ServiceTax": "1539.90",
+      "PremWithServTax": "10095.00",
+      "ErrorMsg": "",
+      "KeralaCess": "0.00"
+    }
+  }
+}

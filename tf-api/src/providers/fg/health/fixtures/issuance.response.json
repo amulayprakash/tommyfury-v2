@@ -1,0 +1,10 @@
+{
+  "Client": { "Status": "Successful", "ClientId": "72596801", "ErrorMessage": "" },
+  "Receipt": { "Status": "Successful", "ReceiptNo": "Z2231823", "ErrorMessage": "" },
+  "Policy": {
+    "Status": "Successful",
+    "PolicyNo": "VIT-10-24-0000445-00-000",
+    "Message": "Policy Synced Successfully"
+  },
+  "Application": { "WinNo": "NR-00000000500130529", "ApplicationNo": "G0081816" }
+}

@@ -31,6 +31,13 @@ const config: FgConfig = {
     tokenUrl: "https://uat.example.com:9443/oauth2/token",
     clientBasic: "cmVuZXdhbDpiYXNpYw==",
   },
+  health: {
+    baseUrl: "https://uat.example.com:8243/Health/1.0.0/BO/Service.svc",
+    tokenUrl: "https://uat.example.com:9443/oauth2/token",
+    clientBasic: "aGVhbHRoOmJhc2lj",
+    agentCode: "60000272",
+    branchCode: "10",
+  },
   payment: {
     url: "https://pay.example.com/WebAggPayNew.aspx",
     paymentOption: "3",

@@ -75,6 +75,23 @@ const envSchema = z.object({
   FG_RENEWAL_TOKEN_URL: z.string().optional(),
   FG_RENEWAL_CLIENT_BASIC: z.string().optional(),
 
+  // ── FG Health (TCS BO Service) — separate WSO2 product/subscription ──
+  /** Gates health provider registration (in addition to FG_ENABLED). */
+  FG_HEALTH_ENABLED: z
+    .string()
+    .default("false")
+    .transform((v) => v === "true"),
+  /** Health SOAP service base (the BO/Service.svc gateway path). */
+  FG_HEALTH_BASE_URL: z
+    .string()
+    .default("https://uat-internal-apigw.generalicentralinsurance.com:8243/Health/1.0.0/BO/Service.svc"),
+  /** Health OAuth2 token endpoint (defaults to FG_TOKEN_URL when unset). */
+  FG_HEALTH_TOKEN_URL: z.string().optional(),
+  /** Base64 client for the health product (distinct subscription from motor). */
+  FG_HEALTH_CLIENT_BASIC: z.string().optional(),
+  /** Health agent code (samples use 60000272; falls back to FG_AGENT_CODE). */
+  FG_HEALTH_AGENT_CODE: z.string().optional(),
+
   // ── FG Web-Aggregator payment gateway (checksum-signed form POST) ──
   /** Hosted payment page the signed form POSTs to (WebAggPayNew.aspx). */
   FG_PAYMENT_URL: z

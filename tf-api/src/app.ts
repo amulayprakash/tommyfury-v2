@@ -14,6 +14,7 @@ import { quotesRouter } from "@/routes/v1/quotes.routes.ts";
 import { lifecycleRouter } from "@/routes/v1/lifecycle.routes.ts";
 import { mastersRouter } from "@/routes/v1/masters.routes.ts";
 import { providersRouter } from "@/routes/v1/providers.routes.ts";
+import { healthInsuranceRouter } from "@/routes/v1/health-insurance.routes.ts";
 
 // Register providers once at startup
 import { registerIciciProvider } from "@/providers/icici/index.ts";
@@ -68,6 +69,7 @@ export function createApp(): express.Application {
   app.use("/api/v1", healthRouter);
   app.use("/api/v1", compareRouter);
   app.use("/api/v1", quotesRouter);
+  app.use("/api/v1", healthInsuranceRouter);
   app.use("/api/v1", lifecycleRouter);
   app.use("/api/v1", mastersRouter);
   app.use("/api/v1", providersRouter);

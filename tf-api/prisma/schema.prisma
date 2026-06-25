@@ -85,6 +85,113 @@ model Quote {
   @@map("quotes")
 }
 
+// ─── Health quotes (separate line of business from motor `quotes`) ────────────
+
+model HealthQuote {
+  id           Int      @id @default(autoincrement())
+  requestId    String   @unique @db.VarChar(64)
+  providerSlug String   @db.VarChar(64)
+  product      String   @db.VarChar(32)
+  line         String   @db.VarChar(16) // indemnity | pa
+  status       String   @db.VarChar(32) @default("pending")
+
+  // Quote identity
+  quoteNo               String? @db.VarChar(128)
+  providerTransactionId String? @db.VarChar(128)
+
+  // Plan
+  sumInsured      Int?
+  policyTermYears Int     @default(1)
+  members         Json?   // per-member breakdown
+
+  // Lifecycle
+  policyNumber String? @db.VarChar(128)
+  policyStatus String? @db.VarChar(32)
+  clientId     String? @db.VarChar(64)
+  applicationNo String? @db.VarChar(128)
+  receiptNo    String? @db.VarChar(128)
+  paymentTranKey String? @db.VarChar(128)
+  paymentRefNo   String? @db.VarChar(128)
+  pgType         String? @db.VarChar(32)
+
+  // Policy holder
+  holderName   String? @db.VarChar(255)
+  holderEmail  String? @db.VarChar(255)
+  holderMobile String? @db.VarChar(20)
+
+  // Premium (stored as integers in paise to avoid float rounding)
+  basePremium  Int?
+  netPremium   Int?
+  grossPremium Int?
+
+  // JSON blobs for full audit
+  contractDetails Json?
+  rawRequest      Json?
+  rawFullQuote    Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([providerSlug])
+  @@index([product])
+  @@index([status])
+  @@index([providerTransactionId])
+  @@map("health_quotes")
+}
+
+// ─── Health masters (FG is the master source; FG codes stored on the rows) ─────
+
+model HealthProductMaster {
+  id             Int     @id @default(autoincrement())
+  code           String  @unique @db.VarChar(32) // canonical product, e.g. healthAbsolute
+  label          String  @db.VarChar(255)
+  line           String  @db.VarChar(16) // indemnity | pa
+  fgProduct      String  @db.VarChar(64) // <tem:Product>
+  fgMajorClass   String  @db.VarChar(16)
+  fgContractType String  @db.VarChar(16)
+  fgPolicyType   String  @db.VarChar(16)
+  isActive       Boolean @default(true)
+
+  @@map("health_product_master")
+}
+
+// Cover / plan type offered for a product, with the allowed sum-insured band.
+model HealthCoverMaster {
+  id             Int     @id @default(autoincrement())
+  productCode    String  @db.VarChar(32)
+  code           String  @db.VarChar(32) // cover/plan type, e.g. Classic
+  label          String  @db.VarChar(255)
+  minSumInsured  Int?
+  maxSumInsured  Int?
+  sortOrder      Int     @default(0)
+  isActive       Boolean @default(true)
+
+  @@unique([productCode, code])
+  @@index([productCode])
+  @@map("health_cover_master")
+}
+
+model HealthOccupationMaster {
+  id          Int     @id @default(autoincrement())
+  code        String  @unique @db.VarChar(16) // canonical = FG occupation code
+  description String  @db.VarChar(191)
+  fgCode      String  @db.VarChar(16)
+  paRiskClass String? @db.VarChar(8) // PA occupation risk class
+  isActive    Boolean @default(true)
+
+  @@map("health_occupation_master")
+}
+
+model HealthRelationMaster {
+  id       Int     @id @default(autoincrement())
+  code     String  @unique @db.VarChar(24) // canonical relation, e.g. self
+  label    String  @db.VarChar(64)
+  fgCode   String  @db.VarChar(8)
+  isActive Boolean @default(true)
+
+  @@map("health_relation_master")
+}
+
 // ─── Masters ─────────────────────────────────────────────────────────────────
 
 model RtoMaster {
