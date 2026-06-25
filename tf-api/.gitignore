@@ -8,3 +8,5 @@ dist/
 *.tsbuildinfo
 prisma/generated/
 coverage/
+# Portable data snapshot — distributed to the team out-of-band, not via git.
+prisma/data-snapshot.json
