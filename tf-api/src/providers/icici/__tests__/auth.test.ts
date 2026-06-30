@@ -34,6 +34,21 @@ describe("iciciTokenFetcher", () => {
     );
   });
 
+  it("sends the password verbatim when no AES key is configured (pre-encrypted)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ token: "jwt", expiry: new Date(Date.now() + 60_000).toISOString(), success: true }),
+    } as Response);
+
+    const preEncrypted: IciciConfig = { ...config, aesKey: undefined, password: "+6BG4SKmBk03yCiUCOUbaQ==" };
+    await iciciTokenFetcher(preEncrypted)();
+
+    const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.Password).toBe("+6BG4SKmBk03yCiUCOUbaQ==");
+    expect(body.Login).toBe("user");
+    expect(body.LoginType).toBe("App");
+  });
+
   it("throws when success is false", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
       ok: true,

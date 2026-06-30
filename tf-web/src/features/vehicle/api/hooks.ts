@@ -8,9 +8,12 @@ import {
   getPolicyStatus,
   getProviderAddons,
   getProviders,
+  initiateOvd,
   initiatePayment,
   listInsurers,
   searchMmv,
+  searchRto,
+  type OvdUploadBody,
   type PaymentInitiateBody,
 } from "./vehicle-api";
 import type { CkycRequest, CompareQuotesRequest, MotorFullQuoteRequest } from "./types";
@@ -34,6 +37,16 @@ export function useMmvSearch(
   return useQuery({
     queryKey: ["mmv", params],
     queryFn: () => searchMmv(params),
+    enabled,
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** RTO typeahead (by code or city) — backs the new-vehicle manual-entry form. */
+export function useRtoSearch(q: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["rto", q],
+    queryFn: () => searchRto(q),
     enabled,
     staleTime: 5 * 60_000,
   });
@@ -83,6 +96,13 @@ export function useCkyc() {
   return useMutation({
     mutationFn: ({ provider, req }: { provider: string; req: CkycRequest }) =>
       completeCkyc(provider, req),
+  });
+}
+
+export function useOvd() {
+  return useMutation({
+    mutationFn: ({ provider, body }: { provider: string; body: OvdUploadBody }) =>
+      initiateOvd(provider, body),
   });
 }
 

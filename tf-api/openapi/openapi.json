@@ -111,6 +111,17 @@
             "minimum": 0,
             "exclusiveMinimum": true
           },
+          "commercialVehicleClass": {
+            "type": "string",
+            "enum": [
+              "pcv",
+              "gcv",
+              "misc"
+            ]
+          },
+          "isInclusionOfIMT": {
+            "type": "boolean"
+          },
           "rtoCode": {
             "type": "string",
             "minLength": 1
@@ -460,6 +471,17 @@
             "type": "number",
             "minimum": 0,
             "exclusiveMinimum": true
+          },
+          "commercialVehicleClass": {
+            "type": "string",
+            "enum": [
+              "pcv",
+              "gcv",
+              "misc"
+            ]
+          },
+          "isInclusionOfIMT": {
+            "type": "boolean"
           },
           "rtoCode": {
             "type": "string",
@@ -1020,6 +1042,17 @@
             "type": "number",
             "minimum": 0,
             "exclusiveMinimum": true
+          },
+          "commercialVehicleClass": {
+            "type": "string",
+            "enum": [
+              "pcv",
+              "gcv",
+              "misc"
+            ]
+          },
+          "isInclusionOfIMT": {
+            "type": "boolean"
           },
           "rtoCode": {
             "type": "string",
@@ -4764,6 +4797,17 @@
                     "minimum": 0,
                     "exclusiveMinimum": true
                   },
+                  "commercialVehicleClass": {
+                    "type": "string",
+                    "enum": [
+                      "pcv",
+                      "gcv",
+                      "misc"
+                    ]
+                  },
+                  "isInclusionOfIMT": {
+                    "type": "boolean"
+                  },
                   "rtoCode": {
                     "type": "string",
                     "minLength": 1
@@ -5428,6 +5472,17 @@
                     "type": "number",
                     "minimum": 0,
                     "exclusiveMinimum": true
+                  },
+                  "commercialVehicleClass": {
+                    "type": "string",
+                    "enum": [
+                      "pcv",
+                      "gcv",
+                      "misc"
+                    ]
+                  },
+                  "isInclusionOfIMT": {
+                    "type": "boolean"
                   },
                   "rtoCode": {
                     "type": "string",
@@ -6308,6 +6363,17 @@
                     "type": "number",
                     "minimum": 0,
                     "exclusiveMinimum": true
+                  },
+                  "commercialVehicleClass": {
+                    "type": "string",
+                    "enum": [
+                      "pcv",
+                      "gcv",
+                      "misc"
+                    ]
+                  },
+                  "isInclusionOfIMT": {
+                    "type": "boolean"
                   },
                   "rtoCode": {
                     "type": "string",

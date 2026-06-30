@@ -86,16 +86,39 @@ export class FetchTransport implements FgTransport {
  * "[object Object]". Returns the deepest non-generic message.
  */
 export function extractFgError(value: unknown, depth = 0): string {
-  if (typeof value === "string") return value.trim();
+  if (typeof value === "string") {
+    const s = value.trim();
+    // FG sometimes packs a whole JSON error blob into a string field — e.g. the
+    // CKYC failure surfaces ErrorMessage='{"message":"No record exist.",…}'.
+    // Unwrap it so we report "No record exist." instead of raw JSON.
+    if (depth <= 6 && s.startsWith("{") && s.endsWith("}")) {
+      try {
+        const inner = extractFgError(JSON.parse(s) as unknown, depth + 1);
+        if (inner) return inner;
+      } catch {
+        /* not valid JSON — fall through to the raw string */
+      }
+    }
+    return s;
+  }
   if (!value || typeof value !== "object" || depth > 6) return "";
   const o = value as Record<string, unknown>;
-  // Prefer the inner ErrorMessage, then Error, then any nested Root, then scan.
-  for (const key of ["ErrorMessage", "Error", "Message", "Root"] as const) {
+
+  // A short `Error` label (e.g. "CKYC error") is most useful prefixed onto the
+  // deeper, specific message ("No record exist.") rather than returned alone.
+  const label =
+    typeof o.Error === "string" && o.Error.trim() && !o.Error.trim().startsWith("{")
+      ? o.Error.trim()
+      : "";
+
+  // Prefer the inner ErrorMessage/message, then any nested Root, then scan.
+  for (const key of ["ErrorMessage", "message", "Message", "Root"] as const) {
     if (key in o) {
       const inner = extractFgError(o[key], depth + 1);
-      if (inner) return inner;
+      if (inner && inner !== label) return label ? `${label}: ${inner}` : inner;
     }
   }
+  if (label) return label;
   for (const v of Object.values(o)) {
     const inner = extractFgError(v, depth + 1);
     if (inner) return inner;
@@ -106,6 +129,8 @@ export function extractFgError(value: unknown, depth = 0): string {
 /** Classifies an FG failure message into a canonical, frontend-friendly code. */
 export function classifyFgError(message: string): string {
   const m = message.toLowerCase();
+  if (m.includes("ckyc") || m.includes("kyc") || m.includes("no record exist"))
+    return "KYC_INCOMPLETE";
   if (m.includes("referral") || m.includes("declined")) return "REFERRAL_DECLINED";
   if (m.includes("tp policy expired") || m.includes("tp policy has expired")) return "PREV_TP_EXPIRED";
   if (m.includes("previous tp") || m.includes("previous t.p")) return "PREV_TP_REQUIRED";

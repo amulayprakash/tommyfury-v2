@@ -12,6 +12,11 @@ import type {
 export const ICICI_SLUG = "icici";
 export const ICICI_DISPLAY_NAME = "ICICI Lombard";
 
+// Only categories ICICI can ACTUALLY quote (i.e. has master data for). Commercial
+// (PCV/GCV) is intentionally excluded until ICICI delivers the CV make/model/RTO master
+// CSVs — the product codes + CV mapper scaffolding below are ready, but advertising a
+// capability we have no data for makes ICICI return errors for every commercial request.
+// Re-add "commercial"/"newCommercial" here once the CV master is imported.
 export const ICICI_CAPABILITIES: ReadonlySet<VehicleCategory> = new Set([
   "fourWheeler",
   "twoWheeler",
@@ -28,26 +33,35 @@ export const ICICI_OPERATIONS: ReadonlySet<ProviderOperation> = new Set([
 ]);
 
 /** Physical vehicle line → ICICI premium endpoint segment. */
-export type IciciVehicleLine = "tw" | "fw";
+export type IciciVehicleLine = "tw" | "fw" | "cv";
+
+/** Commercial-vehicle product class (ICICI CV product master). */
+export type IciciCvClass = "pcv" | "gcv" | "misc";
 
 export interface IciciConfig {
   baseUrl: string;
   login: string;
   password: string;
-  aesKey: string;
+  /**
+   * AES key shared by ICICI, used to encrypt the plaintext password. When unset,
+   * ICICI_PASSWORD is treated as ALREADY encrypted and sent verbatim — ICICI may
+   * hand over a pre-encrypted password string to use directly (confirmed on UAT
+   * for the "generic v1" login).
+   */
+  aesKey?: string;
   aesMode: string;
   credentialSetId: string;
 }
 
 /**
  * Reads ICICI config from env. Throws only when ICICI is enabled but
- * misconfigured — fixtures-based tests run without these set.
+ * misconfigured — fixtures-based tests run without these set. ICICI_AES_KEY is
+ * optional: omit it when ICICI_PASSWORD is already an encrypted value.
  */
 export function loadIciciConfig(): IciciConfig {
   const missing: string[] = [];
   if (!env.ICICI_LOGIN) missing.push("ICICI_LOGIN");
   if (!env.ICICI_PASSWORD) missing.push("ICICI_PASSWORD");
-  if (!env.ICICI_AES_KEY) missing.push("ICICI_AES_KEY");
   if (missing.length > 0) {
     throw new Error(`ICICI provider enabled but missing env: ${missing.join(", ")}`);
   }
@@ -55,7 +69,7 @@ export function loadIciciConfig(): IciciConfig {
     baseUrl: env.ICICI_BASE_URL.replace(/\/$/, ""),
     login: env.ICICI_LOGIN!,
     password: env.ICICI_PASSWORD!,
-    aesKey: env.ICICI_AES_KEY!,
+    aesKey: env.ICICI_AES_KEY || undefined,
     aesMode: env.ICICI_AES_MODE,
     credentialSetId: "default",
   };
@@ -69,6 +83,8 @@ interface ProductKey {
   business: BusinessType;
   policyType: PolicyType;
   tenureYears: number;
+  /** Commercial product class — required (and only used) when line === "cv". */
+  cvClass?: IciciCvClass;
 }
 
 // Product Master per the partner PDFs ("Generic 2W/4W" → Product Master table).
@@ -93,10 +109,32 @@ const PRODUCT_CODES: Record<string, number> = {
   "fw|renewal|thirdParty|1": 29,
   "fw|rollover|comprehensive|2": 36,
   "fw|rollover|comprehensive|3": 53,
+  // ── Commercial Vehicle (Generic 5 — Product Master) ──────────────────────────
+  // CV keys carry the product class (pcv/gcv/misc) in the line segment.
+  // ⚠️ The PDF Product Master table is column-garbled — these are a best-effort
+  // mapping; confirm the exact PCV/GCV/MISC × comprehensive/TP/new codes with the
+  // ICICI RM before go-live. (Code 47 "PCV-TP Roll Over" is unconfirmed; omitted.)
+  // PCV — Passenger Carrying Vehicle
+  "cv-pcv|rollover|comprehensive|1": 41, // PCV Roll Over (comprehensive)
+  "cv-pcv|renewal|comprehensive|1": 41,
+  "cv-pcv|rollover|thirdParty|1": 42, // PCV TP
+  "cv-pcv|renewal|thirdParty|1": 42,
+  "cv-pcv|new|comprehensive|1": 49, // PCV Brand New
+  // GCV — Goods Carrying Vehicle
+  "cv-gcv|rollover|comprehensive|1": 44, // GCV Roll Over (comprehensive)
+  "cv-gcv|renewal|comprehensive|1": 44,
+  "cv-gcv|rollover|thirdParty|1": 43, // GCV TP
+  "cv-gcv|renewal|thirdParty|1": 43,
+  "cv-gcv|new|comprehensive|1": 50, // GCV Brand New
+  // MISC — Miscellaneous / special vehicles (TP-only per the master)
+  "cv-misc|rollover|thirdParty|1": 48, // MISC TP
+  "cv-misc|renewal|thirdParty|1": 48,
+  "cv-misc|new|thirdParty|1": 40, // MISC TP Brand New
 };
 
 export function resolveProductCode(key: ProductKey): number | undefined {
-  const k = `${key.line}|${key.business}|${key.policyType}|${key.tenureYears}`;
+  const line = key.line === "cv" ? `cv-${key.cvClass ?? "gcv"}` : key.line;
+  const k = `${line}|${key.business}|${key.policyType}|${key.tenureYears}`;
   return PRODUCT_CODES[k];
 }
 
@@ -127,6 +165,20 @@ export const ADDON_CODES_2W: Record<string, string> = {
   consumables: "CS",
 };
 
+// CV add-ons per the "Commercial Vehicle Generic 5" doc: RSA, ZD, EP, RTI, EME,
+// CS, GC, LDBP (Battery Protect — EV only). EME (Emergency Medical Expense) has no
+// canonical actionable AddonKey yet, so it is intentionally omitted here — it still
+// surfaces in the raw response (see normalizer). batteryProtect (LDBP) applies to EVs.
+export const ADDON_CODES_CV: Record<string, string> = {
+  rsa: "RSA",
+  zeroDep: "ZD",
+  engineProtect: "EP",
+  rti: "RTI",
+  consumables: "CS",
+  garageCash: "GC",
+  batteryProtect: "LDBP",
+};
+
 // ─── Motor capability matrix (derived from product + addon code maps) ──────────
 // Plan types come from which ProductCodes exist per line; add-ons come from the
 // add-on code maps, intersected with the canonical actionable AddonKey set.
@@ -135,9 +187,12 @@ const VALID_ADDON_KEYS: ReadonlySet<string> = new Set(AddonKeySchema.options);
 
 function policyTypesForLine(line: IciciVehicleLine): PolicyType[] {
   const set = new Set<PolicyType>();
+  // CV product keys carry a "cv-<class>" prefix, so match on the line prefix.
+  const matches = (segment: string | undefined) =>
+    line === "cv" ? !!segment?.startsWith("cv") : segment === line;
   for (const key of Object.keys(PRODUCT_CODES)) {
     const parts = key.split("|");
-    if (parts[0] === line && parts[2]) set.add(parts[2] as PolicyType);
+    if (matches(parts[0]) && parts[2]) set.add(parts[2] as PolicyType);
   }
   return [...set];
 }
@@ -149,6 +204,8 @@ function addonsFromCodes(codes: Record<string, string>): AddonKey[] {
 export const ICICI_MOTOR_CAPABILITIES: MotorCapabilities = {
   fourWheeler: { policyTypes: policyTypesForLine("fw"), addons: addonsFromCodes(ADDON_CODES_4W) },
   twoWheeler: { policyTypes: policyTypesForLine("tw"), addons: addonsFromCodes(ADDON_CODES_2W) },
+  commercial: { policyTypes: policyTypesForLine("cv"), addons: addonsFromCodes(ADDON_CODES_CV) },
+  newCommercial: { policyTypes: policyTypesForLine("cv"), addons: addonsFromCodes(ADDON_CODES_CV) },
 };
 
 // ─── Voluntary deductible ─────────────────────────────────────────────────────

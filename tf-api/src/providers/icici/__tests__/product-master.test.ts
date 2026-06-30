@@ -34,4 +34,20 @@ describe("resolveProductCode — ICICI Product Master", () => {
   it("returns undefined for an unsupported journey", () => {
     expect(resolveProductCode({ line: "fw", business: "new", policyType: "standAloneOD", tenureYears: 1 })).toBeUndefined();
   });
+
+  // ⚠️ CV codes are a best-effort read of the garbled PDF master — confirm with the RM.
+  it("maps commercial-vehicle products (PCV / GCV / MISC)", () => {
+    expect(resolveProductCode({ line: "cv", cvClass: "pcv", business: "rollover", policyType: "comprehensive", tenureYears: 1 })).toBe(41);
+    expect(resolveProductCode({ line: "cv", cvClass: "pcv", business: "rollover", policyType: "thirdParty", tenureYears: 1 })).toBe(42);
+    expect(resolveProductCode({ line: "cv", cvClass: "pcv", business: "new", policyType: "comprehensive", tenureYears: 1 })).toBe(49);
+    expect(resolveProductCode({ line: "cv", cvClass: "gcv", business: "rollover", policyType: "comprehensive", tenureYears: 1 })).toBe(44);
+    expect(resolveProductCode({ line: "cv", cvClass: "gcv", business: "rollover", policyType: "thirdParty", tenureYears: 1 })).toBe(43);
+    expect(resolveProductCode({ line: "cv", cvClass: "gcv", business: "new", policyType: "comprehensive", tenureYears: 1 })).toBe(50);
+    expect(resolveProductCode({ line: "cv", cvClass: "misc", business: "rollover", policyType: "thirdParty", tenureYears: 1 })).toBe(48);
+    expect(resolveProductCode({ line: "cv", cvClass: "misc", business: "new", policyType: "thirdParty", tenureYears: 1 })).toBe(40);
+  });
+
+  it("defaults CV class to GCV when unspecified", () => {
+    expect(resolveProductCode({ line: "cv", business: "rollover", policyType: "comprehensive", tenureYears: 1 })).toBe(44);
+  });
 });

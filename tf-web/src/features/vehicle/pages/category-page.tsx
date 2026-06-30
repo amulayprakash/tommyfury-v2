@@ -1,9 +1,9 @@
 import { Bike, Car, Loader2, Search, Truck } from "lucide-react";
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 
-import { ROUTES } from "@/app/router/paths";
+import { NEW_VEHICLE_ROUTES, ROUTES } from "@/app/router/paths";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -95,6 +95,16 @@ export function CategoryPage({ category }: CategoryPageProps) {
               )}
             </Button>
           </form>
+
+          <p className="mt-4 text-center text-sm text-muted-foreground">
+            Bought a new vehicle and don’t have a number yet?{" "}
+            <Link
+              to={NEW_VEHICLE_ROUTES[category]}
+              className="font-medium text-primary hover:underline"
+            >
+              Add details manually
+            </Link>
+          </p>
         </CardContent>
       </Card>
     </div>

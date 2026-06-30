@@ -104,7 +104,7 @@ export class IciciProvider
     const codes = await this.codeResolver(req);
     const { url, payload } = buildSaveQuotePayload(req, codes, ctx.requestId);
 
-    const body = await this.transport.request({ method: "POST", url: this.url(url), token, jsonBody: payload });
+    const body = await this.transport.request({ method: "POST", url: this.url(url), token, jsonBody: payload, idempotent: true });
     assertIciciSuccess(body, "save-quote");
 
     return normalizeQuote(body, {
@@ -125,6 +125,7 @@ export class IciciProvider
       method: "GET",
       url: this.url(endpoints.getQuote(line, transactionId)),
       token,
+      idempotent: true,
     });
     assertIciciSuccess(body, "get-quote");
     // The GET-quote response carries no policy-type field, so infer it from the
@@ -149,6 +150,7 @@ export class IciciProvider
       method: "GET",
       url: this.url(endpoints.getQuote(line, req.quoteId)),
       token,
+      idempotent: true,
     });
     assertIciciSuccess(quoteBody, "get-quote");
     const base = normalizeQuote(quoteBody, {
@@ -238,6 +240,7 @@ export class IciciProvider
       url: this.url(endpoints.policyStatus()),
       token,
       jsonBody: buildPolicyStatusPayload(req.transactionId),
+      idempotent: true,
     });
     assertIciciSuccess(body, "policy-status");
     return normalizePolicyStatus(body);
@@ -249,6 +252,7 @@ export class IciciProvider
       method: "POST",
       url: this.url(endpoints.certificate(transactionId)),
       token,
+      idempotent: true,
     });
     assertIciciSuccess(body, "coi");
     return normalizeCertificate(body);

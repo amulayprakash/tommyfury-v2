@@ -157,3 +157,10 @@ export const ROUTES = {
     loader: "/loader",
   },
 } as const;
+
+/** Manual new-vehicle (no RC yet) entry route, keyed by supported category. */
+export const NEW_VEHICLE_ROUTES = {
+  twoWheeler: ROUTES.vehicle.newBike,
+  fourWheeler: ROUTES.vehicle.newCar,
+  commercial: ROUTES.vehicle.newCommercialDetails,
+} as const;

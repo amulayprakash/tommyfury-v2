@@ -1,0 +1,27 @@
+{
+  "_comment": "ICICI Lombard previous-insurer master, transcribed from the partner doc (dock boyz/ICICI/cv_out.txt 'Insurer Master' table). import-icici-master.ts fuzzy-matches each canonical InsurerMaster (FG-sourced) name to an entry here and writes ProviderInsurerCode(icici, providerCode=code). NOTE (UAT confirmation): the doc's Save-Quote sample sent PreviousInsurerCode='ICICI LOMBARD' (a name) while this table's Code column is short ('ICLB'). We store the short code; if UAT rejects it for rollover/OD, switch providerCode to the name. Previous-insurer is optional for a quote, so this rarely blocks pricing.",
+  "insurers": [
+    { "code": "ACKO", "name": "ACKO GENERAL INSURANCE LIMITED" },
+    { "code": "GODI", "name": "GO DIGIT GENERAL INSURANCE CO LTD" },
+    { "code": "LIBE", "name": "LIBERTY VIDEOCON GENERAL INSURANCE COMPANY LIMITED" },
+    { "code": "GIC", "name": "GENERAL INSURANCE CORPORATION OF INDIA" },
+    { "code": "ICLB", "name": "ICICI LOMBARD GENERAL INSURANCE COMPANY LTD" },
+    { "code": "NIA", "name": "THE NEW INDIA ASSURANCE COMPANY LTD" },
+    { "code": "UIIC", "name": "UNITED INDIA INSURANCE COMPANY LTD" },
+    { "code": "NIC", "name": "NATIONAL INSURANCE COMPANY LIMITED" },
+    { "code": "OIC", "name": "ORIENTAL INSURANCE COMPANY LTD" },
+    { "code": "RGIC", "name": "RELIANCE GENERAL INSURANCE COMPANY LTD" },
+    { "code": "RSUND", "name": "ROYAL SUNDARAM GENERAL INSURANCE CO LTD" },
+    { "code": "TAIG", "name": "TATA AIG GENERAL INSURANCE CO LTD" },
+    { "code": "IFTM", "name": "IFFCO TOKIO GENERAL INSURANCE CO LTD" },
+    { "code": "BANZ", "name": "BAJAJ ALLIANZ GENERAL INSURANCE CO LTD" },
+    { "code": "CHOLA", "name": "CHOLAMANDALAM MS GENERAL INSURANCE COMPANY LTD" },
+    { "code": "FGIC", "name": "FUTURE GENERALI INDIA INSURANCE CO LTD" },
+    { "code": "USGI", "name": "UNIVERSAL SOMPO GENERAL INSURANCE CO LTD" },
+    { "code": "SHRIRAM", "name": "SHRIRAM GENERAL INSURANCE CO LTD" },
+    { "code": "AXA", "name": "AXA INSURANCE COMPANY" },
+    { "code": "MAGMA", "name": "MAGMA HDI GENERAL INSURANCE CO LTD" },
+    { "code": "BAXA", "name": "BHARTI AXA GENERAL INSURANCE CO LTD" },
+    { "code": "LNT", "name": "L&T GENERAL INSURANCE CO LTD" }
+  ]
+}

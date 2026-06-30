@@ -63,7 +63,9 @@ model Quote {
   engineNumber    String?  @db.VarChar(64)
   chassisNumber   String?  @db.VarChar(64)
 
-  // Premium (stored as integers in paise to avoid float rounding)
+  // Premium amounts in WHOLE RUPEES (INR), rounded to integer. The whole stack —
+  // provider normalizers, this table, the FG payment gateway, and the frontend — uses
+  // rupees end-to-end (no paise). Indian motor premiums are whole-rupee after GST rounding.
   idvValue        Int?
   netPremium      Int?
   grossPremium    Int?
@@ -119,7 +121,9 @@ model HealthQuote {
   holderEmail  String? @db.VarChar(255)
   holderMobile String? @db.VarChar(20)
 
-  // Premium (stored as integers in paise to avoid float rounding)
+  // Premium amounts in WHOLE RUPEES (INR), rounded to integer. The whole stack —
+  // provider normalizers, this table, the FG payment gateway, and the frontend — uses
+  // rupees end-to-end (no paise). Indian motor premiums are whole-rupee after GST rounding.
   basePremium  Int?
   netPremium   Int?
   grossPremium Int?
@@ -203,6 +207,8 @@ model RtoMaster {
   // Motor zone (A/B for private car). No RTO→zone in the FG master, so it is
   // derived at seed time (metro cities → A, else B).
   zone        String?  @db.VarChar(4)
+  // Owning data source ("fg" | "icici"). See MmvMaster.source.
+  source      String?  @db.VarChar(16)
   isActive    Boolean  @default(true)
 
   providerCodes ProviderRtoCode[]
@@ -229,6 +235,9 @@ model MmvMaster {
   seatingCapacity  Int?
   carryingCapacity Int?
   vehicleType      String? @db.VarChar(191) // FG VEHICLE_TYPE class, e.g. "PV-Private Car"
+  // Owning data source ("fg" | "icici"). Explicit provenance for idempotent,
+  // partition-scoped imports — replaces inferring ownership from makeId format.
+  source      String?  @db.VarChar(16)
   isActive    Boolean  @default(true)
 
   providerCodes ProviderMmvCode[]
@@ -237,6 +246,7 @@ model MmvMaster {
   @@index([makeName])
   @@index([modelName])
   @@index([category])
+  @@index([source])
   @@map("mmv_master")
 }
 
@@ -246,6 +256,8 @@ model InsurerMaster {
   name         String   @db.VarChar(255)
   shortName    String?  @db.VarChar(64)
   logoUrl      String?  @db.VarChar(512)
+  // Owning data source ("fg" | "icici"). See MmvMaster.source.
+  source       String?  @db.VarChar(16)
   isActive     Boolean  @default(true)
 
   providerCodes ProviderInsurerCode[]
@@ -299,8 +311,16 @@ model ProviderRtoCode {
   rtoId        Int
   rto          RtoMaster @relation(fields: [rtoId], references: [id])
   providerCode String    @db.VarChar(64)
+  // Vehicle line this code applies to. ICICI's RTO master is per-line: the same
+  // city has different RTO codes for 2W / 4W / CV (e.g. Pune 4W=9, 2W=634), so one
+  // code per RTO can't serve both lines. "all" = line-agnostic (resolver fallback).
+  line         String    @db.VarChar(8) @default("all") // "tw" | "fw" | "cv" | "all"
+  // Live-validation audit (scripts/validate-icici-codes.ts): verifiedAt set when the
+  // code priced on the vendor; verifyError records the last definitive/transient failure.
+  verifiedAt   DateTime?
+  verifyError  String?   @db.VarChar(255)
 
-  @@unique([providerSlug, rtoId])
+  @@unique([providerSlug, rtoId, line])
   @@map("provider_rto_codes")
 }
 
@@ -312,6 +332,9 @@ model ProviderMmvCode {
   providerMakeCode    String?  @db.VarChar(64)
   providerModelCode   String?  @db.VarChar(64)
   providerVariantCode String?  @db.VarChar(64)
+  // Live-validation audit (see ProviderRtoCode).
+  verifiedAt   DateTime?
+  verifyError  String?   @db.VarChar(255)
 
   @@unique([providerSlug, mmvId])
   @@map("provider_mmv_codes")

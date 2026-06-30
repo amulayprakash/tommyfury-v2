@@ -1,4 +1,4 @@
-import { ArrowRight, Pencil } from "lucide-react";
+import { AlertTriangle, ArrowRight, Pencil } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 
@@ -88,6 +88,14 @@ export function VehicleDetailsPage() {
     [rc],
   );
 
+  // DF-04: the RC's own detected category disagrees with the journey the user picked
+  // (e.g. a goods carrier entered on the Car flow). Warn rather than silently mis-map.
+  const categoryMismatch = Boolean(rc && category && rc.category !== category);
+  // DF-03: a prior policy exists but its expiry didn't parse, so break-in can't be derived.
+  const expiryUnknown = Boolean(rc && !rc.isPreviousPolicyExpiryKnown);
+  const categoryLabel = (c: string) =>
+    c === "twoWheeler" ? "two-wheeler" : c === "commercial" ? "commercial vehicle" : "car";
+
   if (!rc || !category) {
     return (
       <div className="mx-auto max-w-xl text-center">
@@ -161,6 +169,29 @@ export function VehicleDetailsPage() {
           </Button>
         </CardHeader>
         <CardContent>
+          {categoryMismatch && (
+            <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <span>
+                This vehicle looks like a <strong>{categoryLabel(rc.category)}</strong>, but you're getting a{" "}
+                <strong>{categoryLabel(category)}</strong> quote. If that's wrong,{" "}
+                <Link to={ROUTES.vehicle.start} className="font-medium underline">
+                  start over
+                </Link>{" "}
+                and choose the right vehicle type.
+              </span>
+            </div>
+          )}
+          {expiryUnknown && (
+            <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <span>
+                We couldn't read your previous policy's expiry date. If it has already expired, this is a{" "}
+                <strong>break-in</strong> case and may need a vehicle inspection — please confirm your previous
+                policy status before continuing.
+              </span>
+            </div>
+          )}
           <div className="divide-y">
             <DetailRow label="Vehicle number" value={rc.rcNumber} />
             <DetailRow label="Vehicle" value={vehicleName} />

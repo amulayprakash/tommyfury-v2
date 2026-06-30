@@ -58,4 +58,24 @@ describe("parseSoapResponse", () => {
       /VendorCode and VendorUserId must be same/,
     );
   });
+
+  it("unwraps the CKYC failure and classifies it as KYC_INCOMPLETE", () => {
+    // FG packs the CKYC lookup result (JSON) into ErrorMessage when the proposer
+    // has no central-registry record — CreateProposal then fails with this shape.
+    const failRoot =
+      "<Root><Policy><Status>Fail</Status></Policy><Client></Client>" +
+      "<Error>CKYC error</Error>" +
+      '<ErrorMessage>{"Success":false,"ErrorType":null,"Final_Status":"0",' +
+      '"ErrorMessage":null,"message":"No record exist.","Proposal_ID":"PR_4UTNLVSSP87"}</ErrorMessage></Root>';
+    const root = parseSoapResponse(soapWrap("GetQuote", failRoot)) as Record<string, unknown>;
+    try {
+      assertFgSuccess(root, "create-proposal");
+      expect.unreachable("should have thrown");
+    } catch (err) {
+      expect((err as Error).message).toBe(
+        "FG create-proposal failed: CKYC error: No record exist.",
+      );
+      expect((err as { code?: string }).code).toBe("KYC_INCOMPLETE");
+    }
+  });
 });

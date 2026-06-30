@@ -65,8 +65,13 @@ describe("resolveLine", () => {
     expect(resolveLine("twoWheeler")).toBe("tw");
   });
 
-  it("throws for unsupported categories", () => {
-    expect(() => resolveLine("commercial")).toThrow(ProviderCapabilityError);
+  it("maps commercial/newCommercial → cv", () => {
+    expect(resolveLine("commercial")).toBe("cv");
+    expect(resolveLine("newCommercial")).toBe("cv");
+  });
+
+  it("throws for an unknown category", () => {
+    expect(() => resolveLine("spaceship" as never)).toThrow(ProviderCapabilityError);
   });
 });
 

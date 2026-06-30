@@ -2,7 +2,7 @@ import { ArrowRight, Loader2, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 
-import { ROUTES } from "@/app/router/paths";
+import { NEW_VEHICLE_ROUTES, ROUTES } from "@/app/router/paths";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -258,11 +258,21 @@ export function ComparePage() {
             {[vehicle.makeName, vehicle.modelName, vehicle.variantName].filter(Boolean).join(" ")}
           </p>
           <p className="text-sm text-muted-foreground">
-            {vehicle.registrationNumber} · {vehicle.rtoCode} · {vehicle.fuelType}
+            {[vehicle.registrationNumber, vehicle.rtoCode, vehicle.fuelType]
+              .filter(Boolean)
+              .join(" · ")}
           </p>
         </div>
         <Button asChild variant="ghost" size="sm">
-          <Link to={ROUTES.vehicle.confirmDetails}>Edit</Link>
+          <Link
+            to={
+              vehicle.businessType === "new"
+                ? NEW_VEHICLE_ROUTES[category]
+                : ROUTES.vehicle.confirmDetails
+            }
+          >
+            Edit
+          </Link>
         </Button>
       </div>
 

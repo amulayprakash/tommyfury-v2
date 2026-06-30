@@ -8,6 +8,8 @@ import type {
   CompareResult,
   KycResult,
   MotorFullQuoteRequest,
+  OvdDocType,
+  OvdResult,
   PolicyStatusResult,
   ProviderInfo,
   ProvidersResponse,
@@ -117,6 +119,33 @@ export async function completeCkyc(
   const { data } = await vendorClient.post<ApiEnvelope<KycResult>>(
     `/${providerSlug}/kyc/ckyc`,
     req,
+  );
+  return data.response;
+}
+
+export interface OvdUploadBody {
+  transactionId: string;
+  proofOfIdentityType: OvdDocType;
+  proofOfAddressType: OvdDocType;
+  proofOfIdentity: File;
+  proofOfAddress: File;
+}
+
+/** Alternate KYC: uploads ID + address proofs (multipart) to the OVD endpoint. */
+export async function initiateOvd(
+  providerSlug: string,
+  body: OvdUploadBody,
+): Promise<OvdResult> {
+  const form = new FormData();
+  form.append("transactionId", body.transactionId);
+  form.append("proofOfIdentityType", body.proofOfIdentityType);
+  form.append("proofOfAddressType", body.proofOfAddressType);
+  form.append("policyType", "motor");
+  form.append("proofOfIdentity", body.proofOfIdentity);
+  form.append("proofOfAddress", body.proofOfAddress);
+  const { data } = await vendorClient.post<ApiEnvelope<OvdResult>>(
+    `/${providerSlug}/kyc/ovd`,
+    form,
   );
   return data.response;
 }

@@ -18,9 +18,14 @@ interface IciciTokenResponse {
  */
 export function iciciTokenFetcher(config: IciciConfig): TokenFetcher {
   return async () => {
+    // When an AES key is configured we encrypt the plaintext password; otherwise
+    // ICICI_PASSWORD is already an encrypted value and is sent verbatim.
+    const password = config.aesKey
+      ? encryptPassword(config.password, config.aesKey, config.aesMode)
+      : config.password;
     const body = JSON.stringify({
       Login: config.login,
-      Password: encryptPassword(config.password, config.aesKey, config.aesMode),
+      Password: password,
       LoginType: "App",
     });
 

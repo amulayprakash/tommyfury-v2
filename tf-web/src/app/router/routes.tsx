@@ -31,6 +31,9 @@ const VehicleDetailsPage = lazy(() =>
 const VehicleComparePage = lazy(() =>
   import("@/features/vehicle/pages/compare-page").then((m) => ({ default: m.ComparePage })),
 );
+const NewVehiclePage = lazy(() =>
+  import("@/features/vehicle/pages/new-vehicle-page").then((m) => ({ default: m.NewVehiclePage })),
+);
 const VehicleProposalPage = lazy(() =>
   import("@/features/vehicle/pages/proposal-page").then((m) => ({ default: m.ProposalPage })),
 );
@@ -130,19 +133,21 @@ export const routes: RouteObject[] = [
           placeholder(ROUTES.vehicle.zunoCreateQuote, "Zuno Proposal", VEHICLE),
           placeholder(ROUTES.vehicle.zunoKyc, "Zuno KYC", VEHICLE),
           placeholder(ROUTES.vehicle.zunoNwCheckout, "Zuno Checkout", VEHICLE),
-          // New vehicle journey
-          placeholder(ROUTES.vehicle.newCar, "New Car Insurance", VEHICLE),
-          placeholder(ROUTES.vehicle.newBike, "New Bike Insurance", VEHICLE),
+          // New vehicle journey — manual entry (no RC yet), category-aware.
+          { path: ROUTES.vehicle.newCar, element: <NewVehiclePage category="fourWheeler" /> },
+          { path: ROUTES.vehicle.newBike, element: <NewVehiclePage category="twoWheeler" /> },
           placeholder(ROUTES.vehicle.newViewDetails, "Review Vehicle Details", VEHICLE),
           placeholder(ROUTES.vehicle.newQuotes, "Compare New Vehicle Quotes", VEHICLE),
           placeholder(ROUTES.vehicle.newCreateQuote, "New Vehicle Proposal", VEHICLE),
           placeholder(ROUTES.vehicle.newKyc, "New Vehicle KYC", VEHICLE),
-          // Commercial journey — shares the confirm/quotes/proposal steps below.
+          // Commercial journey — the category-aware shared wizard pages (they read
+          // category from the vehicle-quote store), so the dedicated commercial URLs
+          // render the same built steps the in-flow shared routes use.
           { path: ROUTES.vehicle.newCommercial, element: <VehicleNumberPage category="commercial" /> },
-          placeholder(ROUTES.vehicle.newCommercialDetails, "Commercial Vehicle Details", VEHICLE),
-          placeholder(ROUTES.vehicle.newCommercialQuotes, "Compare Commercial Quotes", VEHICLE),
-          placeholder(ROUTES.vehicle.newCommercialCreateQuote, "Commercial Proposal", VEHICLE),
-          placeholder(ROUTES.vehicle.newCommercialKyc, "Commercial KYC", VEHICLE),
+          { path: ROUTES.vehicle.newCommercialDetails, element: <NewVehiclePage category="commercial" /> },
+          { path: ROUTES.vehicle.newCommercialQuotes, element: <VehicleComparePage /> },
+          { path: ROUTES.vehicle.newCommercialCreateQuote, element: <VehicleProposalPage /> },
+          { path: ROUTES.vehicle.newCommercialKyc, element: <VehicleKycPage /> },
 
           // Health journey
           placeholder(ROUTES.health.start, "Health Insurance", HEALTH),

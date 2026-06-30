@@ -30,6 +30,12 @@ export interface RcDetails {
   previousPolicyNumber?: string;
   previousPolicyExpiryDate?: string; // YYYY-MM-DD
   isPreviousPolicyExpired: boolean;
+  /**
+   * False when the RC reports a prior policy but its expiry date is missing or
+   * unparseable — the break-in (expired) state then can't be derived and must be
+   * confirmed rather than silently assumed active (DF-03).
+   */
+  isPreviousPolicyExpiryKnown: boolean;
 }
 
 /** The portion of the regtech / Laravel response we consume. */
@@ -76,7 +82,23 @@ function toYearMonth(value?: string): string | undefined {
 
 function mapCategory(raw?: string, vehicleClass?: string): SupportedCategory {
   const hay = `${raw ?? ""} ${vehicleClass ?? ""}`.toUpperCase();
-  if (hay.includes("2W") || hay.includes("M-CYCLE") || hay.includes("SCOOTER")) return "twoWheeler";
+  if (
+    hay.includes("2W") ||
+    hay.includes("M-CYCLE") ||
+    hay.includes("MCYCLE") ||
+    hay.includes("MOTOR CYCLE") ||
+    hay.includes("MOTORCYCLE") ||
+    hay.includes("SCOOTER")
+  )
+    return "twoWheeler";
+  // Commercial — goods carriers, passenger carriers (cab/bus), trailers, tractors.
+  // Deliberately does NOT match bare "LMV"/"MOTOR CAR" (private). Used to warn when a
+  // commercial RC is entered on the car/2W route rather than to silently re-map it (DF-04).
+  if (
+    /GOODS|\bGCV\b|\bPCV\b|\bLGV\b|\bHGV\b|\bMGV\b|\bHCV\b|\bMCV\b|\bLCV\b|TRUCK|LORRY|TRAILER|TRACTOR|TANKER|TIPPER|DUMPER/.test(hay) ||
+    /MAXI ?CAB|MOTOR ?CAB|\bCAB\b|\bTAXI\b|\bBUS\b|OMNI ?BUS|PASSENGER|ARTICULAT|TRANSPORT|\bLMV-?TR\b/.test(hay)
+  )
+    return "commercial";
   return "fourWheeler";
 }
 
@@ -98,6 +120,10 @@ function extractPincode(address?: string): string | undefined {
 function normalise(raw: RcRaw, fallbackRcNumber: string): RcDetails {
   const expiryIso = toIsoDate(raw.insurance_upto);
   const isExpired = expiryIso ? new Date(expiryIso) < new Date() : false;
+  // A prior policy is evidenced by any insurer/policy/expiry field. If one exists but
+  // the expiry didn't parse, the break-in state is genuinely unknown (DF-03).
+  const hasPriorPolicy = Boolean(raw.insurance_company || raw.insurance_policy_number || raw.insurance_upto);
+  const isPreviousPolicyExpiryKnown = Boolean(expiryIso) || !hasPriorPolicy;
   const cc = raw.cubic_capacity ? Number.parseFloat(raw.cubic_capacity) : undefined;
   return {
     rcNumber: raw.rc_number ?? fallbackRcNumber,
@@ -126,6 +152,7 @@ function normalise(raw: RcRaw, fallbackRcNumber: string): RcDetails {
     previousPolicyNumber: raw.insurance_policy_number || undefined,
     previousPolicyExpiryDate: expiryIso,
     isPreviousPolicyExpired: isExpired,
+    isPreviousPolicyExpiryKnown,
   };
 }
 

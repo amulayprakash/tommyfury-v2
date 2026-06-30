@@ -205,7 +205,7 @@ function buildAdditionalBenefit(req: MotorQuoteRequest, cpaReq: "Y" | "N"): Reco
   };
 }
 
-function buildPreviousInsDtls(req: MotorQuoteRequest): Record<string, unknown> {
+function buildPreviousInsDtls(req: MotorQuoteRequest, codes: FgResolvedCodes): Record<string, unknown> {
   const isNew = req.businessType === "new";
   const isRollover = req.businessType === "rollover" || req.businessType === "renewal";
   return {
@@ -214,9 +214,12 @@ function buildPreviousInsDtls(req: MotorQuoteRequest): Record<string, unknown> {
     RollOver: isRollover ? "Y" : "N",
     RollOverList: {
       PolicyNo: req.previousPolicyNumber ?? "",
-      InsuredName: "",
+      InsuredName: req.proposerName ?? "",
       PreviousPolExpDt: req.previousPolicyExpiryDate ? toFgDate(req.previousPolicyExpiryDate) : "",
-      ClientCode: "",
+      // FG hard-fails a rollover proposal without the previous insurer's ClientCode
+      // ("Please Pass Rollover Insurer ClientCode"). Use the resolved code, falling
+      // back to FG's own client code when the previous insurer can't be resolved.
+      ClientCode: isRollover ? (codes.previousInsurerCode ?? FALLBACK_INSURER_CODE) : "",
       Address1: "",
       Address2: "",
       Address3: "",
@@ -353,7 +356,7 @@ function buildRisk(
     AddonReq: addons.length > 0 ? "Y" : "N",
     Addon: addons.length > 0 ? addons : [{ CoverCode: "" }],
     PreviousTPInsDtls: buildPreviousTp(req, codes),
-    PreviousInsDtls: buildPreviousInsDtls(req),
+    PreviousInsDtls: buildPreviousInsDtls(req, codes),
     ...RISK_TAIL,
   };
 }

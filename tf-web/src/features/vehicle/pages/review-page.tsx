@@ -1,11 +1,12 @@
-import { ArrowRight, Loader2, ShieldCheck } from "lucide-react";
+import { ArrowRight, BadgeCheck, Loader2, ShieldCheck } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 
 import { ROUTES } from "@/app/router/paths";
+import { apiErrorMessage } from "@/lib/api/error-message";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useFullQuote } from "../api/hooks";
+import { useFullQuote, useProviders } from "../api/hooks";
 import type { MotorFullQuoteRequest } from "../api/types";
 import { PremiumBreakdown } from "../components/premium-breakdown";
 import { WizardSteps } from "../components/wizard-steps";
@@ -15,8 +16,9 @@ import { buildQuoteRequest, useVehicleQuoteStore } from "../vehicle-quote-store"
 export function ReviewPage() {
   const navigate = useNavigate();
   const store = useVehicleQuoteStore();
-  const { vehicle, selected, proposal, panNumber, ckyc, kycRefId } = store;
+  const { vehicle, selected, proposal, panNumber, ckyc, kycRefId, kycId } = store;
   const fullQuote = useFullQuote();
+  const providers = useProviders();
 
   if (!vehicle || !selected || !proposal) {
     return (
@@ -32,7 +34,21 @@ export function ReviewPage() {
   const panUpper = (panNumber ?? "").trim().toUpperCase();
   const panValid = PAN_REGEX.test(panUpper);
 
+  // Gate the proposal on completed KYC. FG's CreateProposal needs the resolved
+  // CKYC *number* (else "CKYC error: No record exist."); ICICI links KYC by
+  // TransactionId, so a completed KYC (kycId) is enough.
+  const provider = providers.data?.find((p) => p.slug === selected.providerSlug);
+  const requiresKyc = provider?.operations.includes("ckyc") ?? false;
+  const needsCkycNumber = selected.providerSlug === "fg";
+  const kycDone = needsCkycNumber ? Boolean(ckyc) : Boolean(kycId);
+  const kycReady = !requiresKyc || kycDone;
+
   const onProceed = () => {
+    if (!kycReady) {
+      toast.error("Complete KYC verification before proceeding to payment.");
+      void navigate(ROUTES.vehicle.kycStatus);
+      return;
+    }
     const base = buildQuoteRequest(store);
     if (!base) return;
 
@@ -80,8 +96,7 @@ export function ReviewPage() {
           store.setFullQuote(quote.transactionId ?? quote.quoteNo ?? req.quoteId, quote);
           void navigate(ROUTES.vehicle.paymentPage);
         },
-        onError: (err) =>
-          toast.error(err instanceof Error ? err.message : "Could not generate the full quote."),
+        onError: (err) => toast.error(apiErrorMessage(err, "Could not generate the full quote.")),
       },
     );
   };
@@ -115,11 +130,23 @@ export function ReviewPage() {
               </p>
             ) : null}
 
+            {!kycReady ? (
+              <div className="flex items-start gap-2 rounded-md bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+                <BadgeCheck className="mt-0.5 size-4 shrink-0" />
+                <span>
+                  KYC isn’t verified yet. Complete KYC to confirm the policy.{" "}
+                  <Link to={ROUTES.vehicle.kycStatus} className="font-medium underline">
+                    Verify KYC
+                  </Link>
+                </span>
+              </div>
+            ) : null}
+
             <Button
               size="lg"
               className="w-full"
               onClick={onProceed}
-              disabled={fullQuote.isPending}
+              disabled={fullQuote.isPending || !kycReady}
             >
               {fullQuote.isPending ? (
                 <>

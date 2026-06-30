@@ -1,0 +1,5 @@
+{
+  "_comment": "Optional manual curation applied by import-icici-master.ts (step 6) AFTER the automatic cross-walk. Empty by default. ProviderRtoCode is now LINE-AWARE (the import stores a code per vehicle line from the Private-Car / Two-Wheeler / CV RTO CSVs), so the earlier 2W-RTO band-aid is no longer needed and has been removed. Add entries here only to correct a genuinely wrong/missing auto-mapping. rto[].line is the vehicle line the code applies to: \"tw\" | \"fw\" | \"cv\" | \"all\". mmv entries pin a canonical make/model to specific ICICI make/model codes.",
+  "mmv": [],
+  "rto": []
+}

@@ -10,3 +10,11 @@ prisma/generated/
 coverage/
 # Portable data snapshot — distributed to the team out-of-band, not via git.
 prisma/data-snapshot.json
+# Regenerable script artifacts (import sidecars, live-matrix outputs/logs).
+scripts/_*
+# Local-only dev/probe scripts — not part of the deploy or any npm script.
+scripts/live-matrix.ts
+scripts/rc-csv.ts
+scripts/rc-mock-server.ts
+scripts/find-frontend-test-vehicles.ts
+scripts/verify-test-vehicles.ts

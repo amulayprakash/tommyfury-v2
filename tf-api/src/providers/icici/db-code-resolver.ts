@@ -5,6 +5,7 @@ import {
   getProviderInsurerCode,
 } from "@/repositories/master.repository.ts";
 import { ICICI_SLUG } from "./config.ts";
+import { resolveLine } from "./mapper.ts";
 import type { IciciCodeResolver } from "./icici.provider.ts";
 
 /**
@@ -24,9 +25,13 @@ export const dbCodeResolver: IciciCodeResolver = async (req) => {
     throw new NotFoundError(`ICICI vehicle-code mapping for ${req.makeName} ${req.modelName}`);
   }
 
-  const rtoCode = await getProviderRtoCode(ICICI_SLUG, req.rtoCode);
+  // ICICI's RTO master is per vehicle line (2W/4W/CV have different codes for the
+  // same city), so resolve the RTO code for THIS request's line. A vehicle whose RTO
+  // ICICI hasn't onboarded for that line is honestly rejected (NotFound), not mis-priced.
+  const line = resolveLine(req.vehicleType);
+  const rtoCode = await getProviderRtoCode(ICICI_SLUG, req.rtoCode, line);
   if (!rtoCode) {
-    throw new NotFoundError(`ICICI RTO-code mapping for "${req.rtoCode}"`);
+    throw new NotFoundError(`ICICI RTO-code mapping for "${req.rtoCode}" (${line})`);
   }
 
   const previousInsurerCode = req.previousInsurerId

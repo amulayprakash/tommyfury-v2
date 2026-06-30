@@ -3,12 +3,15 @@
  *
  *   npx tsx scripts/import-fg-master.ts
  *
- * Idempotent: wipes master rows (+ FG add-on catalog) and re-inserts. FG is the
- * data source, so MmvMaster.modelId holds the FG PASIA_CODE and makeName the FG
- * Make — the FG resolver reads these directly (no ProviderMmvCode needed).
+ * Idempotent + partition-scoped: UPSERTS FG-owned master rows (source="fg") and
+ * marks rows missing from the sheet inactive. It NEVER deletes provider codes or
+ * canonical rows, so ICICI's ProviderMmvCode/ProviderRtoCode FK references survive an
+ * FG re-import (import order no longer matters). FG is the data source, so
+ * MmvMaster.modelId holds the FG PASIA_CODE and makeName the FG Make — the FG resolver
+ * reads these directly (no ProviderMmvCode needed).
  */
 import { createRequire } from "node:module";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 
 const require = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -74,6 +77,20 @@ async function insertChunked<T>(
   console.log(`  ${label}: ${rows.length} rows`);
 }
 
+/** Runs per-row upserts in batched transactions (idempotent, preserves row ids so
+ *  other providers' FK references survive). */
+async function upsertChunked<T>(
+  label: string,
+  rows: T[],
+  toOp: (row: T) => Prisma.PrismaPromise<unknown>,
+  size = 500,
+): Promise<void> {
+  for (let i = 0; i < rows.length; i += size) {
+    await prisma.$transaction(rows.slice(i, i + size).map(toOp));
+  }
+  console.log(`  ${label}: ${rows.length} rows`);
+}
+
 async function main() {
   console.log(`Reading ${XLS_PATH} …`);
   const wb = XLSX.readFile(XLS_PATH);
@@ -84,12 +101,17 @@ async function main() {
       ? (XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, blankrows: false, defval: "" }) as unknown[][])
       : [];
 
-  // ── Wipe (children first for FKs) ──
-  console.log("Clearing master tables …");
-  await prisma.providerMmvCode.deleteMany({});
-  await prisma.providerRtoCode.deleteMany({});
-  await prisma.mmvMaster.deleteMany({});
-  await prisma.rtoMaster.deleteMany({});
+  // ── Idempotent, partition-scoped refresh (NEVER wipes provider codes or canonical
+  // rows, so ICICI's ProviderMmvCode/ProviderRtoCode FK references survive an FG
+  // re-import). Normalize legacy NULL variantId → "" so the
+  // (makeId,modelId,variantId,fuelType) unique key is fully effective and upserts match
+  // deterministically. Then mark FG-owned masters stale; the upserts below reactivate
+  // the rows still present in the sheet (rows truly removed stay isActive=false). ──
+  console.log("Refreshing FG-owned master rows (upsert; no destructive wipe) …");
+  await prisma.$executeRawUnsafe("UPDATE mmv_master SET variantId='' WHERE variantId IS NULL");
+  await prisma.mmvMaster.updateMany({ where: { source: "fg" }, data: { isActive: false } });
+  await prisma.rtoMaster.updateMany({ where: { source: "fg" }, data: { isActive: false } });
+  // FG-owned tables with NO inbound FK can be safely replaced wholesale.
   await prisma.pincodeMaster.deleteMany({});
   await prisma.occupationMaster.deleteMany({});
   await prisma.motorAddon.deleteMany({ where: { providerSlug: "fg" } });
@@ -97,8 +119,8 @@ async function main() {
   // ── MMV (PVT Car=4W, GCV+PCV=commercial) ──
   const mmvRows: {
     makeId: string; makeName: string; modelId: string; modelName: string;
-    variantName: string | null; fuelType: string; engineCC: number | null; category: string;
-    bodyType: string | null; gvw: number | null; seatingCapacity: number | null;
+    variantId: string; variantName: string | null; fuelType: string; engineCC: number | null;
+    category: string; bodyType: string | null; gvw: number | null; seatingCapacity: number | null;
     carryingCapacity: number | null; vehicleType: string | null;
   }[] = [];
   const seenMmv = new Set<string>();
@@ -116,6 +138,7 @@ async function main() {
       makeName: make,
       modelId: pasia,
       modelName: s(r.VEHICLE_MODEL) || pasia,
+      variantId: "", // FG has no per-variant id; "" keeps the unique key non-null
       variantName: s(r.Variant_Name) || null,
       fuelType: fuel,
       engineCC: intOrNull(r.CC),
@@ -130,8 +153,16 @@ async function main() {
   for (const r of sheet("PVT Car MMV")) pushMmv(r, "fourWheeler");
   for (const r of sheet("GCV MMV")) pushMmv(r, "commercial");
   for (const r of sheet("PCV MMV")) pushMmv(r, "commercial");
-  await insertChunked("MmvMaster", mmvRows, (c) =>
-    prisma.mmvMaster.createMany({ data: c, skipDuplicates: true }),
+  await upsertChunked("MmvMaster(fg)", mmvRows, (r) =>
+    prisma.mmvMaster.upsert({
+      where: {
+        makeId_modelId_variantId_fuelType: {
+          makeId: r.makeId, modelId: r.modelId, variantId: r.variantId, fuelType: r.fuelType,
+        },
+      },
+      update: { ...r, source: "fg", isActive: true },
+      create: { ...r, source: "fg", isActive: true },
+    }),
   );
 
   // ── RTO + derived zone ──
@@ -149,8 +180,12 @@ async function main() {
       };
     })
     .filter((r) => r.code && !rtoSeen.has(r.code) && rtoSeen.add(r.code));
-  await insertChunked("RtoMaster", rtoRows, (c) =>
-    prisma.rtoMaster.createMany({ data: c, skipDuplicates: true }),
+  await upsertChunked("RtoMaster(fg)", rtoRows, (r) =>
+    prisma.rtoMaster.upsert({
+      where: { code: r.code },
+      update: { ...r, source: "fg", isActive: true },
+      create: { ...r, source: "fg", isActive: true },
+    }),
   );
 
   // ── Add-On catalog (3 sections by vehicle class) ──
@@ -218,9 +253,12 @@ async function main() {
     .slice(1)
     .map((r) => ({ code: s(r[1]), name: s(r[0]).slice(0, 255) }))
     .filter((r) => r.code && r.name && !insSeen.has(r.code) && insSeen.add(r.code));
-  await prisma.insurerMaster.deleteMany({ where: { code: { in: insurerRows.map((r) => r.code) } } });
-  await insertChunked("InsurerMaster(fg)", insurerRows, (c) =>
-    prisma.insurerMaster.createMany({ data: c, skipDuplicates: true }),
+  await upsertChunked("InsurerMaster(fg)", insurerRows, (r) =>
+    prisma.insurerMaster.upsert({
+      where: { code: r.code },
+      update: { name: r.name, source: "fg", isActive: true },
+      create: { code: r.code, name: r.name, source: "fg", isActive: true },
+    }),
   );
 
   // ── Register FG in the Provider table ──

@@ -32,6 +32,14 @@ export const MotorQuoteRequestSchema = z.object({
   commercialSubType: z.enum(["goods", "passenger"]).optional(),
   grossVehicleWeight: z.coerce.number().positive().optional(),
   carryingCapacity: z.coerce.number().positive().optional(),
+  /**
+   * Commercial vehicle product class (ICICI CV: PCV / GCV / MISC). When omitted it
+   * is derived from commercialSubType (passenger→pcv, goods→gcv); set explicitly to
+   * select the MISC (miscellaneous/special) product line.
+   */
+  commercialVehicleClass: z.enum(["pcv", "gcv", "misc"]).optional(),
+  /** Include IMT-23 endorsement (ICICI CV Save-Quote IsInclusionOfIMT). */
+  isInclusionOfIMT: z.boolean().optional(),
 
   // Registration
   rtoCode: z.string().min(1),

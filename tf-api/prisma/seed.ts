@@ -29,13 +29,15 @@ async function main() {
   // ── Dev master subset (ICICI sample codes) ──
   const rto = await prisma.rtoMaster.upsert({
     where: { code: "MH02" },
-    update: {},
-    create: { code: "MH02", city: "Mumbai", state: "Maharashtra", stateCode: "MH" },
+    update: { source: "fg" },
+    create: { code: "MH02", city: "Mumbai", state: "Maharashtra", stateCode: "MH", source: "fg" },
   });
+  // Line-aware ICICI RTO code (the sample vehicle below is fourWheeler → line "fw"),
+  // matching the real import so a seeded-only dev DB resolves like a fully-imported one.
   await prisma.providerRtoCode.upsert({
-    where: { providerSlug_rtoId: { providerSlug: "icici", rtoId: rto.id } },
+    where: { providerSlug_rtoId_line: { providerSlug: "icici", rtoId: rto.id, line: "fw" } },
     update: { providerCode: "12621" },
-    create: { providerSlug: "icici", rtoId: rto.id, providerCode: "12621" },
+    create: { providerSlug: "icici", rtoId: rto.id, providerCode: "12621", line: "fw" },
   });
 
   const mmv = await prisma.mmvMaster.upsert({
@@ -47,7 +49,7 @@ async function main() {
         fuelType: "petrol",
       },
     },
-    update: {},
+    update: { source: "icici" },
     create: {
       makeId: "10",
       makeName: "Sample Make",
@@ -57,6 +59,7 @@ async function main() {
       variantName: "",
       fuelType: "petrol",
       category: "fourWheeler",
+      source: "icici",
     },
   });
   await prisma.providerMmvCode.upsert({
@@ -72,8 +75,8 @@ async function main() {
 
   const insurer = await prisma.insurerMaster.upsert({
     where: { code: "ICICI_LOMBARD" },
-    update: {},
-    create: { code: "ICICI_LOMBARD", name: "ICICI Lombard", shortName: "ICICI" },
+    update: { source: "fg" },
+    create: { code: "ICICI_LOMBARD", name: "ICICI Lombard", shortName: "ICICI", source: "fg" },
   });
   await prisma.providerInsurerCode.upsert({
     where: { providerSlug_insurerId: { providerSlug: "icici", insurerId: insurer.id } },

@@ -6,6 +6,7 @@ import {
   ICICI_SLUG,
   ADDON_CODES_2W,
   ADDON_CODES_4W,
+  ADDON_CODES_CV,
   IDV_TYPE,
   KYC_POLICY_TYPE,
   PREV_POLICY_TYPE,
@@ -13,6 +14,7 @@ import {
   resolveProductCode,
   voluntaryDeductibleCode,
   type IciciVehicleLine,
+  type IciciCvClass,
 } from "./config.ts";
 
 /** Master codes resolved (DB or pass-through) before building a payload. */
@@ -25,7 +27,8 @@ export interface IciciResolvedCodes {
 
 // ─── Endpoints ────────────────────────────────────────────────────────────────
 
-const lineSegment = (line: IciciVehicleLine) => (line === "tw" ? "motor-tw" : "motor-fw");
+const lineSegment = (line: IciciVehicleLine) =>
+  line === "tw" ? "motor-tw" : line === "cv" ? "motor-cv" : "motor-fw";
 
 export const endpoints = {
   premium: (line: IciciVehicleLine) => `/generic/${lineSegment(line)}/generic/premium`,
@@ -48,9 +51,22 @@ export function resolveLine(vehicleType: VehicleCategory): IciciVehicleLine {
     case "fourWheeler":
     case "newVehicle":
       return "fw";
+    case "commercial":
+    case "newCommercial":
+      return "cv";
     default:
       throw new ProviderCapabilityError(ICICI_SLUG, vehicleType);
   }
+}
+
+/**
+ * Commercial product class for ICICI CV product-code selection. An explicit
+ * commercialVehicleClass wins (the only way to reach the MISC line); otherwise it
+ * is derived from commercialSubType (passenger→PCV, goods→GCV), defaulting to GCV.
+ */
+function resolveCvClass(req: MotorQuoteRequest): IciciCvClass {
+  if (req.commercialVehicleClass) return req.commercialVehicleClass;
+  return req.commercialSubType === "passenger" ? "pcv" : "gcv";
 }
 
 function tenureYears(req: MotorQuoteRequest): number {
@@ -64,7 +80,7 @@ function tenureYears(req: MotorQuoteRequest): number {
 }
 
 function buildAddons(req: MotorQuoteRequest, line: IciciVehicleLine): string[] {
-  const map = line === "fw" ? ADDON_CODES_4W : ADDON_CODES_2W;
+  const map = line === "fw" ? ADDON_CODES_4W : line === "cv" ? ADDON_CODES_CV : ADDON_CODES_2W;
   // Canonical cover flag → ICICI addon code (only those the line's map supports).
   const flags: Record<string, boolean> = {
     rsa: req.rsa,
@@ -107,14 +123,19 @@ export function buildSaveQuotePayload(
   requestId: string,
 ): { line: IciciVehicleLine; url: string; payload: Record<string, unknown> } {
   const line = resolveLine(req.vehicleType);
+  const cvClass = line === "cv" ? resolveCvClass(req) : undefined;
   const productCode = resolveProductCode({
     line,
     business: req.businessType,
     policyType: req.selectedPolicy,
     tenureYears: tenureYears(req),
+    cvClass,
   });
   if (productCode === undefined) {
-    throw new ProviderCapabilityError(ICICI_SLUG, `${req.vehicleType}/${req.selectedPolicy}`);
+    const detail = cvClass
+      ? `${req.vehicleType}/${cvClass}/${req.selectedPolicy}`
+      : `${req.vehicleType}/${req.selectedPolicy}`;
+    throw new ProviderCapabilityError(ICICI_SLUG, detail);
   }
 
   const hasIdv = typeof req.idvValue === "number" && req.idvValue > 0;
@@ -174,6 +195,12 @@ export function buildSaveQuotePayload(
   if (line === "tw") {
     payload.DrivingAccessoriesSI = req.drivingAccessoriesSI ?? 0;
     payload.KeyProtectSI = req.keyProtectSI ?? 0;
+  }
+
+  // CV carries the IMT-23 endorsement flag (paid-driver/employee legal liability
+  // already ride on NumberOfDriver / NumberOfEmployee set above).
+  if (line === "cv") {
+    payload.IsInclusionOfIMT = req.isInclusionOfIMT ?? false;
   }
 
   // Stand-alone OD requires the active TP policy details.

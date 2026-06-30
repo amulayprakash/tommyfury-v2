@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+// MONEY UNITS: every monetary field below (premiums, IDV, tax, discounts) is in
+// WHOLE RUPEES (INR) — not paise. Providers, persistence, the FG payment gateway, and
+// the frontend all use rupees end-to-end.
+
 // ─── Canonical Quote Result — mirrors live Zuno response shape ─────────────────
 
 export const AddonPremiumSchema = z.object({

@@ -90,15 +90,36 @@ export function listMotorAddons(providerSlug: string, category: string, fuelClas
 
 // ─── Canonical → provider code resolution ─────────────────────────────────────
 
+/**
+ * Picks the right RTO code for a vehicle `line` from a provider's (possibly per-line)
+ * code rows. ICICI's RTO master is per-line — the same city has different codes for
+ * 2W/4W/CV — so we store one row per line plus an optional line-agnostic "all" row.
+ * Prefers the exact line, then "all". When `line` is given but neither exists, returns
+ * undefined (honest miss — never a wrong-line code). When `line` is omitted, behaves
+ * line-agnostically. Pure (no DB) so it is unit-testable.
+ */
+export function selectRtoCodeForLine(
+  codes: { line: string; providerCode: string }[],
+  line?: string,
+): string | undefined {
+  if (codes.length === 0) return undefined;
+  if (line) {
+    const match = codes.find((c) => c.line === line) ?? codes.find((c) => c.line === "all");
+    return match?.providerCode;
+  }
+  return (codes.find((c) => c.line === "all") ?? codes[0])?.providerCode;
+}
+
 export async function getProviderRtoCode(
   providerSlug: string,
   rtoCode: string,
+  line?: string,
 ): Promise<string | undefined> {
   const rto = await prisma.rtoMaster.findUnique({
     where: { code: rtoCode },
     include: { providerCodes: { where: { providerSlug } } },
   });
-  return rto?.providerCodes[0]?.providerCode;
+  return selectRtoCodeForLine(rto?.providerCodes ?? [], line);
 }
 
 export async function getProviderMmvCode(
@@ -108,12 +129,19 @@ export async function getProviderMmvCode(
   fuelType: string,
   variantId?: string,
 ): Promise<{ makeCode?: string | null; modelCode?: string | null } | undefined> {
-  const mmv = await prisma.mmvMaster.findFirst({
-    where: { makeId, modelId, fuelType, ...(variantId ? { variantId } : {}) },
+  // The frontend's variant auto-pick can land on a variant row that has no provider
+  // code even when a sibling variant of the same make/model/fuel does (provider codes
+  // are model-grained, not variant-grained). Resolving across all sibling rows — and
+  // preferring the exact requested variant only when it is itself coded — lets such a
+  // vehicle still quote instead of failing NotFound (RT-06).
+  const rows = await prisma.mmvMaster.findMany({
+    where: { makeId, modelId, fuelType },
     include: { providerCodes: { where: { providerSlug } } },
   });
-  const code = mmv?.providerCodes[0];
-  if (!code) return undefined;
+  const coded = rows.filter((r) => r.providerCodes[0]?.providerMakeCode && r.providerCodes[0]?.providerModelCode);
+  if (coded.length === 0) return undefined;
+  const exact = variantId ? coded.find((r) => r.variantId === variantId) : undefined;
+  const code = (exact ?? coded[0]!).providerCodes[0]!;
   return { makeCode: code.providerMakeCode, modelCode: code.providerModelCode };
 }
 

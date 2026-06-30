@@ -19,6 +19,11 @@ export type CompareResult = CompareResponseData["results"][number];
 
 export type CkycRequest = components["schemas"]["CkycRequest"];
 export type KycResult = components["schemas"]["KycResult"];
+export type OvdResult = components["schemas"]["OvdResult"];
+
+/** KYC document types accepted by the OVD (document-upload) fallback. */
+export const OVD_DOC_TYPES = ["AADHAAR", "PAN", "VOTER", "PASSPORT", "DL"] as const;
+export type OvdDocType = (typeof OVD_DOC_TYPES)[number];
 export type PolicyStatusRequest = components["schemas"]["PolicyStatusRequest"];
 export type PolicyStatusResult = components["schemas"]["PolicyStatusResult"];
 

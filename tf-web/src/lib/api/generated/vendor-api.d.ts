@@ -34,7 +34,7 @@ export interface paths {
                                 slug: string;
                                 displayName: string;
                                 capabilities: ("fourWheeler" | "twoWheeler" | "commercial" | "newVehicle" | "newCommercial")[];
-                                operations: ("quote" | "retrieveQuote" | "proposal" | "ckyc" | "ovd" | "issuance" | "renewal" | "inspection" | "policyStatus" | "coi")[];
+                                operations: ("quote" | "retrieveQuote" | "proposal" | "ckyc" | "ovd" | "issuance" | "renewal" | "inspection" | "policyStatus" | "coi" | "healthQuote" | "healthProposal" | "healthIssuance")[];
                                 motorCapabilities: {
                                     fourWheeler?: {
                                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
@@ -113,6 +113,9 @@ export interface paths {
                         commercialSubType?: "goods" | "passenger";
                         grossVehicleWeight?: number;
                         carryingCapacity?: number;
+                        /** @enum {string} */
+                        commercialVehicleClass?: "pcv" | "gcv" | "misc";
+                        isInclusionOfIMT?: boolean;
                         rtoCode: string;
                         registrationDate: string;
                         registrationNumber?: string;
@@ -333,6 +336,9 @@ export interface paths {
                         commercialSubType?: "goods" | "passenger";
                         grossVehicleWeight?: number;
                         carryingCapacity?: number;
+                        /** @enum {string} */
+                        commercialVehicleClass?: "pcv" | "gcv" | "misc";
+                        isInclusionOfIMT?: boolean;
                         rtoCode: string;
                         registrationDate: string;
                         registrationNumber?: string;
@@ -654,6 +660,9 @@ export interface paths {
                         commercialSubType?: "goods" | "passenger";
                         grossVehicleWeight?: number;
                         carryingCapacity?: number;
+                        /** @enum {string} */
+                        commercialVehicleClass?: "pcv" | "gcv" | "misc";
+                        isInclusionOfIMT?: boolean;
                         rtoCode: string;
                         registrationDate: string;
                         registrationNumber?: string;
@@ -1524,6 +1533,655 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/health/quotes/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Compare health quotes — fan out one member set across products/providers */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @default 1 */
+                        policyTermYears?: number;
+                        /**
+                         * @default FULL
+                         * @enum {string}
+                         */
+                        installments?: "FULL" | "YEARLY" | "HALFYEARLY" | "QUARTERLY" | "MONTHLY";
+                        /** @default false */
+                        isFgEmployee?: boolean;
+                        coPay?: boolean;
+                        members: {
+                            memberId?: number;
+                            /** @enum {string} */
+                            relation: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                            name: string;
+                            dob: string;
+                            /** @enum {string} */
+                            gender: "M" | "F" | "O";
+                            occupationCode?: string;
+                            sumInsured?: number;
+                            coverType?: string;
+                            planType?: string;
+                            deductible?: number | null;
+                            heightCm?: number;
+                            weightKg?: number;
+                            smoking?: boolean;
+                            alcohol?: boolean;
+                            tobacco?: boolean;
+                            /** @default true */
+                            isGoodHealth?: boolean;
+                            medicalLoading?: number | null;
+                            annualIncome?: number | null;
+                            abhaNo?: string;
+                            disability?: {
+                                /** @default false */
+                                has?: boolean;
+                                udidNumber?: string;
+                                percent?: number | null;
+                            };
+                            nominee?: {
+                                name: string;
+                                /** @enum {string} */
+                                relation: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                                age?: number;
+                                dob?: string;
+                                /** @enum {string} */
+                                gender?: "M" | "F" | "O";
+                                appointeeName?: string;
+                                /** @enum {string} */
+                                appointeeRelation?: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                            };
+                            pa?: {
+                                occupationClass?: string;
+                                /** @default [] */
+                                covers?: {
+                                    coverCode: string;
+                                    sumInsured?: number | null;
+                                    coverType?: string;
+                                }[];
+                            };
+                        }[];
+                        paPlan?: string;
+                        paUnit?: number;
+                        /** @enum {string} */
+                        coverageClass?: "Individual" | "Family";
+                        pincode?: string;
+                        city?: string;
+                        state?: string;
+                        policyStartDate?: string;
+                        products?: ("healthAbsolute" | "healthVital" | "healthTotal" | "diy" | "advantageTopup" | "varishtaBima" | "personalAccident")[];
+                        providers?: string[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Per-product health quote results */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation error */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/{provider}/health/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Health quote — price a product for the given members */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    provider: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @default 1 */
+                        policyTermYears?: number;
+                        /**
+                         * @default FULL
+                         * @enum {string}
+                         */
+                        installments?: "FULL" | "YEARLY" | "HALFYEARLY" | "QUARTERLY" | "MONTHLY";
+                        /** @default false */
+                        isFgEmployee?: boolean;
+                        coPay?: boolean;
+                        members: {
+                            memberId?: number;
+                            /** @enum {string} */
+                            relation: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                            name: string;
+                            dob: string;
+                            /** @enum {string} */
+                            gender: "M" | "F" | "O";
+                            occupationCode?: string;
+                            sumInsured?: number;
+                            coverType?: string;
+                            planType?: string;
+                            deductible?: number | null;
+                            heightCm?: number;
+                            weightKg?: number;
+                            smoking?: boolean;
+                            alcohol?: boolean;
+                            tobacco?: boolean;
+                            /** @default true */
+                            isGoodHealth?: boolean;
+                            medicalLoading?: number | null;
+                            annualIncome?: number | null;
+                            abhaNo?: string;
+                            disability?: {
+                                /** @default false */
+                                has?: boolean;
+                                udidNumber?: string;
+                                percent?: number | null;
+                            };
+                            nominee?: {
+                                name: string;
+                                /** @enum {string} */
+                                relation: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                                age?: number;
+                                dob?: string;
+                                /** @enum {string} */
+                                gender?: "M" | "F" | "O";
+                                appointeeName?: string;
+                                /** @enum {string} */
+                                appointeeRelation?: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                            };
+                            pa?: {
+                                occupationClass?: string;
+                                /** @default [] */
+                                covers?: {
+                                    coverCode: string;
+                                    sumInsured?: number | null;
+                                    coverType?: string;
+                                }[];
+                            };
+                        }[];
+                        paPlan?: string;
+                        paUnit?: number;
+                        /** @enum {string} */
+                        coverageClass?: "Individual" | "Family";
+                        pincode?: string;
+                        city?: string;
+                        state?: string;
+                        policyStartDate?: string;
+                        /** @enum {string} */
+                        product: "healthAbsolute" | "healthVital" | "healthTotal" | "diy" | "advantageTopup" | "varishtaBima" | "personalAccident";
+                    };
+                };
+            };
+            responses: {
+                /** @description Health quote */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            quoteNo: string;
+                            transactionId?: string;
+                            requestId: string;
+                            providerSlug: string;
+                            insurerId?: string;
+                            insurerName?: string;
+                            insurerLogoUrl?: string;
+                            /** @enum {string} */
+                            product: "healthAbsolute" | "healthVital" | "healthTotal" | "diy" | "advantageTopup" | "varishtaBima" | "personalAccident";
+                            /** @enum {string} */
+                            line: "indemnity" | "pa";
+                            sumInsured: number;
+                            policyTermYears: number;
+                            policyStartDate?: string;
+                            policyEndDate?: string;
+                            members: {
+                                memberId: number;
+                                name?: string;
+                                relation?: string;
+                                age?: number;
+                                sumInsured?: number;
+                                coverType?: string;
+                                basePremium?: number;
+                                loadingAmount?: number;
+                                loadingPercent?: number;
+                                perPersonPremium?: number;
+                            }[];
+                            basePremium: number;
+                            totalDiscount: number;
+                            totalLoading: number;
+                            netPremium: number;
+                            /** @default 18 */
+                            serviceTaxPercent: number;
+                            serviceTaxAmount: number;
+                            grossPremium: number;
+                            policyNumber?: string;
+                            clientId?: string;
+                            applicationNo?: string;
+                            receiptNo?: string;
+                            paymentUrl?: string;
+                            contractDetails?: {
+                                [key: string]: unknown;
+                            };
+                            _rawResponse?: unknown;
+                        };
+                    };
+                };
+                /** @description Unknown provider */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation / unsupported product */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/{provider}/health/full-quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Health proposal — validate the full proposal (HealthPreCRTValidate) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    provider: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @default 1 */
+                        policyTermYears?: number;
+                        /**
+                         * @default FULL
+                         * @enum {string}
+                         */
+                        installments?: "FULL" | "YEARLY" | "HALFYEARLY" | "QUARTERLY" | "MONTHLY";
+                        /** @default false */
+                        isFgEmployee?: boolean;
+                        coPay?: boolean;
+                        members: {
+                            memberId?: number;
+                            /** @enum {string} */
+                            relation: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                            name: string;
+                            dob: string;
+                            /** @enum {string} */
+                            gender: "M" | "F" | "O";
+                            occupationCode?: string;
+                            sumInsured?: number;
+                            coverType?: string;
+                            planType?: string;
+                            deductible?: number | null;
+                            heightCm?: number;
+                            weightKg?: number;
+                            smoking?: boolean;
+                            alcohol?: boolean;
+                            tobacco?: boolean;
+                            /** @default true */
+                            isGoodHealth?: boolean;
+                            medicalLoading?: number | null;
+                            annualIncome?: number | null;
+                            abhaNo?: string;
+                            disability?: {
+                                /** @default false */
+                                has?: boolean;
+                                udidNumber?: string;
+                                percent?: number | null;
+                            };
+                            nominee?: {
+                                name: string;
+                                /** @enum {string} */
+                                relation: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                                age?: number;
+                                dob?: string;
+                                /** @enum {string} */
+                                gender?: "M" | "F" | "O";
+                                appointeeName?: string;
+                                /** @enum {string} */
+                                appointeeRelation?: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                            };
+                            pa?: {
+                                occupationClass?: string;
+                                /** @default [] */
+                                covers?: {
+                                    coverCode: string;
+                                    sumInsured?: number | null;
+                                    coverType?: string;
+                                }[];
+                            };
+                        }[];
+                        paPlan?: string;
+                        paUnit?: number;
+                        /** @enum {string} */
+                        coverageClass?: "Individual" | "Family";
+                        pincode?: string;
+                        city?: string;
+                        state?: string;
+                        policyStartDate?: string;
+                        /** @enum {string} */
+                        product: "healthAbsolute" | "healthVital" | "healthTotal" | "diy" | "advantageTopup" | "varishtaBima" | "personalAccident";
+                        quoteId: string;
+                        proposer: {
+                            /** @enum {string} */
+                            title?: "Mr" | "Mrs" | "Ms" | "Dr";
+                            firstName: string;
+                            lastName: string;
+                            /** Format: email */
+                            email: string;
+                            mobile: string;
+                            dob: string;
+                            /** @enum {string} */
+                            gender?: "M" | "F" | "O";
+                            panNumber?: string;
+                            aadharNumber?: string;
+                        };
+                        address: {
+                            addressLine1: string;
+                            addressLine2?: string;
+                            pincode: string;
+                            city: string;
+                            state: string;
+                        };
+                        /** @enum {string} */
+                        maritalStatus?: "S" | "M" | "D" | "W";
+                        kycRefId?: string;
+                        ckyc?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Proposal result */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            quoteNo: string;
+                            transactionId?: string;
+                            requestId: string;
+                            providerSlug: string;
+                            insurerId?: string;
+                            insurerName?: string;
+                            insurerLogoUrl?: string;
+                            /** @enum {string} */
+                            product: "healthAbsolute" | "healthVital" | "healthTotal" | "diy" | "advantageTopup" | "varishtaBima" | "personalAccident";
+                            /** @enum {string} */
+                            line: "indemnity" | "pa";
+                            sumInsured: number;
+                            policyTermYears: number;
+                            policyStartDate?: string;
+                            policyEndDate?: string;
+                            members: {
+                                memberId: number;
+                                name?: string;
+                                relation?: string;
+                                age?: number;
+                                sumInsured?: number;
+                                coverType?: string;
+                                basePremium?: number;
+                                loadingAmount?: number;
+                                loadingPercent?: number;
+                                perPersonPremium?: number;
+                            }[];
+                            basePremium: number;
+                            totalDiscount: number;
+                            totalLoading: number;
+                            netPremium: number;
+                            /** @default 18 */
+                            serviceTaxPercent: number;
+                            serviceTaxAmount: number;
+                            grossPremium: number;
+                            policyNumber?: string;
+                            clientId?: string;
+                            applicationNo?: string;
+                            receiptNo?: string;
+                            paymentUrl?: string;
+                            contractDetails?: {
+                                [key: string]: unknown;
+                            };
+                            _rawResponse?: unknown;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/{provider}/health/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue the health policy — full payload + payment receipt */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    provider: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @default 1 */
+                        policyTermYears?: number;
+                        /**
+                         * @default FULL
+                         * @enum {string}
+                         */
+                        installments?: "FULL" | "YEARLY" | "HALFYEARLY" | "QUARTERLY" | "MONTHLY";
+                        /** @default false */
+                        isFgEmployee?: boolean;
+                        coPay?: boolean;
+                        members: {
+                            memberId?: number;
+                            /** @enum {string} */
+                            relation: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                            name: string;
+                            dob: string;
+                            /** @enum {string} */
+                            gender: "M" | "F" | "O";
+                            occupationCode?: string;
+                            sumInsured?: number;
+                            coverType?: string;
+                            planType?: string;
+                            deductible?: number | null;
+                            heightCm?: number;
+                            weightKg?: number;
+                            smoking?: boolean;
+                            alcohol?: boolean;
+                            tobacco?: boolean;
+                            /** @default true */
+                            isGoodHealth?: boolean;
+                            medicalLoading?: number | null;
+                            annualIncome?: number | null;
+                            abhaNo?: string;
+                            disability?: {
+                                /** @default false */
+                                has?: boolean;
+                                udidNumber?: string;
+                                percent?: number | null;
+                            };
+                            nominee?: {
+                                name: string;
+                                /** @enum {string} */
+                                relation: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                                age?: number;
+                                dob?: string;
+                                /** @enum {string} */
+                                gender?: "M" | "F" | "O";
+                                appointeeName?: string;
+                                /** @enum {string} */
+                                appointeeRelation?: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                            };
+                            pa?: {
+                                occupationClass?: string;
+                                /** @default [] */
+                                covers?: {
+                                    coverCode: string;
+                                    sumInsured?: number | null;
+                                    coverType?: string;
+                                }[];
+                            };
+                        }[];
+                        paPlan?: string;
+                        paUnit?: number;
+                        /** @enum {string} */
+                        coverageClass?: "Individual" | "Family";
+                        pincode?: string;
+                        city?: string;
+                        state?: string;
+                        policyStartDate?: string;
+                        /** @enum {string} */
+                        product: "healthAbsolute" | "healthVital" | "healthTotal" | "diy" | "advantageTopup" | "varishtaBima" | "personalAccident";
+                        quoteId: string;
+                        proposer: {
+                            /** @enum {string} */
+                            title?: "Mr" | "Mrs" | "Ms" | "Dr";
+                            firstName: string;
+                            lastName: string;
+                            /** Format: email */
+                            email: string;
+                            mobile: string;
+                            dob: string;
+                            /** @enum {string} */
+                            gender?: "M" | "F" | "O";
+                            panNumber?: string;
+                            aadharNumber?: string;
+                        };
+                        address: {
+                            addressLine1: string;
+                            addressLine2?: string;
+                            pincode: string;
+                            city: string;
+                            state: string;
+                        };
+                        /** @enum {string} */
+                        maritalStatus?: "S" | "M" | "D" | "W";
+                        kycRefId?: string;
+                        ckyc?: string;
+                        clientId?: string;
+                        receipt: {
+                            uniqueTranKey: string;
+                            transactionDate: string;
+                            /** @default IVR */
+                            receiptType?: string;
+                            amount: number;
+                            tranRefNo: string;
+                            tranRefNoDate: string;
+                            /** @default PAYU */
+                            pgType?: string;
+                            tcsAmount?: string;
+                            checkType?: string;
+                            bsbCode?: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Issuance result */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            providerSlug: string;
+                            insurerName?: string;
+                            /** @enum {string} */
+                            status: "ISSUED" | "IN_PROGRESS" | "REJECTED" | "INSPECTION_PENDING" | "INSPECTION_REJECTED" | "INSPECTION_APPROVED" | "INSPECTION_CLOSED" | "UNKNOWN";
+                            policyNumber?: string;
+                            applicationNo?: string;
+                            receiptNo?: string;
+                            clientId?: string;
+                            quoteNo?: string;
+                            message?: string;
+                            _rawResponse?: unknown;
+                        };
+                    };
+                };
+                /** @description Validation / unsupported operation */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1551,6 +2209,9 @@ export interface components {
             commercialSubType?: "goods" | "passenger";
             grossVehicleWeight?: number;
             carryingCapacity?: number;
+            /** @enum {string} */
+            commercialVehicleClass?: "pcv" | "gcv" | "misc";
+            isInclusionOfIMT?: boolean;
             rtoCode: string;
             registrationDate: string;
             registrationNumber?: string;
@@ -1651,6 +2312,9 @@ export interface components {
             commercialSubType?: "goods" | "passenger";
             grossVehicleWeight?: number;
             carryingCapacity?: number;
+            /** @enum {string} */
+            commercialVehicleClass?: "pcv" | "gcv" | "misc";
+            isInclusionOfIMT?: boolean;
             rtoCode: string;
             registrationDate: string;
             registrationNumber?: string;
@@ -1812,6 +2476,9 @@ export interface components {
             commercialSubType?: "goods" | "passenger";
             grossVehicleWeight?: number;
             carryingCapacity?: number;
+            /** @enum {string} */
+            commercialVehicleClass?: "pcv" | "gcv" | "misc";
+            isInclusionOfIMT?: boolean;
             rtoCode: string;
             registrationDate: string;
             registrationNumber?: string;
@@ -1957,7 +2624,7 @@ export interface components {
                 slug: string;
                 displayName: string;
                 capabilities: ("fourWheeler" | "twoWheeler" | "commercial" | "newVehicle" | "newCommercial")[];
-                operations: ("quote" | "retrieveQuote" | "proposal" | "ckyc" | "ovd" | "issuance" | "renewal" | "inspection" | "policyStatus" | "coi")[];
+                operations: ("quote" | "retrieveQuote" | "proposal" | "ckyc" | "ovd" | "issuance" | "renewal" | "inspection" | "policyStatus" | "coi" | "healthQuote" | "healthProposal" | "healthIssuance")[];
                 motorCapabilities: {
                     fourWheeler?: {
                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
@@ -2217,6 +2884,411 @@ export interface components {
             rawStatus?: string;
             inspectionId?: string;
             message?: string;
+            _rawResponse?: unknown;
+        };
+        HealthQuoteRequest: {
+            /** @default 1 */
+            policyTermYears: number;
+            /**
+             * @default FULL
+             * @enum {string}
+             */
+            installments: "FULL" | "YEARLY" | "HALFYEARLY" | "QUARTERLY" | "MONTHLY";
+            /** @default false */
+            isFgEmployee: boolean;
+            coPay?: boolean;
+            members: {
+                memberId?: number;
+                /** @enum {string} */
+                relation: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                name: string;
+                dob: string;
+                /** @enum {string} */
+                gender: "M" | "F" | "O";
+                occupationCode?: string;
+                sumInsured?: number;
+                coverType?: string;
+                planType?: string;
+                deductible?: number | null;
+                heightCm?: number;
+                weightKg?: number;
+                smoking?: boolean;
+                alcohol?: boolean;
+                tobacco?: boolean;
+                /** @default true */
+                isGoodHealth: boolean;
+                medicalLoading?: number | null;
+                annualIncome?: number | null;
+                abhaNo?: string;
+                disability?: {
+                    /** @default false */
+                    has: boolean;
+                    udidNumber?: string;
+                    percent?: number | null;
+                };
+                nominee?: {
+                    name: string;
+                    /** @enum {string} */
+                    relation: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                    age?: number;
+                    dob?: string;
+                    /** @enum {string} */
+                    gender?: "M" | "F" | "O";
+                    appointeeName?: string;
+                    /** @enum {string} */
+                    appointeeRelation?: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                };
+                pa?: {
+                    occupationClass?: string;
+                    /** @default [] */
+                    covers: {
+                        coverCode: string;
+                        sumInsured?: number | null;
+                        coverType?: string;
+                    }[];
+                };
+            }[];
+            paPlan?: string;
+            paUnit?: number;
+            /** @enum {string} */
+            coverageClass?: "Individual" | "Family";
+            pincode?: string;
+            city?: string;
+            state?: string;
+            policyStartDate?: string;
+            /** @enum {string} */
+            product: "healthAbsolute" | "healthVital" | "healthTotal" | "diy" | "advantageTopup" | "varishtaBima" | "personalAccident";
+        };
+        HealthFullQuoteRequest: {
+            /** @default 1 */
+            policyTermYears: number;
+            /**
+             * @default FULL
+             * @enum {string}
+             */
+            installments: "FULL" | "YEARLY" | "HALFYEARLY" | "QUARTERLY" | "MONTHLY";
+            /** @default false */
+            isFgEmployee: boolean;
+            coPay?: boolean;
+            members: {
+                memberId?: number;
+                /** @enum {string} */
+                relation: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                name: string;
+                dob: string;
+                /** @enum {string} */
+                gender: "M" | "F" | "O";
+                occupationCode?: string;
+                sumInsured?: number;
+                coverType?: string;
+                planType?: string;
+                deductible?: number | null;
+                heightCm?: number;
+                weightKg?: number;
+                smoking?: boolean;
+                alcohol?: boolean;
+                tobacco?: boolean;
+                /** @default true */
+                isGoodHealth: boolean;
+                medicalLoading?: number | null;
+                annualIncome?: number | null;
+                abhaNo?: string;
+                disability?: {
+                    /** @default false */
+                    has: boolean;
+                    udidNumber?: string;
+                    percent?: number | null;
+                };
+                nominee?: {
+                    name: string;
+                    /** @enum {string} */
+                    relation: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                    age?: number;
+                    dob?: string;
+                    /** @enum {string} */
+                    gender?: "M" | "F" | "O";
+                    appointeeName?: string;
+                    /** @enum {string} */
+                    appointeeRelation?: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                };
+                pa?: {
+                    occupationClass?: string;
+                    /** @default [] */
+                    covers: {
+                        coverCode: string;
+                        sumInsured?: number | null;
+                        coverType?: string;
+                    }[];
+                };
+            }[];
+            paPlan?: string;
+            paUnit?: number;
+            /** @enum {string} */
+            coverageClass?: "Individual" | "Family";
+            pincode?: string;
+            city?: string;
+            state?: string;
+            policyStartDate?: string;
+            /** @enum {string} */
+            product: "healthAbsolute" | "healthVital" | "healthTotal" | "diy" | "advantageTopup" | "varishtaBima" | "personalAccident";
+            quoteId: string;
+            proposer: {
+                /** @enum {string} */
+                title?: "Mr" | "Mrs" | "Ms" | "Dr";
+                firstName: string;
+                lastName: string;
+                /** Format: email */
+                email: string;
+                mobile: string;
+                dob: string;
+                /** @enum {string} */
+                gender?: "M" | "F" | "O";
+                panNumber?: string;
+                aadharNumber?: string;
+            };
+            address: {
+                addressLine1: string;
+                addressLine2?: string;
+                pincode: string;
+                city: string;
+                state: string;
+            };
+            /** @enum {string} */
+            maritalStatus?: "S" | "M" | "D" | "W";
+            kycRefId?: string;
+            ckyc?: string;
+        };
+        HealthCompareRequest: {
+            /** @default 1 */
+            policyTermYears: number;
+            /**
+             * @default FULL
+             * @enum {string}
+             */
+            installments: "FULL" | "YEARLY" | "HALFYEARLY" | "QUARTERLY" | "MONTHLY";
+            /** @default false */
+            isFgEmployee: boolean;
+            coPay?: boolean;
+            members: {
+                memberId?: number;
+                /** @enum {string} */
+                relation: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                name: string;
+                dob: string;
+                /** @enum {string} */
+                gender: "M" | "F" | "O";
+                occupationCode?: string;
+                sumInsured?: number;
+                coverType?: string;
+                planType?: string;
+                deductible?: number | null;
+                heightCm?: number;
+                weightKg?: number;
+                smoking?: boolean;
+                alcohol?: boolean;
+                tobacco?: boolean;
+                /** @default true */
+                isGoodHealth: boolean;
+                medicalLoading?: number | null;
+                annualIncome?: number | null;
+                abhaNo?: string;
+                disability?: {
+                    /** @default false */
+                    has: boolean;
+                    udidNumber?: string;
+                    percent?: number | null;
+                };
+                nominee?: {
+                    name: string;
+                    /** @enum {string} */
+                    relation: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                    age?: number;
+                    dob?: string;
+                    /** @enum {string} */
+                    gender?: "M" | "F" | "O";
+                    appointeeName?: string;
+                    /** @enum {string} */
+                    appointeeRelation?: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                };
+                pa?: {
+                    occupationClass?: string;
+                    /** @default [] */
+                    covers: {
+                        coverCode: string;
+                        sumInsured?: number | null;
+                        coverType?: string;
+                    }[];
+                };
+            }[];
+            paPlan?: string;
+            paUnit?: number;
+            /** @enum {string} */
+            coverageClass?: "Individual" | "Family";
+            pincode?: string;
+            city?: string;
+            state?: string;
+            policyStartDate?: string;
+            products?: ("healthAbsolute" | "healthVital" | "healthTotal" | "diy" | "advantageTopup" | "varishtaBima" | "personalAccident")[];
+            providers?: string[];
+        };
+        HealthIssuanceRequest: {
+            /** @default 1 */
+            policyTermYears: number;
+            /**
+             * @default FULL
+             * @enum {string}
+             */
+            installments: "FULL" | "YEARLY" | "HALFYEARLY" | "QUARTERLY" | "MONTHLY";
+            /** @default false */
+            isFgEmployee: boolean;
+            coPay?: boolean;
+            members: {
+                memberId?: number;
+                /** @enum {string} */
+                relation: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                name: string;
+                dob: string;
+                /** @enum {string} */
+                gender: "M" | "F" | "O";
+                occupationCode?: string;
+                sumInsured?: number;
+                coverType?: string;
+                planType?: string;
+                deductible?: number | null;
+                heightCm?: number;
+                weightKg?: number;
+                smoking?: boolean;
+                alcohol?: boolean;
+                tobacco?: boolean;
+                /** @default true */
+                isGoodHealth: boolean;
+                medicalLoading?: number | null;
+                annualIncome?: number | null;
+                abhaNo?: string;
+                disability?: {
+                    /** @default false */
+                    has: boolean;
+                    udidNumber?: string;
+                    percent?: number | null;
+                };
+                nominee?: {
+                    name: string;
+                    /** @enum {string} */
+                    relation: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                    age?: number;
+                    dob?: string;
+                    /** @enum {string} */
+                    gender?: "M" | "F" | "O";
+                    appointeeName?: string;
+                    /** @enum {string} */
+                    appointeeRelation?: "self" | "spouse" | "father" | "mother" | "son" | "daughter" | "brother" | "sister" | "grandfather" | "grandmother" | "fatherInLaw" | "motherInLaw" | "other";
+                };
+                pa?: {
+                    occupationClass?: string;
+                    /** @default [] */
+                    covers: {
+                        coverCode: string;
+                        sumInsured?: number | null;
+                        coverType?: string;
+                    }[];
+                };
+            }[];
+            paPlan?: string;
+            paUnit?: number;
+            /** @enum {string} */
+            coverageClass?: "Individual" | "Family";
+            pincode?: string;
+            city?: string;
+            state?: string;
+            policyStartDate?: string;
+            /** @enum {string} */
+            product: "healthAbsolute" | "healthVital" | "healthTotal" | "diy" | "advantageTopup" | "varishtaBima" | "personalAccident";
+            quoteId: string;
+            proposer: {
+                /** @enum {string} */
+                title?: "Mr" | "Mrs" | "Ms" | "Dr";
+                firstName: string;
+                lastName: string;
+                /** Format: email */
+                email: string;
+                mobile: string;
+                dob: string;
+                /** @enum {string} */
+                gender?: "M" | "F" | "O";
+                panNumber?: string;
+                aadharNumber?: string;
+            };
+            address: {
+                addressLine1: string;
+                addressLine2?: string;
+                pincode: string;
+                city: string;
+                state: string;
+            };
+            /** @enum {string} */
+            maritalStatus?: "S" | "M" | "D" | "W";
+            kycRefId?: string;
+            ckyc?: string;
+            clientId?: string;
+            receipt: {
+                uniqueTranKey: string;
+                transactionDate: string;
+                /** @default IVR */
+                receiptType: string;
+                amount: number;
+                tranRefNo: string;
+                tranRefNoDate: string;
+                /** @default PAYU */
+                pgType: string;
+                tcsAmount?: string;
+                checkType?: string;
+                bsbCode?: string;
+            };
+        };
+        HealthQuoteResult: {
+            quoteNo: string;
+            transactionId?: string;
+            requestId: string;
+            providerSlug: string;
+            insurerId?: string;
+            insurerName?: string;
+            insurerLogoUrl?: string;
+            /** @enum {string} */
+            product: "healthAbsolute" | "healthVital" | "healthTotal" | "diy" | "advantageTopup" | "varishtaBima" | "personalAccident";
+            /** @enum {string} */
+            line: "indemnity" | "pa";
+            sumInsured: number;
+            policyTermYears: number;
+            policyStartDate?: string;
+            policyEndDate?: string;
+            members: {
+                memberId: number;
+                name?: string;
+                relation?: string;
+                age?: number;
+                sumInsured?: number;
+                coverType?: string;
+                basePremium?: number;
+                loadingAmount?: number;
+                loadingPercent?: number;
+                perPersonPremium?: number;
+            }[];
+            basePremium: number;
+            totalDiscount: number;
+            totalLoading: number;
+            netPremium: number;
+            /** @default 18 */
+            serviceTaxPercent: number;
+            serviceTaxAmount: number;
+            grossPremium: number;
+            policyNumber?: string;
+            clientId?: string;
+            applicationNo?: string;
+            receiptNo?: string;
+            paymentUrl?: string;
+            contractDetails?: {
+                [key: string]: unknown;
+            };
             _rawResponse?: unknown;
         };
     };

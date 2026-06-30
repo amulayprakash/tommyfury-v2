@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { HealthProductSchema, HealthLineSchema } from "./health-enums.ts";
 
+// MONEY UNITS: all monetary fields (premiums, sum insured, tax) are in WHOLE RUPEES
+// (INR) — not paise. Consistent with the motor stack.
+
 // ─── Per-member premium breakdown ─────────────────────────────────────────────
 
 export const HealthMemberPremiumSchema = z.object({
