@@ -6,6 +6,8 @@ import type {
   CompareQuotesRequest,
   CompareResponseData,
   CompareResult,
+  InspectionRequest,
+  InspectionResult,
   KycResult,
   MotorFullQuoteRequest,
   OvdDocType,
@@ -146,6 +148,29 @@ export async function initiateOvd(
   const { data } = await vendorClient.post<ApiEnvelope<OvdResult>>(
     `/${providerSlug}/kyc/ovd`,
     form,
+  );
+  return data.response;
+}
+
+// ─── Break-in / pre-inspection (LiveChek) ────────────────────────────────────
+
+export async function createInspection(
+  providerSlug: string,
+  req: InspectionRequest,
+): Promise<InspectionResult> {
+  const { data } = await vendorClient.post<ApiEnvelope<InspectionResult>>(
+    `/${providerSlug}/inspection`,
+    req,
+  );
+  return data.response;
+}
+
+export async function getInspectionStatus(
+  providerSlug: string,
+  refId: string,
+): Promise<InspectionResult> {
+  const { data } = await vendorClient.get<ApiEnvelope<InspectionResult>>(
+    `/${providerSlug}/inspection/${encodeURIComponent(refId)}/status`,
   );
   return data.response;
 }

@@ -29,16 +29,32 @@ export function mapLivechekStatus(raw: string | undefined): PolicyLifecycleStatu
  * Detects whether FG requires a pre-inspection for this journey: break-in
  * (expired previous policy), TP→Comprehensive upgrade, or a rollover missing the
  * previous-policy reference (PYP skipped). New vehicles never need it.
+ *
+ * Break-in is DERIVED from the dates, not just the client-sent flag: FG decides
+ * break-in from PreviousPolExpDt vs the new policy start, so an expired — or
+ * unreadable/missing — previous expiry must trigger the inspection path even
+ * when the caller left isPreviousPolicyExpired false (live-observed 2026-07-14:
+ * FG rejected exactly such a proposal as "break-in Scenario").
  */
 export function inspectionRequired(req: MotorQuoteRequest): boolean {
   if (req.businessType === "new" || req.vehicleType === "newVehicle" || req.vehicleType === "newCommercial") {
     return false;
   }
-  if (req.isPreviousPolicyExpired) return true; // break-in
+  // Third-party has an inspection WAIVER (no own-damage exposure) — FG applies
+  // the T+2 risk-start rule instead (certification SC_09 "Break In - Third
+  // Party Policy: Inspection wavier for Third Party Policy").
+  if (req.selectedPolicy === "thirdParty") return false;
+  if (req.isPreviousPolicyExpired) return true; // break-in (explicit)
   if (req.previousPolicyType === "thirdParty" && req.selectedPolicy === "comprehensive") return true;
   const isRollover = req.businessType === "rollover" || req.businessType === "renewal";
-  if (isRollover && !req.previousPolicyNumber) return true; // PYP skipped
-  return false;
+  if (!isRollover) return false;
+  if (!req.previousPolicyNumber) return true; // PYP skipped
+  // Derived break-in: previous policy expiry unknown, or before the new
+  // policy's start (ISO YYYY-MM-DD strings compare lexicographically).
+  const expiry = req.previousPolicyExpiryDate;
+  if (!expiry) return true;
+  const start = req.policyStartDate ?? new Date().toISOString().slice(0, 10);
+  return expiry < start;
 }
 
 async function livechek(

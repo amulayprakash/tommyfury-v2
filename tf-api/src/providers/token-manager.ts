@@ -18,6 +18,7 @@ export type TokenFetcher = () => Promise<CachedToken>;
 export interface TokenStore {
   get(key: string): CachedToken | undefined;
   set(key: string, token: CachedToken): void;
+  delete(key: string): void;
 }
 
 class InMemoryTokenStore implements TokenStore {
@@ -29,6 +30,10 @@ class InMemoryTokenStore implements TokenStore {
 
   set(key: string, token: CachedToken): void {
     this.cache.set(key, token);
+  }
+
+  delete(key: string): void {
+    this.cache.delete(key);
   }
 }
 
@@ -64,6 +69,15 @@ export class TokenManager {
 
     inFlight.set(cacheKey, fetchPromise);
     return fetchPromise;
+  }
+
+  /**
+   * Drops a cached token before its computed expiry — used when the vendor
+   * rejects it (401) mid-lifetime, so the next getToken() mints fresh instead
+   * of serving the dead token for the rest of its cache window.
+   */
+  invalidate(cacheKey: string): void {
+    this.store.delete(cacheKey);
   }
 
   private async runFetch(cacheKey: string, fetcher: TokenFetcher): Promise<string> {

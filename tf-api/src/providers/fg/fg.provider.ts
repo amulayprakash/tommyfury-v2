@@ -24,8 +24,9 @@ import type {
   HealthProvider,
   ProviderContext,
 } from "@/providers/insurance-provider.ts";
-import { AppError } from "@/errors/app-error.ts";
-import { tokenManager } from "@/providers/token-manager.ts";
+import { AppError, ProviderError } from "@/errors/app-error.ts";
+import { tokenManager, type TokenFetcher } from "@/providers/token-manager.ts";
+import { logger } from "@/lib/logger.ts";
 
 import {
   FG_SLUG,
@@ -39,7 +40,7 @@ import {
 import { fgTokenFetcher, fgProductTokenFetcher } from "./auth.ts";
 import { fgVerifyCkyc, fgGetCkycStatus } from "./ckyc.ts";
 import { fgRenewalQuote, fgRenewalCreatePolicy } from "./renewal.ts";
-import { createInspection, getInspectionStatus } from "./inspection.ts";
+import { createInspection, getInspectionStatus, inspectionRequired } from "./inspection.ts";
 import { FetchTransport, assertFgSuccess, type FgTransport } from "./http.ts";
 import {
   buildGetQuotePayload,
@@ -89,6 +90,16 @@ export const passthroughCodeResolver: FgCodeResolver = async (req) => ({
   carryingCapacity: req.carryingCapacity,
 });
 
+/**
+ * A product token with its cache handle: `get` serves the cached token (minting
+ * when stale); `invalidate` drops it so the next get mints fresh — used when FG
+ * rejects a token (401) ahead of its advertised TTL.
+ */
+interface FgTokenHandle {
+  get(): Promise<string>;
+  invalidate(): void;
+}
+
 export interface FgProviderDeps {
   config: FgConfig;
   transport?: FgTransport;
@@ -124,45 +135,71 @@ export class FgProvider
   private readonly config: FgConfig;
   private readonly transport: FgTransport;
   private readonly codeResolver: FgCodeResolver;
-  private readonly tokenProvider: () => Promise<string>;
-  private readonly ckycTokenProvider: () => Promise<string>;
-  private readonly renewalTokenProvider: () => Promise<string>;
-  private readonly healthTokenProvider: () => Promise<string>;
+  private readonly motorToken: FgTokenHandle;
+  private readonly ckycToken: FgTokenHandle;
+  private readonly renewalToken: FgTokenHandle;
+  private readonly healthToken: FgTokenHandle;
   private readonly healthCodeResolver: FgHealthCodeResolver;
 
   constructor(deps: FgProviderDeps) {
     this.config = deps.config;
     this.transport = deps.transport ?? new FetchTransport();
     this.codeResolver = deps.codeResolver ?? passthroughCodeResolver;
-    this.tokenProvider =
-      deps.tokenProvider ??
-      (() =>
-        tokenManager.getToken(
-          `${FG_SLUG}:${this.config.credentialSetId}`,
-          fgTokenFetcher(this.config),
-        ));
-    this.ckycTokenProvider =
-      deps.ckycTokenProvider ??
-      (() =>
-        tokenManager.getToken(
-          `${FG_SLUG}-ckyc:${this.config.credentialSetId}`,
-          fgProductTokenFetcher(this.config, this.config.ckyc),
-        ));
-    this.renewalTokenProvider =
-      deps.renewalTokenProvider ??
-      (() =>
-        tokenManager.getToken(
-          `${FG_SLUG}-renewal:${this.config.credentialSetId}`,
-          fgProductTokenFetcher(this.config, this.config.renewal),
-        ));
-    this.healthTokenProvider =
-      deps.healthTokenProvider ??
-      (() =>
-        tokenManager.getToken(
-          `${FG_SLUG}-health:${this.config.credentialSetId}`,
-          fgProductTokenFetcher(this.config, this.config.health),
-        ));
+    // The fetcher is built lazily (first token get), not in the constructor —
+    // tests construct providers from partial configs with overridden tokens.
+    const handle = (
+      override: (() => Promise<string>) | undefined,
+      cacheKey: string,
+      makeFetcher: () => TokenFetcher,
+    ): FgTokenHandle =>
+      override
+        ? { get: override, invalidate: () => {} }
+        : {
+            get: () => tokenManager.getToken(cacheKey, makeFetcher()),
+            invalidate: () => tokenManager.invalidate(cacheKey),
+          };
+    this.motorToken = handle(
+      deps.tokenProvider,
+      `${FG_SLUG}:${this.config.credentialSetId}`,
+      () => fgTokenFetcher(this.config),
+    );
+    this.ckycToken = handle(
+      deps.ckycTokenProvider,
+      `${FG_SLUG}-ckyc:${this.config.credentialSetId}`,
+      () => fgProductTokenFetcher(this.config, this.config.ckyc),
+    );
+    this.renewalToken = handle(
+      deps.renewalTokenProvider,
+      `${FG_SLUG}-renewal:${this.config.credentialSetId}`,
+      () => fgProductTokenFetcher(this.config, this.config.renewal),
+    );
+    this.healthToken = handle(
+      deps.healthTokenProvider,
+      `${FG_SLUG}-health:${this.config.credentialSetId}`,
+      () => fgProductTokenFetcher(this.config, this.config.health),
+    );
     this.healthCodeResolver = deps.healthCodeResolver ?? passthroughHealthResolver;
+  }
+
+  /**
+   * FG's gateway invalidates bearer tokens ahead of their advertised TTL
+   * (live-observed 2026-07-14: a cached, unexpired token 401s while a fresh
+   * mint succeeds; FG's doc says to mint per request). On a 401, drop the
+   * cached token and retry the call once with a freshly minted one.
+   */
+  private async withAuthRetry<T>(
+    tokenHandle: FgTokenHandle,
+    fn: (token: string) => Promise<T>,
+  ): Promise<T> {
+    const token = await tokenHandle.get();
+    try {
+      return await fn(token);
+    } catch (err) {
+      if (!(err instanceof ProviderError) || err.upstreamStatus !== 401) throw err;
+      tokenHandle.invalidate();
+      logger.warn({ provider: FG_SLUG }, "FG rejected cached token (401); retrying with a fresh token");
+      return fn(await tokenHandle.get());
+    }
   }
 
   private url(path: string): string {
@@ -178,17 +215,18 @@ export class FgProvider
   }
 
   async getQuote(req: MotorQuoteRequest, ctx: ProviderContext): Promise<CanonicalQuoteResult> {
-    const token = await this.tokenProvider();
     const codes = await this.codeResolver(req);
     const { url, payload } = buildGetQuotePayload(req, codes, this.meta, ctx.requestId);
 
-    const body = await this.transport.request({
-      method: "POST",
-      url: this.url(url),
-      token,
-      xmlBody: buildSoapEnvelope("getQuote", payload),
-      soapAction: SOAP_ACTIONS.getQuote,
-    });
+    const body = await this.withAuthRetry(this.motorToken, (token) =>
+      this.transport.request({
+        method: "POST",
+        url: this.url(url),
+        token,
+        xmlBody: buildSoapEnvelope("getQuote", payload),
+        soapAction: SOAP_ACTIONS.getQuote,
+      }),
+    );
     assertFgSuccess(extractRoot(body), "get-quote");
 
     return normalizeQuote(body, {
@@ -202,20 +240,33 @@ export class FgProvider
     req: MotorFullQuoteRequest,
     ctx: ProviderContext,
   ): Promise<CanonicalQuoteResult> {
+    // FG rejects break-in proposals without inspection evidence ("This is a
+    // break-in Scenario, So please pass the inspection details"). Fail fast
+    // with a typed code so the frontend can run the inspection flow instead
+    // of parsing FG's error text.
+    if (inspectionRequired(req) && !req.inspectionReportNumber) {
+      throw new AppError(
+        422,
+        "FG requires a completed vehicle inspection for this journey (break-in). Complete the inspection and resubmit with its report number.",
+        "INSPECTION_REQUIRED",
+      );
+    }
+
     // FG has no "retrieve quote by id" — CreateProposal (CRT) is built directly
     // against the prior QuotationNumber (req.quoteId → strpolicyquoteNumber) and
     // returns the (bound) premium in the same response shape as a quote.
-    const token = await this.tokenProvider();
     const codes = await this.codeResolver(req);
     const { url, payload } = buildCreateProposalPayload(req, codes, this.meta, ctx.requestId);
 
-    const body = await this.transport.request({
-      method: "POST",
-      url: this.url(url),
-      token,
-      xmlBody: buildSoapEnvelope("createProposal", payload),
-      soapAction: SOAP_ACTIONS.createProposal,
-    });
+    const body = await this.withAuthRetry(this.motorToken, (token) =>
+      this.transport.request({
+        method: "POST",
+        url: this.url(url),
+        token,
+        xmlBody: buildSoapEnvelope("createProposal", payload),
+        soapAction: SOAP_ACTIONS.createProposal,
+      }),
+    );
     assertFgSuccess(extractRoot(body), "create-proposal");
 
     return normalizeProposal(body, {
@@ -231,34 +282,50 @@ export class FgProvider
   ): Promise<PolicyIssuanceResult> {
     // Final step: bind the collected payment (Receipt) to the prior proposal
     // (ClientID + QuotationNo) and issue the real policy. Same SOAP transport.
-    const token = await this.tokenProvider();
     const { url, payload } = buildIssueProposalPayload(req, this.meta, ctx.requestId);
 
-    const body = await this.transport.request({
-      method: "POST",
-      url: this.url(url),
-      token,
-      xmlBody: buildSoapEnvelope("issueProposal", payload),
-      soapAction: SOAP_ACTIONS.issueProposal,
-    });
+    const body = await this.withAuthRetry(this.motorToken, (token) =>
+      this.transport.request({
+        method: "POST",
+        url: this.url(url),
+        token,
+        xmlBody: buildSoapEnvelope("issueProposal", payload),
+        soapAction: SOAP_ACTIONS.issueProposal,
+      }),
+    );
     assertFgSuccess(extractRoot(body), "policy-issuance");
 
     return normalizeIssuance(body, { quoteNo: req.quoteNo });
   }
 
   async completeCkyc(req: CkycRequest, _ctx: ProviderContext): Promise<KycResult> {
-    const token = await this.ckycTokenProvider();
-    const result = await fgVerifyCkyc(this.config, req, token);
-    // On an auto-match, fetch the confirmed CKYC number for the proposal.
-    if (result.isKycSuccess && result.proposalId) {
+    const result = await this.withAuthRetry(this.ckycToken, (token) =>
+      fgVerifyCkyc(this.config, req, token),
+    );
+    // A registry auto-match already carries the CKYC number in the VerifyCKYC
+    // response; only fall back to the status poll when it is missing (manual
+    // document-upload cases deliver the number there once the upload clears).
+    const proposalId = result.proposalId;
+    if (result.isKycSuccess && proposalId && !result.ckycNumber) {
       try {
-        const status = await fgGetCkycStatus(this.config, result.proposalId, token);
+        const status = await this.withAuthRetry(this.ckycToken, (token) =>
+          fgGetCkycStatus(this.config, proposalId, token),
+        );
         if (status.ckycNumber) {
           result.ckycNumber = status.ckycNumber;
           result.kycId = status.ckycNumber;
+        } else {
+          // Matched case but FG hasn't finalised the KYC record yet — the
+          // frontend re-polls; keep the proposalId link and say why.
+          result.displayMessage = status.message ?? result.displayMessage;
+          logger.warn(
+            { proposalId, kycFinalStatus: status.status, kycMessage: status.message },
+            "FG CKYC matched but no CKYC number yet",
+          );
         }
-      } catch {
+      } catch (err) {
         // Best-effort: the proposalId still links the verified KYC.
+        logger.warn({ err, proposalId }, "FG CKYC status lookup failed");
       }
     }
     return result;
@@ -271,20 +338,22 @@ export class FgProvider
   }
 
   async renewalQuote(req: RenewalQuoteRequest, ctx: ProviderContext): Promise<CanonicalQuoteResult> {
-    const token = await this.renewalTokenProvider();
-    return fgRenewalQuote(this.config, req, token, {
-      requestId: ctx.requestId,
-      vehicleCategory: "fourWheeler",
-      policyType: "comprehensive",
-    });
+    return this.withAuthRetry(this.renewalToken, (token) =>
+      fgRenewalQuote(this.config, req, token, {
+        requestId: ctx.requestId,
+        vehicleCategory: "fourWheeler",
+        policyType: "comprehensive",
+      }),
+    );
   }
 
   async renewalCreatePolicy(
     req: RenewalCreatePolicyRequest,
     _ctx: ProviderContext,
   ): Promise<PolicyIssuanceResult> {
-    const token = await this.renewalTokenProvider();
-    return fgRenewalCreatePolicy(this.config, req, token);
+    return this.withAuthRetry(this.renewalToken, (token) =>
+      fgRenewalCreatePolicy(this.config, req, token),
+    );
   }
 
   createInspection(req: InspectionRequest, _ctx: ProviderContext): Promise<InspectionResult> {
@@ -307,14 +376,15 @@ export class FgProvider
 
   /** Single SOAP round-trip for any health op; asserts business success. */
   private async healthCall(build: FgHealthBuildResult, context: string): Promise<unknown> {
-    const token = await this.healthTokenProvider();
-    const body = await this.transport.request({
-      method: "POST",
-      url: this.config.health.baseUrl,
-      token,
-      xmlBody: buildHealthSoapEnvelope(build.method, build.soapProduct, build.payload),
-      soapAction: build.soapAction,
-    });
+    const body = await this.withAuthRetry(this.healthToken, (token) =>
+      this.transport.request({
+        method: "POST",
+        url: this.config.health.baseUrl,
+        token,
+        xmlBody: buildHealthSoapEnvelope(build.method, build.soapProduct, build.payload),
+        soapAction: build.soapAction,
+      }),
+    );
     assertFgSuccess(extractHealthRoot(body), context);
     return body;
   }

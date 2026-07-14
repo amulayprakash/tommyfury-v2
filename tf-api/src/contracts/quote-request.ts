@@ -192,6 +192,19 @@ export const MotorFullQuoteRequestSchema = MotorQuoteRequestSchema.extend({
   kycRefId: z.string().optional(),
   ckyc: z.string().optional(),
 
+  // Pre-inspection evidence for break-in scenarios (FG rejects a break-in
+  // proposal without it). Populated from the completed LiveChek inspection
+  // (or a vendor-issued report reference during UAT).
+  inspectionReportNumber: z.string().optional(),
+  inspectionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+
+  /**
+   * The OD special-discount percentage the vendor applied at quote
+   * (CanonicalQuoteResult.odDiscountPercent). FG re-rates the proposal WITHOUT
+   * the discount unless it is echoed back in CreateProposal.
+   */
+  odDiscountPercent: z.coerce.number().min(0).max(100).optional(),
+
   // Optional, provider-agnostic proposal/payment fields (vendors that don't
   // use them simply ignore them). Driven by ICICI's proposal contract.
   amountCollected: z.coerce.number().nonnegative().optional(),

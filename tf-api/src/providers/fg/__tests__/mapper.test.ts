@@ -156,6 +156,43 @@ describe("buildCreateProposalPayload", () => {
     expect(vehicle(p).IDV).toBe("738908");
   });
 
+  it("echoes the quote's OD special discount as a negative percentage", () => {
+    const p = buildCreateProposalPayload(fullQuote({ odDiscountPercent: 60 }), codes, meta, "r");
+    const benefit = risk(p).AdditionalBenefit as Record<string, unknown>;
+    expect(benefit.Discount).toBe("-60");
+    // ENQ keeps the FG-decides default
+    const enq = buildGetQuotePayload(baseQuote(), codes, meta, "r");
+    expect((risk(enq).AdditionalBenefit as Record<string, unknown>).Discount).toBe("0.00000");
+  });
+
+  it("starts a clean rollover the day after the previous policy expires", () => {
+    const p = buildCreateProposalPayload(
+      fullQuote({ previousPolicyExpiryDate: "2099-08-10" }),
+      codes,
+      meta,
+      "r",
+    );
+    expect(header(p).PolicyStartDate).toBe("11/08/2099");
+    expect(header(p).PolicyEndDate).toBe("10/08/2100");
+  });
+
+  it("carries break-in inspection evidence into RollOverList", () => {
+    const p = buildCreateProposalPayload(
+      fullQuote({
+        isPreviousPolicyExpired: true,
+        inspectionReportNumber: "LVC-000123",
+        inspectionDate: "2026-07-14",
+      }),
+      codes,
+      meta,
+      "r",
+    );
+    const rollOver = (risk(p).PreviousInsDtls as Record<string, unknown>)
+      .RollOverList as Record<string, unknown>;
+    expect(rollOver.InspectionRptNo).toBe("LVC-000123");
+    expect(rollOver.InspectionDt).toBe("14/07/2026");
+  });
+
   it("adds a CPA nominee block when PA + nominee are present", () => {
     const p = buildCreateProposalPayload(
       fullQuote({ paOwner: true, nomineeName: "Asha", nomineeAge: 30, nomineeRelation: "SPOU" }),

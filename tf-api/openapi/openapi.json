@@ -860,6 +860,19 @@
           "ckyc": {
             "type": "string"
           },
+          "inspectionReportNumber": {
+            "type": "string"
+          },
+          "inspectionDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "odDiscountPercent": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 100
+          },
           "amountCollected": {
             "type": "number",
             "nullable": true,
@@ -1501,6 +1514,10 @@
             "type": "number",
             "minimum": 0
           },
+          "odDiscountPercent": {
+            "type": "number",
+            "minimum": 0
+          },
           "policyNumber": {
             "type": "string"
           },
@@ -2039,6 +2056,10 @@
                       "minimum": 0
                     },
                     "grossPremium": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "odDiscountPercent": {
                       "type": "number",
                       "minimum": 0
                     },
@@ -5285,6 +5306,10 @@
                                 "type": "number",
                                 "minimum": 0
                               },
+                              "odDiscountPercent": {
+                                "type": "number",
+                                "minimum": 0
+                              },
                               "policyNumber": {
                                 "type": "string"
                               },
@@ -5932,6 +5957,10 @@
                       "type": "number",
                       "minimum": 0
                     },
+                    "odDiscountPercent": {
+                      "type": "number",
+                      "minimum": 0
+                    },
                     "policyNumber": {
                       "type": "string"
                     },
@@ -6201,6 +6230,10 @@
                       "minimum": 0
                     },
                     "grossPremium": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "odDiscountPercent": {
                       "type": "number",
                       "minimum": 0
                     },
@@ -6752,6 +6785,19 @@
                   "ckyc": {
                     "type": "string"
                   },
+                  "inspectionReportNumber": {
+                    "type": "string"
+                  },
+                  "inspectionDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "odDiscountPercent": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 100
+                  },
                   "amountCollected": {
                     "type": "number",
                     "nullable": true,
@@ -7030,6 +7076,10 @@
                       "minimum": 0
                     },
                     "grossPremium": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "odDiscountPercent": {
                       "type": "number",
                       "minimum": 0
                     },
@@ -7884,6 +7934,10 @@
                       "minimum": 0
                     },
                     "grossPremium": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "odDiscountPercent": {
                       "type": "number",
                       "minimum": 0
                     },

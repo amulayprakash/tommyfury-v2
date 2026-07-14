@@ -65,6 +65,19 @@ export interface PreviousTpDetails {
   expiryDate?: string;
 }
 
+/**
+ * Completed break-in pre-inspection evidence (FG rejects a break-in proposal
+ * without it). Captured from the LiveChek flow or entered manually.
+ */
+export interface InspectionEvidence {
+  /** Correlation id of the LiveChek request (when one was raised in-app). */
+  refId?: string;
+  /** Report number fed into the proposal (LiveChek inspection id or manual). */
+  reportNumber: string;
+  /** Inspection date (YYYY-MM-DD). */
+  date: string;
+}
+
 type AddonState = Partial<Record<AddonKey, boolean>>;
 
 interface VehicleQuoteState {
@@ -93,6 +106,8 @@ interface VehicleQuoteState {
   /** CKYC number + ref captured before the proposal (fed into CreateProposal). */
   ckyc: string | null;
   kycRefId: string | null;
+  /** Break-in inspection evidence (FG requires it in the proposal). */
+  inspection: InspectionEvidence | null;
 
   setCategory: (category: SupportedCategory) => void;
   setRc: (rc: RcDetails) => void;
@@ -111,6 +126,7 @@ interface VehicleQuoteState {
   setFullQuote: (transactionId: string, quote: CanonicalQuote) => void;
   setKyc: (kycId: string | null) => void;
   setCkyc: (ckyc: string | null, kycRefId: string | null) => void;
+  setInspection: (inspection: InspectionEvidence | null) => void;
   reset: () => void;
 }
 
@@ -133,6 +149,7 @@ const initial = {
   kycId: null,
   ckyc: null,
   kycRefId: null,
+  inspection: null as InspectionEvidence | null,
 };
 
 export const useVehicleQuoteStore = create<VehicleQuoteState>()(
@@ -156,6 +173,7 @@ export const useVehicleQuoteStore = create<VehicleQuoteState>()(
       setFullQuote: (transactionId, fullQuote) => set({ transactionId, fullQuote }),
       setKyc: (kycId) => set({ kycId }),
       setCkyc: (ckyc, kycRefId) => set({ ckyc, kycRefId }),
+      setInspection: (inspection) => set({ inspection }),
       reset: () => set({ ...initial }),
     }),
     {

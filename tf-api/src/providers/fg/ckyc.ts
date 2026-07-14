@@ -20,6 +20,8 @@ interface VerifyCkycResponse {
     proposalId?: string;
     ckyc_remarks?: string;
     ckyc_request_id?: string | null;
+    /** Registry auto-match delivers the CKYC number right here (remarks "OK"). */
+    ckyc_number?: string | null;
     idNum?: string;
     url?: string;
     finalStatus?: string;
@@ -116,11 +118,14 @@ export async function fgVerifyCkyc(
     };
   }
 
-  // Auto-matched: proposalId carries the CKYC; the number is confirmed via status.
+  // Auto-matched. A registry hit (ckyc_remarks "OK") carries the CKYC number
+  // directly in this response; older/manual cases deliver it via GetKycStatus.
+  const ckycNumber = r.ckyc_number ?? undefined;
   return {
     isKycSuccess: true,
+    ckycNumber,
     proposalId,
-    kycId: proposalId,
+    kycId: ckycNumber ?? proposalId,
     ckycRefId: proposalId,
     name: r.uploadedDocuments?.full_name ?? req.fullName,
     _rawResponse: json,
@@ -129,29 +134,49 @@ export async function fgVerifyCkyc(
 
 interface CkycStatusResponse {
   apiStatus?: string;
-  response?: { ckyc_no?: string; ckycNumber?: string; finalStatus?: string; status?: string } | null;
+  kycStatus?: number;
+  response?: {
+    finalStatus?: string;
+    status?: string;
+    success?: boolean;
+    message?: string;
+    ckyc_no?: string;
+    ckycNumber?: string;
+    uploadedDocuments?: ({ ckycNumber?: string | null } & Record<string, unknown>) | null;
+  } | null;
   errorMessage?: string | null;
 }
 
+export interface FgCkycStatus {
+  ckycNumber?: string;
+  status?: string;
+  success?: boolean;
+  message?: string;
+  raw: unknown;
+}
+
 /**
- * Polls CKYC status by proposalId to retrieve the final CKYC number (fed into
- * CreateProposal). The v3 status path is best-effort; confirm with FG.
+ * Fetches the KYC state for a VerifyCKYC proposalId. v3 endpoint (per FG's
+ * GC-CKYCAPI v3 Postman collection, live-verified): POST /Verify/GetKycStatus
+ * with {proposal_id, system_name}. Once KYC completes, the CKYC number (fed
+ * into CreateProposal) arrives nested in response.uploadedDocuments.ckycNumber;
+ * response.success / finalStatus report whether it is actually complete.
  */
 export async function fgGetCkycStatus(
   config: FgConfig,
   proposalId: string,
   token: string,
-): Promise<{ ckycNumber?: string; status?: string; raw: unknown }> {
+): Promise<FgCkycStatus> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     accept: "*/*",
     Authorization: `Bearer ${token}`,
   };
   if (config.ckyc.subscriptionToken) headers.Token = config.ckyc.subscriptionToken;
-  const res = await fetch(`${config.ckyc.baseUrl}/Web/GetCKYCStatus`, {
+  const res = await fetch(`${config.ckyc.baseUrl}/Verify/GetKycStatus`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ proposal_id: proposalId, proposalId }),
+    body: JSON.stringify({ proposal_id: proposalId, system_name: config.vendorCode }),
   });
   const text = await res.text().catch(() => "");
   if (!res.ok) {
@@ -164,5 +189,11 @@ export async function fgGetCkycStatus(
     throw new ProviderError(FG_SLUG, 502, "FG CKYC status returned non-JSON", text.slice(0, 500));
   }
   const r = json.response ?? {};
-  return { ckycNumber: r.ckyc_no ?? r.ckycNumber, status: r.finalStatus ?? r.status, raw: json };
+  return {
+    ckycNumber: r.uploadedDocuments?.ckycNumber ?? r.ckyc_no ?? r.ckycNumber,
+    status: r.finalStatus ?? r.status,
+    success: r.success,
+    message: r.message,
+    raw: json,
+  };
 }

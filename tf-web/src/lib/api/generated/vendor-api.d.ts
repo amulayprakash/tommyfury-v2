@@ -262,6 +262,7 @@ export interface paths {
                                     serviceTaxPercent: number;
                                     serviceTaxAmount: number;
                                     grossPremium: number;
+                                    odDiscountPercent?: number;
                                     policyNumber?: string;
                                     paymentUrl?: string;
                                     contractDetails?: {
@@ -478,6 +479,7 @@ export interface paths {
                             serviceTaxPercent: number;
                             serviceTaxAmount: number;
                             grossPremium: number;
+                            odDiscountPercent?: number;
                             policyNumber?: string;
                             paymentUrl?: string;
                             contractDetails?: {
@@ -590,6 +592,7 @@ export interface paths {
                             serviceTaxPercent: number;
                             serviceTaxAmount: number;
                             grossPremium: number;
+                            odDiscountPercent?: number;
                             policyNumber?: string;
                             paymentUrl?: string;
                             contractDetails?: {
@@ -777,6 +780,9 @@ export interface paths {
                         nomineeAge?: number;
                         kycRefId?: string;
                         ckyc?: string;
+                        inspectionReportNumber?: string;
+                        inspectionDate?: string;
+                        odDiscountPercent?: number | null;
                         amountCollected?: number | null;
                         paymentTransactionId?: string;
                         /** Format: uri */
@@ -863,6 +869,7 @@ export interface paths {
                             serviceTaxPercent: number;
                             serviceTaxAmount: number;
                             grossPremium: number;
+                            odDiscountPercent?: number;
                             policyNumber?: string;
                             paymentUrl?: string;
                             contractDetails?: {
@@ -1326,6 +1333,7 @@ export interface paths {
                             serviceTaxPercent: number;
                             serviceTaxAmount: number;
                             grossPremium: number;
+                            odDiscountPercent?: number;
                             policyNumber?: string;
                             paymentUrl?: string;
                             contractDetails?: {
@@ -2429,6 +2437,9 @@ export interface components {
             nomineeAge?: number;
             kycRefId?: string;
             ckyc?: string;
+            inspectionReportNumber?: string;
+            inspectionDate?: string;
+            odDiscountPercent?: number | null;
             amountCollected?: number | null;
             paymentTransactionId?: string;
             /** Format: uri */
@@ -2610,6 +2621,7 @@ export interface components {
             serviceTaxPercent: number;
             serviceTaxAmount: number;
             grossPremium: number;
+            odDiscountPercent?: number;
             policyNumber?: string;
             paymentUrl?: string;
             contractDetails?: {
@@ -2708,6 +2720,7 @@ export interface components {
                     serviceTaxPercent: number;
                     serviceTaxAmount: number;
                     grossPremium: number;
+                    odDiscountPercent?: number;
                     policyNumber?: string;
                     paymentUrl?: string;
                     contractDetails?: {

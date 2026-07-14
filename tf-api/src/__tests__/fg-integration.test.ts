@@ -100,29 +100,56 @@ describe("FG integration (fixtures)", () => {
     expect(res.body.response.transactionId).toBe("0000621254");
     expect(res.body.response.basicOdPremium).toBe(7390.93);
     expect(res.body.response.grossPremium).toBeCloseTo(35385.899, 1);
+    // FG's DISCPERC must surface so the proposal can echo it (else FG re-rates
+    // the CRT without the special discount).
+    expect(res.body.response.odDiscountPercent).toBe(60);
   });
 
+  const proposalBody = {
+    ...quoteBody,
+    // A clean rollover: previous policy present and unexpired (no inspection).
+    previousPolicyNumber: "PREV123456",
+    previousPolicyExpiryDate: "2099-01-01",
+    quoteId: "0000771450",
+    proposer: {
+      firstName: "Chandrakant",
+      lastName: "Kadam",
+      email: "ck@example.com",
+      mobile: "9821550969",
+      dob: "1987-12-02",
+      panNumber: "ATYPK2714N",
+    },
+    address: {
+      addressLine1: "Safalya Building",
+      pincode: "400013",
+      city: "Mumbai",
+      state: "MAHARASHTRA",
+    },
+    vehicle: { engineNumber: "ENG1", chassisNumber: "CHS1" },
+  };
+
   it("binds a proposal (CreateProposal) returning the ClientId", async () => {
+    const res = await request(app).post("/api/v1/fg/motor/full-quote").send(proposalBody);
+    expect(res.status).toBe(200);
+    expect(res.body.response.contractDetails.clientId).toBe("72590187");
+  });
+
+  it("fails fast with INSPECTION_REQUIRED for a break-in proposal without a report", async () => {
+    const res = await request(app)
+      .post("/api/v1/fg/motor/full-quote")
+      .send({ ...proposalBody, isPreviousPolicyExpired: true });
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe("INSPECTION_REQUIRED");
+  });
+
+  it("lets a break-in proposal through once inspection details are supplied", async () => {
     const res = await request(app)
       .post("/api/v1/fg/motor/full-quote")
       .send({
-        ...quoteBody,
-        quoteId: "0000771450",
-        proposer: {
-          firstName: "Chandrakant",
-          lastName: "Kadam",
-          email: "ck@example.com",
-          mobile: "9821550969",
-          dob: "1987-12-02",
-          panNumber: "ATYPK2714N",
-        },
-        address: {
-          addressLine1: "Safalya Building",
-          pincode: "400013",
-          city: "Mumbai",
-          state: "MAHARASHTRA",
-        },
-        vehicle: { engineNumber: "ENG1", chassisNumber: "CHS1" },
+        ...proposalBody,
+        isPreviousPolicyExpired: true,
+        inspectionReportNumber: "LVC-000123",
+        inspectionDate: "2026-07-14",
       });
     expect(res.status).toBe(200);
     expect(res.body.response.contractDetails.clientId).toBe("72590187");

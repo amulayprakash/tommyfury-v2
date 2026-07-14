@@ -92,6 +92,7 @@ interface ParsedPremium {
   grossPremium: number;
   addonPremiums: CanonicalQuoteResult["addonPremiums"];
   ownDamageDiscount: number;
+  odDiscountPercent: number;
 }
 
 function parsePremium(table1: Table1Row[]): ParsedPremium {
@@ -103,6 +104,7 @@ function parsePremium(table1: Table1Row[]): ParsedPremium {
   let servTaxOd = 0;
   let servTaxTp = 0;
   let ownDamageDiscount = 0;
+  let odDiscountPercent = 0;
   const addonPremiums: CanonicalQuoteResult["addonPremiums"] = {};
 
   for (const row of table1) {
@@ -113,6 +115,8 @@ function parsePremium(table1: Table1Row[]): ParsedPremium {
 
     if (code === "OD" && desc.includes("basic od")) basicOdPremium = value;
     else if (code === "OD" && desc.includes("special discount")) ownDamageDiscount = value;
+    // Live UAT reports it negative ("-72.00"); older recordings positive ("60").
+    else if (code === "DISCPERC") odDiscountPercent = Math.abs(value);
     else if (code === "TP" && desc.includes("basic tp")) thirdPartyPremium = value;
     else if (code === "TOTALADDON") totalAddonPremium = value;
     else if (code === "Gross Premium") {
@@ -143,6 +147,7 @@ function parsePremium(table1: Table1Row[]): ParsedPremium {
     grossPremium,
     addonPremiums,
     ownDamageDiscount,
+    odDiscountPercent,
   };
 }
 
@@ -180,6 +185,7 @@ function buildResult(body: unknown, ctx: QuoteNormalizeCtx): CanonicalQuoteResul
     serviceTaxPercent: 18,
     serviceTaxAmount: premium.serviceTaxAmount,
     grossPremium: premium.grossPremium,
+    ...(premium.odDiscountPercent > 0 ? { odDiscountPercent: premium.odDiscountPercent } : {}),
     policyNumber: policyNumber || undefined,
     contractDetails: { clientId: clientId ?? null, quotationNo },
     _rawResponse: body,

@@ -4,7 +4,9 @@ import { lookupRc } from "./rc-lookup";
 import {
   compareQuotes,
   completeCkyc,
+  createInspection,
   fetchFullQuote,
+  getInspectionStatus,
   getPolicyStatus,
   getProviderAddons,
   getProviders,
@@ -16,7 +18,12 @@ import {
   type OvdUploadBody,
   type PaymentInitiateBody,
 } from "./vehicle-api";
-import type { CkycRequest, CompareQuotesRequest, MotorFullQuoteRequest } from "./types";
+import type {
+  CkycRequest,
+  CompareQuotesRequest,
+  InspectionRequest,
+  MotorFullQuoteRequest,
+} from "./types";
 
 export function useProviders() {
   return useQuery({
@@ -103,6 +110,22 @@ export function useOvd() {
   return useMutation({
     mutationFn: ({ provider, body }: { provider: string; body: OvdUploadBody }) =>
       initiateOvd(provider, body),
+  });
+}
+
+/** Break-in pre-inspection: create a LiveChek request for the vehicle. */
+export function useCreateInspection() {
+  return useMutation({
+    mutationFn: ({ provider, req }: { provider: string; req: InspectionRequest }) =>
+      createInspection(provider, req),
+  });
+}
+
+/** Break-in pre-inspection: re-check the inspection's status on demand. */
+export function useInspectionStatus() {
+  return useMutation({
+    mutationFn: ({ provider, refId }: { provider: string; refId: string }) =>
+      getInspectionStatus(provider, refId),
   });
 }
 

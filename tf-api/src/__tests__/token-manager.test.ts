@@ -15,6 +15,9 @@ class TestStore implements TokenStore {
   set(key: string, token: CachedToken) {
     this.cache.set(key, token);
   }
+  delete(key: string) {
+    this.cache.delete(key);
+  }
 }
 
 describe("TokenManager", () => {

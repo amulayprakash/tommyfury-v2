@@ -83,8 +83,26 @@ function addYearsIso(isoDate: string, years: number): string {
   return end.toISOString().slice(0, 10);
 }
 
+function addDaysIso(isoDate: string, days: number): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const next = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1));
+  next.setUTCDate(next.getUTCDate() + days);
+  return next.toISOString().slice(0, 10);
+}
+
 function policyDates(req: MotorQuoteRequest, tenureYears: number): { start: string; end: string } {
-  const start = req.policyStartDate ?? new Date().toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+  let start = req.policyStartDate;
+  if (!start) {
+    // Rollover convention: risk starts the day after the previous policy
+    // expires — FG flags any gap OR overlap against PreviousPolExpDt as a
+    // "break-in Scenario" at CRT (live-observed 2026-07-14 on a policy that
+    // started today while the previous one was still active). Break-ins
+    // (expired/unknown previous expiry) start today.
+    const isRollover = req.businessType === "rollover" || req.businessType === "renewal";
+    const expiry = req.previousPolicyExpiryDate;
+    start = isRollover && expiry && expiry >= today ? addDaysIso(expiry, 1) : today;
+  }
   const end = req.policyEndDate ?? addYearsIso(start, tenureYears);
   return { start: toFgDate(start), end: toFgDate(end) };
 }
@@ -177,8 +195,12 @@ const EMPTY_CLIENT = {
 // must be present (even empty) in the sample's order — a subset throws
 // "Column 'X' does not belong to table". Full set per the XML gateway sample.
 function buildAdditionalBenefit(req: MotorQuoteRequest, cpaReq: "Y" | "N"): Record<string, unknown> {
+  // Proposal-only: echo the OD special discount FG granted at quote (DISCPERC),
+  // as a NEGATIVE percentage per the kit CRT samples (<Discount>-60</Discount>).
+  // Left "0.00000" at ENQ — FG applies its own deviation discount when quoting.
+  const discPct = (req as Partial<MotorFullQuoteRequest>).odDiscountPercent;
   return {
-    Discount: "0.00000",
+    Discount: discPct && discPct > 0 ? String(-discPct) : "0.00000",
     ElectricalAccessoriesValues: "",
     NonElectricalAccessoriesValues: "",
     FibreGlassTank: "",
@@ -192,7 +214,9 @@ function buildAdditionalBenefit(req: MotorQuoteRequest, cpaReq: "Y" | "N"): Reco
     NCB: String(req.ncbPercent ?? 0),
     RestrictedTPPD: "",
     PrivateCommercialUsage: "",
-    CPAYear: "3",
+    // Left empty per the kit CRT sample (FG derives the CPA tenure from the
+    // contract type); a hardcoded value trips FG's CPA vendor service.
+    CPAYear: "",
     CPADisc: "",
     IMT23: "",
     CPAReq: cpaReq,
@@ -208,26 +232,39 @@ function buildAdditionalBenefit(req: MotorQuoteRequest, cpaReq: "Y" | "N"): Reco
 function buildPreviousInsDtls(req: MotorQuoteRequest, codes: FgResolvedCodes): Record<string, unknown> {
   const isNew = req.businessType === "new";
   const isRollover = req.businessType === "rollover" || req.businessType === "renewal";
+  // Proposal-only enrichments (MotorFullQuoteRequest extends the quote
+  // request): inspection evidence for break-ins, and the proposer address used
+  // as the previous insurer's branch city/pin. FG's CRT hard-requires "Name of
+  // Previous Insurer" + "Branch Address" on rollovers (its kit sample carries
+  // the insurer name in InsuredName and the branch city in Address1/2).
+  const full = req as Partial<MotorFullQuoteRequest>;
+  const inspectionRptNo = full.inspectionReportNumber ?? "";
+  const inspectionDt = full.inspectionDate ? toFgDate(full.inspectionDate) : "";
+  const branchCity = full.address?.city ?? "";
+  const branchPin = full.address?.pincode ?? "";
   return {
     UsedCar: "N",
     UsedCarList: { PurchaseDate: "", InspectionRptNo: "", InspectionDt: "" },
     RollOver: isRollover ? "Y" : "N",
     RollOverList: {
       PolicyNo: req.previousPolicyNumber ?? "",
-      InsuredName: req.proposerName ?? "",
+      // FG's CRT hard-requires the previous insurer's NAME here (its kit sample
+      // carries e.g. "BAJAJ ALLIANZ GENERAL INS"); when it wasn't captured,
+      // fall back to the name paired with FALLBACK_INSURER_CODE below.
+      InsuredName: req.previousInsurerName ?? (isRollover ? FALLBACK_INSURER_NAME : ""),
       PreviousPolExpDt: req.previousPolicyExpiryDate ? toFgDate(req.previousPolicyExpiryDate) : "",
       // FG hard-fails a rollover proposal without the previous insurer's ClientCode
       // ("Please Pass Rollover Insurer ClientCode"). Use the resolved code, falling
       // back to FG's own client code when the previous insurer can't be resolved.
       ClientCode: isRollover ? (codes.previousInsurerCode ?? FALLBACK_INSURER_CODE) : "",
-      Address1: "",
-      Address2: "",
+      Address1: isRollover ? branchCity : "",
+      Address2: isRollover ? branchCity : "",
       Address3: "",
       Address4: "",
       Address5: "",
-      PinCode: "",
-      InspectionRptNo: "",
-      InspectionDt: "",
+      PinCode: isRollover ? branchPin : "",
+      InspectionRptNo: inspectionRptNo,
+      InspectionDt: inspectionDt,
       NCBDeclartion: req.ncbPercent > 0 ? "Y" : "N",
       ClaimInExpiringPolicy: req.claimInPreviousPolicy ? "Y" : "N",
       NCBInExpiringPolicy: String(req.ncbPercent ?? 0),
@@ -249,6 +286,8 @@ const EMPTY_PREVIOUS_TP = {
 
 /** FG fallback insurer code (Future Generali itself) — accepted when no match. */
 const FALLBACK_INSURER_CODE = "40000049";
+/** Display name paired with FALLBACK_INSURER_CODE (CRT requires a non-empty name). */
+const FALLBACK_INSURER_NAME = "FUTURE GENERALI INDIA INSURANCE CO LTD";
 
 function isoMinusOneYear(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
@@ -473,12 +512,16 @@ export function buildCreateProposalPayload(
       string,
       unknown
     >;
+    // Full column set — FG's .NET DataTable rejects a subset (the appointee
+    // columns must be present even when empty, per the kit CRT sample).
     benefit.CPA = {
       CPANomName: req.nomineeName,
       CPANomAge: req.nomineeAge ? String(req.nomineeAge) : "",
       CPANomAgeDet: "Y",
       CPANomPerc: "100",
       CPARelation: req.nomineeRelation ?? "",
+      CPAAppointeeName: "",
+      CPAAppointeRel: "",
     };
   }
 

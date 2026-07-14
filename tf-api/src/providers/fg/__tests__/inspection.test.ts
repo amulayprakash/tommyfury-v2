@@ -8,11 +8,39 @@ const base = {
   businessType: "rollover",
   isPreviousPolicyExpired: false,
   previousPolicyNumber: "P123",
+  previousPolicyExpiryDate: "2099-01-01",
 } as unknown as MotorQuoteRequest;
 
 describe("inspectionRequired (break-in rules)", () => {
   it("requires inspection for an expired previous policy (break-in)", () => {
     expect(inspectionRequired({ ...base, isPreviousPolicyExpired: true })).toBe(true);
+  });
+
+  it("derives break-in from a past expiry date even when the flag says not expired", () => {
+    expect(
+      inspectionRequired({ ...base, previousPolicyExpiryDate: "2023-08-10" }),
+    ).toBe(true);
+  });
+
+  it("derives break-in when the previous expiry is unknown (unreadable RC)", () => {
+    expect(inspectionRequired({ ...base, previousPolicyExpiryDate: undefined })).toBe(true);
+  });
+
+  it("uses the new policy start date for the derived comparison", () => {
+    expect(
+      inspectionRequired({
+        ...base,
+        previousPolicyExpiryDate: "2026-08-01",
+        policyStartDate: "2026-09-01",
+      }),
+    ).toBe(true);
+    expect(
+      inspectionRequired({
+        ...base,
+        previousPolicyExpiryDate: "2026-08-01",
+        policyStartDate: "2026-08-01",
+      }),
+    ).toBe(false);
   });
 
   it("requires inspection on a TP→Comprehensive upgrade", () => {
@@ -31,6 +59,12 @@ describe("inspectionRequired (break-in rules)", () => {
 
   it("never requires inspection for new business", () => {
     expect(inspectionRequired({ ...base, businessType: "new", isPreviousPolicyExpired: true })).toBe(false);
+  });
+
+  it("waives inspection for third-party break-ins (FG SC_09 TP waiver)", () => {
+    expect(
+      inspectionRequired({ ...base, selectedPolicy: "thirdParty", isPreviousPolicyExpired: true }),
+    ).toBe(false);
   });
 });
 

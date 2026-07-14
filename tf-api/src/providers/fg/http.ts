@@ -129,6 +129,8 @@ export function extractFgError(value: unknown, depth = 0): string {
 /** Classifies an FG failure message into a canonical, frontend-friendly code. */
 export function classifyFgError(message: string): string {
   const m = message.toLowerCase();
+  if (m.includes("break-in") || m.includes("breakin") || m.includes("inspection details"))
+    return "INSPECTION_REQUIRED";
   if (m.includes("ckyc") || m.includes("kyc") || m.includes("no record exist"))
     return "KYC_INCOMPLETE";
   if (m.includes("referral") || m.includes("declined")) return "REFERRAL_DECLINED";

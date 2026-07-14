@@ -242,7 +242,6 @@ export function buildProposalPayload(
     PreviousInsurerCode: codes.previousInsurerCode ?? "",
     PreviousPolicyNumber: req.previousPolicyNumber ?? "",
     NomineeName: req.nomineeName ?? null,
-    NomineeAge: req.nomineeAge ?? null,
     NomineeRelationship: req.nomineeRelation ?? null,
     AmountCollected: req.amountCollected ?? 0,
     PaymentTransactionId: req.paymentTransactionId ?? "",
@@ -251,9 +250,20 @@ export function buildProposalPayload(
     RequestId: requestId,
     PanNumber: proposer.panNumber ?? null,
     OdometerReading: req.odometerReading ?? 0,
-    OdometerCaptureDate: req.odometerCaptureDate ?? null,
     isProposalOnly: req.isProposalOnly,
   };
+
+  // Omitted (not null) when absent: both OdometerCaptureDate and NomineeAge bind to
+  // non-nullable value types (System.DateTime / System.Int32) server-side — sending JSON
+  // null 400s the WHOLE proposal ("The JSON value could not be converted to..."), not
+  // just that one field. Confirmed live via the real backend 2026-07-09 (nominee is an
+  // optional step in tf-web's proposal form, so any customer who skips it hits this).
+  if (req.odometerCaptureDate) {
+    payload.OdometerCaptureDate = req.odometerCaptureDate;
+  }
+  if (typeof req.nomineeAge === "number") {
+    payload.NomineeAge = req.nomineeAge;
+  }
 
   // Stand-alone OD proposal also carries the active TP policy details.
   if (req.selectedPolicy === "standAloneOD") {

@@ -26,6 +26,8 @@ export const OVD_DOC_TYPES = ["AADHAAR", "PAN", "VOTER", "PASSPORT", "DL"] as co
 export type OvdDocType = (typeof OVD_DOC_TYPES)[number];
 export type PolicyStatusRequest = components["schemas"]["PolicyStatusRequest"];
 export type PolicyStatusResult = components["schemas"]["PolicyStatusResult"];
+export type InspectionRequest = components["schemas"]["InspectionRequest"];
+export type InspectionResult = components["schemas"]["InspectionResult"];
 
 export type VehicleCategory = MotorQuoteRequest["vehicleType"];
 export type PolicyType = MotorQuoteRequest["selectedPolicy"];

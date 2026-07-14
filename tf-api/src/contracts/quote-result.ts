@@ -68,6 +68,12 @@ export const CanonicalQuoteResultSchema = z.object({
   serviceTaxPercent: z.number().min(0).default(18),
   serviceTaxAmount: z.number().min(0),
   grossPremium: z.number().min(0),
+  /**
+   * Vendor's own-damage special-discount percentage applied at quote (FG
+   * DISCPERC). Must be echoed back on the proposal (FG re-rates WITHOUT the
+   * discount when CreateProposal omits it).
+   */
+  odDiscountPercent: z.number().min(0).optional(),
 
   // Contract metadata (populated by full-quote)
   policyNumber: z.string().optional(),
