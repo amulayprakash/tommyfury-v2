@@ -29,10 +29,19 @@ export function createApp(): express.Application {
   // Security headers
   app.use(helmet());
 
-  // CORS
+  // CORS — in development reflect any origin (dev servers run on localhost,
+  // 127.0.0.1, or LAN IPs interchangeably); production enforces the allow-list.
+  app.use((req, res, next) => {
+    // Chrome Private Network Access: a page on a LAN IP calling localhost
+    // sends this preflight header and requires an explicit opt-in.
+    if (env.NODE_ENV === "development" && req.headers["access-control-request-private-network"]) {
+      res.setHeader("Access-Control-Allow-Private-Network", "true");
+    }
+    next();
+  });
   app.use(
     cors({
-      origin: env.ALLOWED_ORIGINS,
+      origin: env.NODE_ENV === "development" ? true : env.ALLOWED_ORIGINS,
       methods: ["GET", "POST", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization", "X-Request-Id", "X-Signup-Id"],
       credentials: true,
