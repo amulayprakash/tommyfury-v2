@@ -60,14 +60,19 @@ describe("normalizeProposal", () => {
 });
 
 describe("extractRoot", () => {
-  it("unwraps a JSON-stringified Result → Root envelope", () => {
-    const wrapped = { GetQuoteResult: JSON.stringify({ Root: { Client: { QuotationNo: "9" } } }) };
+  it("unwraps a { Root: … } JSON envelope (quote/proposal)", () => {
+    const wrapped = { Root: { Client: { QuotationNo: "9" }, Policy: {} } };
     const root = extractRoot(wrapped);
     expect((root.Client as Record<string, unknown>).QuotationNo).toBe("9");
   });
 
-  it("returns a flat root unchanged", () => {
-    const flat = { Client: { QuotationNo: "1" }, Policy: {} };
+  it("returns a bare { Client, Receipt, Policy } issuance body unchanged", () => {
+    const flat = { Client: { ClientId: "1" }, Receipt: { ReceiptNo: "R1" }, Policy: {} };
     expect(extractRoot(flat)).toBe(flat);
+  });
+
+  it("parses a JSON-stringified body", () => {
+    const root = extractRoot(JSON.stringify({ Root: { Client: { QuotationNo: "7" } } }));
+    expect((root.Client as Record<string, unknown>).QuotationNo).toBe("7");
   });
 });

@@ -27,9 +27,10 @@ export interface QuoteNormalizeCtx {
 }
 
 /**
- * Unwraps FG's response envelopes to the `<Root>` object. The JSON gateway may
- * return the body flat, wrapped in `{ <Op>Result: … }`, under `Root`/`d`, or as
- * a JSON-encoded string — handle all of them defensively.
+ * Unwraps FG's JSON response envelopes to the business object. GetQuote and
+ * CreateProposal are wrapped `{ "Root": { Client, Receipt, Policy } }`;
+ * IssueProposal is bare `{ Client, Receipt, Policy }`. A JSON-encoded string
+ * body is parsed defensively.
  */
 export function extractRoot(body: unknown): Json {
   let cur: unknown = body;
@@ -37,15 +38,8 @@ export function extractRoot(body: unknown): Json {
 
   for (let i = 0; i < 4 && cur && typeof cur === "object"; i++) {
     const c = cur as Json;
-    if ("Policy" in c || "Client" in c) return c;
-    const next =
-      c.GetQuoteResult ??
-      c.CreateProposalResult ??
-      c.IssueProposalResult ??
-      c.PolicyIssuance_VendorsResult ??
-      c.Root ??
-      c.d ??
-      undefined;
+    if ("Policy" in c || "Client" in c || "Receipt" in c) return c;
+    const next = c.Root ?? c.d ?? undefined;
     if (next === undefined) break;
     cur = typeof next === "string" ? tryParse(next) : next;
   }
