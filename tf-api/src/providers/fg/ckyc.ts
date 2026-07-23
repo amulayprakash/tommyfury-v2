@@ -50,7 +50,12 @@ function toVerifyBody(req: CkycRequest, systemName: string): Record<string, unkn
   };
 }
 
-async function postJson(url: string, token: string, subscriptionToken: string | undefined, body: unknown) {
+async function postJson<T = VerifyCkycResponse>(
+  url: string,
+  token: string,
+  subscriptionToken: string | undefined,
+  body: unknown,
+): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     accept: "*/*",
@@ -63,7 +68,7 @@ async function postJson(url: string, token: string, subscriptionToken: string | 
     throw new ProviderError(FG_SLUG, res.status, `FG CKYC request failed [${res.status}]`, text.slice(0, 500));
   }
   try {
-    return JSON.parse(text) as VerifyCkycResponse;
+    return JSON.parse(text) as T;
   } catch {
     throw new ProviderError(FG_SLUG, 502, "FG CKYC returned non-JSON", text.slice(0, 500));
   }
@@ -194,6 +199,89 @@ export async function fgGetCkycStatus(
     status: r.finalStatus ?? r.status,
     success: r.success,
     message: r.message,
+    raw: json,
+  };
+}
+
+// ─── UploadDocBytes (GCKYC/3.0.0 /Verify/UploadDocBytes) ──────────────────────
+// Manual document-upload path for the CKYC-miss case where the redirect URL is
+// unusable: POST a base64 document; Arya OCR extracts + verifies it. The CKYC
+// number is NOT returned here — poll GetKycStatus (finalStatus 1 or 3) after a
+// verified upload. Spec: FGI-CKYC-API-DOC.docx §4 UploadDocBytes.
+
+export interface FgUploadDocRequest {
+  /** Unique request id for this upload (we pass the provider requestId). */
+  reqId: string;
+  /** VerifyCKYC proposal_id (`PR_xxx`) the document is attached to. */
+  proposalId: string;
+  /** Document kind hint — "pdf" (file is a PDF) or an ID type like "aadhar". */
+  docType: string;
+  /** Base64 of the document bytes (no data: prefix). */
+  docBase64: string;
+}
+
+interface UploadDocResponse {
+  extracted_data?:
+    | ({
+        name?: string | null;
+        dob?: string | null;
+        aadhar_id?: string | null;
+        gender?: string | null;
+        address?: string | null;
+        aadhar_masked_no?: string | null;
+        father_spouse_name?: string | null;
+      } & Record<string, unknown>)
+    | null;
+  doc_type?: string;
+  image_quality?: string | null;
+  req_id?: string;
+  success?: boolean;
+  error_message?: string | null;
+  verify_data?: { status?: boolean; code?: number; message?: string | null } | null;
+  proposal_id?: string;
+}
+
+export interface FgUploadDocResult {
+  /** True only when recognition AND verification both passed. */
+  isVerified: boolean;
+  extractedName?: string;
+  imageQuality?: string;
+  proposalId?: string;
+  message?: string;
+  raw: unknown;
+}
+
+/** Chooses FG's `doc_type` from the uploaded file's mime + declared ID type. */
+export function fgCkycDocType(mimeType: string, idType: string): string {
+  if (mimeType === "application/pdf") return "pdf";
+  return idType === "AADHAAR" ? "aadhar" : idType.toLowerCase();
+}
+
+/** Uploads one document to FG's CKYC OCR/verify endpoint and maps the outcome. */
+export async function fgUploadDocBytes(
+  config: FgConfig,
+  req: FgUploadDocRequest,
+  token: string,
+): Promise<FgUploadDocResult> {
+  const json = await postJson<UploadDocResponse>(
+    `${config.ckyc.baseUrl}/Verify/UploadDocBytes`,
+    token,
+    config.ckyc.subscriptionToken,
+    {
+      req_id: req.reqId,
+      proposal_id: req.proposalId,
+      doc_type: req.docType,
+      doc_base64: req.docBase64,
+    },
+  );
+
+  const isVerified = json.success === true && json.verify_data?.status === true;
+  return {
+    isVerified,
+    extractedName: json.extracted_data?.name ?? undefined,
+    imageQuality: json.image_quality ?? undefined,
+    proposalId: json.proposal_id ?? req.proposalId,
+    message: json.error_message || json.verify_data?.message || undefined,
     raw: json,
   };
 }

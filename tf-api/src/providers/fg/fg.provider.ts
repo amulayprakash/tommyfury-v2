@@ -38,7 +38,7 @@ import {
   type FgConfig,
 } from "./config.ts";
 import { fgTokenFetcher, fgProductTokenFetcher } from "./auth.ts";
-import { fgVerifyCkyc, fgGetCkycStatus } from "./ckyc.ts";
+import { fgVerifyCkyc, fgGetCkycStatus, fgUploadDocBytes, fgCkycDocType } from "./ckyc.ts";
 import { fgRenewalQuote, fgRenewalCreatePolicy } from "./renewal.ts";
 import { createInspection, getInspectionStatus, inspectionRequired } from "./inspection.ts";
 import { FetchTransport, assertFgSuccess, type FgTransport } from "./http.ts";
@@ -326,10 +326,47 @@ export class FgProvider
     return result;
   }
 
-  initiateOvd(_req: OvdRequest, _files: OvdFile[], _ctx: ProviderContext): Promise<OvdResult> {
-    // FG has no document-upload API; manual KYC is a hosted redirect surfaced by
-    // completeCkyc (KycResult.redirectUrl). "ovd" is not in FG_OPERATIONS.
-    throw new AppError(501, "FG does not support OVD document upload", "NOT_IMPLEMENTED");
+  async initiateOvd(req: OvdRequest, files: OvdFile[], ctx: ProviderContext): Promise<OvdResult> {
+    // FG's manual-KYC document upload (GCKYC/3.0.0 UploadDocBytes) — used when the
+    // redirect URL cannot be shown. The document is attached to the pending CKYC
+    // case via its VerifyCKYC proposalId; the CKYC number arrives later via
+    // GetKycStatus, so a verified upload just unblocks that poll.
+    const file = files.find((f) => f.fieldName === "proofOfIdentity") ?? files[0];
+    if (!file) {
+      throw new AppError(422, "FG CKYC document upload requires a document file", "OVD_FILE_REQUIRED");
+    }
+    if (!req.proposalId) {
+      throw new AppError(
+        422,
+        "FG CKYC document upload requires the CKYC proposalId from VerifyCKYC",
+        "OVD_PROPOSAL_REQUIRED",
+      );
+    }
+    // Derive doc_type from the CHOSEN file's role, not always proofOfIdentity: the
+    // fallback (files[0]) can be the proofOfAddress file, whose declared kind is
+    // proofOfAddressType — using proofOfIdentityType there would mislabel the doc.
+    const idType =
+      file.fieldName === "proofOfAddress" ? req.proofOfAddressType : req.proofOfIdentityType;
+    const result = await this.withAuthRetry(this.ckycToken, (token) =>
+      fgUploadDocBytes(
+        this.config,
+        {
+          reqId: ctx.requestId,
+          proposalId: req.proposalId!,
+          docType: fgCkycDocType(file.mimeType, idType),
+          docBase64: file.buffer.toString("base64"),
+        },
+        token,
+      ),
+    );
+    return {
+      kycId: result.proposalId,
+      proposalId: result.proposalId,
+      customerName: result.extractedName,
+      isKycSuccess: result.isVerified,
+      displayMessage: result.message,
+      _rawResponse: result.raw,
+    };
   }
 
   async renewalQuote(req: RenewalQuoteRequest, ctx: ProviderContext): Promise<CanonicalQuoteResult> {

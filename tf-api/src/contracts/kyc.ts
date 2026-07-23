@@ -60,6 +60,11 @@ export const OvdRequestSchema = z.object({
   proofOfIdentityType: OvdDocTypeSchema,
   proofOfAddressType: OvdDocTypeSchema,
   policyType: z.enum(["motor", "health", "travel", "sme"]).default("motor"),
+  /**
+   * FG CKYC correlation key (`PR_xxx`) returned by VerifyCKYC. FG's UploadDocBytes
+   * requires it to attach the document to the pending KYC case; other vendors ignore it.
+   */
+  proposalId: z.string().optional(),
 });
 
 export type OvdRequest = z.infer<typeof OvdRequestSchema>;
@@ -78,6 +83,8 @@ export const OvdResultSchema = z.object({
   isKycSuccess: z.boolean(),
   /** Vendor's verbatim reason when the uploaded documents were rejected. */
   displayMessage: z.string().optional(),
+  /** FG CKYC proposal id echoed back so the caller can poll GetKycStatus for the number. */
+  proposalId: z.string().optional(),
   _rawResponse: z.unknown().optional(),
 });
 

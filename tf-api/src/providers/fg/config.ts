@@ -20,14 +20,16 @@ export const FG_CAPABILITIES: ReadonlySet<VehicleCategory> = new Set([
 ]);
 
 /**
- * Quote, proposal, CKYC and issuance are wired. policyStatus / COI remain
- * deferred — declaring an operation here without an implementation would make
- * the capability type-guards lie (see insurance-provider.ts).
+ * Quote, proposal, CKYC, OVD (UploadDocBytes) and issuance are wired.
+ * policyStatus / COI remain deferred — declaring an operation here without an
+ * implementation would make the capability type-guards lie (see
+ * insurance-provider.ts).
  */
 const FG_BASE_OPERATIONS: ProviderOperation[] = [
   "quote",
   "proposal",
   "ckyc",
+  "ovd",
   "issuance",
   "renewal",
   "inspection",

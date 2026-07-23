@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { fgVerifyCkyc, fgGetCkycStatus } from "../ckyc.ts";
+import { fgVerifyCkyc, fgGetCkycStatus, fgUploadDocBytes, fgCkycDocType } from "../ckyc.ts";
 import { FgProvider } from "../fg.provider.ts";
 import type { FgConfig } from "../config.ts";
-import type { CkycRequest } from "@/contracts/kyc.ts";
+import type { CkycRequest, OvdRequest, OvdFile } from "@/contracts/kyc.ts";
 import type { ProviderContext } from "@/providers/insurance-provider.ts";
 
 const config = {
@@ -205,5 +205,128 @@ describe("FG token 401 retry", () => {
       .mock.calls.map(([, init]) => init.headers.Authorization);
     expect(auths).toEqual(["Bearer tok1", "Bearer tok2", "Bearer tok3"]);
     expect(mints).toBe(3);
+  });
+});
+
+describe("FG UploadDocBytes", () => {
+  it("posts {req_id, proposal_id, doc_type, doc_base64} to /Verify/UploadDocBytes", async () => {
+    const fetchMock = mockFetch({
+      extracted_data: { name: "BIRESHWAR", dob: "17-01-2001", address: "C-38 …" },
+      doc_type: "aadhar",
+      image_quality: "good",
+      req_id: "REQ_1",
+      success: true,
+      error_message: "",
+      verify_data: { status: true, code: 200, message: "" },
+      proposal_id: "PR_OX61LYNZVO",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const r = await fgUploadDocBytes(
+      config,
+      { reqId: "REQ_1", proposalId: "PR_OX61LYNZVO", docType: "pdf", docBase64: "JVBERi0=" },
+      "tok",
+    );
+
+    const calls = (fetchMock as unknown as { mock: { calls: [string, { body: string; headers: Record<string, string> }][] } }).mock.calls;
+    const [url, init] = calls[0]!;
+    expect(url).toBe("https://uat.example.com:8243/GCKYC/3.0.0/Verify/UploadDocBytes");
+    expect(init.headers.Token).toBe("sub-token");
+    expect(init.headers.Authorization).toBe("Bearer tok");
+    expect(JSON.parse(init.body)).toEqual({
+      req_id: "REQ_1",
+      proposal_id: "PR_OX61LYNZVO",
+      doc_type: "pdf",
+      doc_base64: "JVBERi0=",
+    });
+    expect(r.isVerified).toBe(true);
+    expect(r.extractedName).toBe("BIRESHWAR");
+    expect(r.imageQuality).toBe("good");
+    expect(r.proposalId).toBe("PR_OX61LYNZVO");
+  });
+
+  it("treats a rejected document (verify_data.status false, code 422) as not verified", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch({
+        extracted_data: { name: null },
+        doc_type: "aadhar",
+        image_quality: null,
+        req_id: "REQ_2",
+        success: true,
+        error_message: "",
+        verify_data: { status: false, code: 422, message: "Invalid Aadhaar Number" },
+        proposal_id: "PR_2",
+      }),
+    );
+    const r = await fgUploadDocBytes(
+      config,
+      { reqId: "REQ_2", proposalId: "PR_2", docType: "aadhar", docBase64: "AAAA" },
+      "tok",
+    );
+    expect(r.isVerified).toBe(false);
+    expect(r.message).toBe("Invalid Aadhaar Number");
+    expect(r.proposalId).toBe("PR_2");
+  });
+
+  it("fgCkycDocType maps pdf mime to 'pdf' and Aadhaar image to 'aadhar'", () => {
+    expect(fgCkycDocType("application/pdf", "AADHAAR")).toBe("pdf");
+    expect(fgCkycDocType("image/jpeg", "AADHAAR")).toBe("aadhar");
+    expect(fgCkycDocType("image/png", "PAN")).toBe("pan");
+  });
+});
+
+describe("FgProvider.initiateOvd", () => {
+  const ovdReq: OvdRequest = {
+    transactionId: "0000771450",
+    proofOfIdentityType: "AADHAAR",
+    proofOfAddressType: "AADHAAR",
+    policyType: "motor",
+    proposalId: "PR_OX61LYNZVO",
+  } as OvdRequest;
+
+  const file: OvdFile = {
+    fieldName: "proofOfIdentity",
+    originalName: "aadhaar.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("hello-doc"),
+  };
+
+  it("uploads the document base64 and maps a verified result to isKycSuccess", async () => {
+    const fetchMock = mockFetch({
+      extracted_data: { name: "John Doe" },
+      doc_type: "aadhar",
+      image_quality: "good",
+      req_id: "test",
+      success: true,
+      error_message: "",
+      verify_data: { status: true, code: 200, message: "" },
+      proposal_id: "PR_OX61LYNZVO",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = new FgProvider({ config, ckycTokenProvider: async () => "tok" });
+    const r = await provider.initiateOvd(ovdReq, [file], { requestId: "test" } as ProviderContext);
+
+    const calls = (fetchMock as unknown as { mock: { calls: [string, { body: string }][] } }).mock.calls;
+    const [url, init] = calls[0]!;
+    expect(url).toBe("https://uat.example.com:8243/GCKYC/3.0.0/Verify/UploadDocBytes");
+    const sent = JSON.parse(init.body);
+    expect(sent.proposal_id).toBe("PR_OX61LYNZVO");
+    expect(sent.doc_type).toBe("pdf");
+    expect(sent.doc_base64).toBe(Buffer.from("hello-doc").toString("base64"));
+    expect(r.isKycSuccess).toBe(true);
+    expect(r.customerName).toBe("John Doe");
+    expect(r.proposalId).toBe("PR_OX61LYNZVO");
+    expect(r.kycId).toBe("PR_OX61LYNZVO");
+  });
+
+  it("rejects when the CKYC proposalId is missing", async () => {
+    const provider = new FgProvider({ config, ckycTokenProvider: async () => "tok" });
+    await expect(
+      provider.initiateOvd({ ...ovdReq, proposalId: undefined } as OvdRequest, [file], {
+        requestId: "test",
+      } as ProviderContext),
+    ).rejects.toThrow(/proposalId/i);
   });
 });
