@@ -1,6 +1,6 @@
-import { XMLBuilder } from "fast-xml-parser";
 import type { MotorQuoteRequest, MotorFullQuoteRequest } from "@/contracts/quote-request.ts";
 import type { PolicyIssuanceRequest } from "@/contracts/policy.ts";
+import { AppError } from "@/errors/app-error.ts";
 import { FUEL_MAP, resolveContract } from "./config.ts";
 
 /** Master codes resolved (DB or pass-through) before building a payload. */
@@ -28,44 +28,15 @@ export interface FgPayloadMeta {
   branchCode: string;
 }
 
-// ─── Endpoints + SOAP envelope (XML gateway) ──────────────────────────────────
-// FG's motor API is SOAP/XML on /MotorNB/1.0.0 (the JSON /MotorAPI endpoint is
-// non-functional in UAT). The Root payload is XML-serialized inside the envelope.
+// ─── Endpoints (JSON gateway) ────────────────────────────────────────────────
+// Generali Central motor new-business is JSON on /MotorAPI/1.0.0. The Root
+// payload is sent as the JSON request body (was XML-in-CDATA under SOAP).
 
 export const endpoints = {
-  getQuote: () => `/MotorNB/1.0.0/GetQuote`,
-  createProposal: () => `/MotorNB/1.0.0/CreateProposal`,
-  issueProposal: () => `/MotorNB/1.0.0/PolicyIssuance`,
+  getQuote: () => `/MotorAPI/1.0.0/GetQuote`,
+  createProposal: () => `/MotorAPI/1.0.0/CreateProposal`,
+  issueProposal: () => `/MotorAPI/1.0.0/IssueProposal`,
 };
-
-const SOAP_METHODS = {
-  getQuote: "GetQuote",
-  createProposal: "CreateProposal",
-  issueProposal: "PolicyIssuance_Vendors",
-} as const;
-
-export const SOAP_ACTIONS = {
-  getQuote: "http://tempuri.org/IService/GetQuote",
-  createProposal: "http://tempuri.org/IService/CreateProposal",
-  issueProposal: "http://tempuri.org/IService/PolicyIssuance_Vendors",
-} as const;
-
-export type FgOperation = keyof typeof SOAP_METHODS;
-
-const xmlBuilder = new XMLBuilder({ ignoreAttributes: true, suppressEmptyNode: false });
-
-/** Wraps the Root payload object as XML inside FG's SOAP envelope. */
-export function buildSoapEnvelope(operation: FgOperation, root: Record<string, unknown>): string {
-  const method = SOAP_METHODS[operation];
-  const rootXml = xmlBuilder.build({ Root: root });
-  return (
-    `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tem="http://tempuri.org/">` +
-    `<soapenv:Header/><soapenv:Body><tem:${method}>` +
-    `<tem:Product>MOTOR</tem:Product><tem:systemname></tem:systemname>` +
-    `<tem:XML><![CDATA[${rootXml}]]></tem:XML>` +
-    `</tem:${method}></soapenv:Body></soapenv:Envelope>`
-  );
-}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -413,7 +384,7 @@ function policyHeader(
     PolicyEndDate: end,
     AgentCode: meta.agentCode,
     BranchCode: meta.branchCode,
-    strPolicyQuoteNumber: opts.quoteNo ?? "",
+    strpolicyquoteNumber: opts.quoteNo ?? "",
     MajorClass: "MOT",
     ContractType: contractType,
     METHOD: method,
@@ -460,6 +431,13 @@ export function buildCreateProposalPayload(
   requestId: string,
 ): { url: string; payload: Record<string, unknown> } {
   const { proposer, address, vehicle } = req;
+  if (!req.ckyc || !req.ckyc.trim()) {
+    throw new AppError(
+      422,
+      "FG requires a completed CKYC before proposal. Complete KYC and resubmit with the CKYC number.",
+      "KYC_INCOMPLETE",
+    );
+  }
   const idv = req.idvValue && req.idvValue > 0 ? String(req.idvValue) : "0";
 
   const vehicleBlock = buildVehicle(req, codes, {
@@ -548,7 +526,6 @@ export function buildIssueProposalPayload(
   const payload = {
     Uid: requestId,
     VendorCode: meta.vendorCode,
-    VendorUserId: meta.vendorCode,
     PolicyHeader: policyHeader,
     Receipt: {
       UniqueTranKey: r.uniqueTranKey,

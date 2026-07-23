@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { MotorQuoteRequestSchema, MotorFullQuoteRequestSchema } from "@/contracts/quote-request.ts";
+import { PolicyIssuanceRequestSchema } from "@/contracts/policy.ts";
 import {
   buildGetQuotePayload,
   buildCreateProposalPayload,
+  buildIssueProposalPayload,
   toFgDate,
   type FgResolvedCodes,
   type FgPayloadMeta,
@@ -48,6 +50,7 @@ const fullQuote = (over: Record<string, unknown> = {}) =>
     },
     vehicle: { engineNumber: "ENG123", chassisNumber: "CHS123" },
     idvValue: 738908,
+    ckyc: "10097186172315",
     ...over,
   });
 
@@ -61,7 +64,7 @@ const vehicle = (p: { payload: Record<string, unknown> }) =>
 describe("buildGetQuotePayload", () => {
   it("builds a 4W rollover comprehensive ENQ payload (FPV)", () => {
     const p = buildGetQuotePayload(baseQuote(), codes, meta, "req-1");
-    expect(p.url).toBe("/MotorNB/1.0.0/GetQuote");
+    expect(p.url).toBe("/MotorAPI/1.0.0/GetQuote");
     expect(header(p).METHOD).toBe("ENQ");
     expect(header(p).ContractType).toBe("FPV");
     expect(risk(p).RiskType).toBe("FPV");
@@ -140,14 +143,19 @@ describe("buildGetQuotePayload", () => {
     expect(prev.RollOver).toBe("Y");
     expect(prev.NewVehicle).toBe("N");
   });
+
+  it("pins the emitted Vehicle.FuelType to the FG code (coded, not the full word)", () => {
+    const p = buildGetQuotePayload(baseQuote({ fuelType: "petrol" }), codes, meta, "r");
+    expect(vehicle(p).FuelType).toBe("P");
+  });
 });
 
 describe("buildCreateProposalPayload", () => {
   it("builds a CRT payload referencing the prior quote number", () => {
     const p = buildCreateProposalPayload(fullQuote(), codes, meta, "req-2");
-    expect(p.url).toBe("/MotorNB/1.0.0/CreateProposal");
+    expect(p.url).toBe("/MotorAPI/1.0.0/CreateProposal");
     expect(header(p).METHOD).toBe("CRT");
-    expect(header(p).strPolicyQuoteNumber).toBe("0000771450");
+    expect(header(p).strpolicyquoteNumber).toBe("0000771450");
     const client = p.payload.Client as Record<string, unknown>;
     expect(client.FirstName).toBe("Chandrakant");
     expect(client.PANNo).toBe("ATYPK2714N");
@@ -204,10 +212,58 @@ describe("buildCreateProposalPayload", () => {
     expect(cpa.CPANomName).toBe("Asha");
     expect(cpa.CPANomAge).toBe("30");
   });
+
+  it("throws KYC_INCOMPLETE when CKYCNo is missing at proposal", () => {
+    expect(() => buildCreateProposalPayload(fullQuote({ ckyc: "" }), codes, meta, "r")).toThrowError(
+      /CKYC/i,
+    );
+    try {
+      buildCreateProposalPayload(fullQuote({ ckyc: "" }), codes, meta, "r");
+    } catch (err) {
+      expect((err as { code?: string }).code).toBe("KYC_INCOMPLETE");
+    }
+  });
+
+  it("carries the CKYCNo into the Client block", () => {
+    const p = buildCreateProposalPayload(fullQuote(), codes, meta, "r");
+    expect((p.payload.Client as Record<string, unknown>).CKYCNo).toBe("10097186172315");
+  });
 });
 
 describe("toFgDate", () => {
   it("converts ISO to DD/MM/YYYY", () => {
     expect(toFgDate("2026-03-11")).toBe("11/03/2026");
+  });
+});
+
+describe("buildIssueProposalPayload", () => {
+  const issuanceReq = () =>
+    PolicyIssuanceRequestSchema.parse({
+      quoteNo: "0000112799",
+      clientId: "80036976",
+      vehicleCategory: "fourWheeler",
+      policyStartDate: "2026-05-14",
+      policyEndDate: "2029-05-13",
+      receipt: {
+        uniqueTranKey: "PB1436423646497",
+        transactionDate: "14/05/2026",
+        receiptType: "IVR",
+        amount: 26652,
+        tranRefNo: "PB814363724334018",
+        tranRefNoDate: "14/05/2026",
+        pgType: "PAYU",
+      },
+    });
+
+  it("targets IssueProposal with a minimal body (no VendorUserId, no Client/Risk)", () => {
+    const p = buildIssueProposalPayload(issuanceReq(), meta, "req-9");
+    expect(p.url).toBe("/MotorAPI/1.0.0/IssueProposal");
+    expect(p.payload).not.toHaveProperty("VendorUserId");
+    expect(p.payload).not.toHaveProperty("Risk");
+    expect(p.payload).not.toHaveProperty("Client");
+    const ph = p.payload.PolicyHeader as Record<string, unknown>;
+    expect(ph.strPolicyQuoteNumber).toBe("0000112799");
+    expect(ph.ClientID).toBe("80036976");
+    expect((p.payload.Receipt as Record<string, unknown>).Amount).toBe("26652");
   });
 });

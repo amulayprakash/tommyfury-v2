@@ -58,7 +58,7 @@ class FixtureTransport implements FgTransport {
   async request(args: { method: string; url: string }): Promise<unknown> {
     const { url } = args;
     if (url.includes("/CreateProposal")) return proposalFixture;
-    if (url.includes("/PolicyIssuance")) return issuanceFixture;
+    if (url.includes("/IssueProposal")) return issuanceFixture;
     if (url.includes("/GetQuote")) return this.failBody ?? quoteFixture;
     throw new Error(`unmapped url: ${url}`);
   }
@@ -126,6 +126,7 @@ describe("FG integration (fixtures)", () => {
       state: "MAHARASHTRA",
     },
     vehicle: { engineNumber: "ENG1", chassisNumber: "CHS1" },
+    ckyc: "10097186172315",
   };
 
   it("binds a proposal (CreateProposal) returning the ClientId", async () => {

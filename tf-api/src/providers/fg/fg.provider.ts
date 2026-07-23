@@ -46,8 +46,6 @@ import {
   buildGetQuotePayload,
   buildCreateProposalPayload,
   buildIssueProposalPayload,
-  buildSoapEnvelope,
-  SOAP_ACTIONS,
   type FgResolvedCodes,
   type FgPayloadMeta,
 } from "./mapper.ts";
@@ -223,8 +221,7 @@ export class FgProvider
         method: "POST",
         url: this.url(url),
         token,
-        xmlBody: buildSoapEnvelope("getQuote", payload),
-        soapAction: SOAP_ACTIONS.getQuote,
+        jsonBody: payload,
       }),
     );
     assertFgSuccess(extractRoot(body), "get-quote");
@@ -263,8 +260,7 @@ export class FgProvider
         method: "POST",
         url: this.url(url),
         token,
-        xmlBody: buildSoapEnvelope("createProposal", payload),
-        soapAction: SOAP_ACTIONS.createProposal,
+        jsonBody: payload,
       }),
     );
     assertFgSuccess(extractRoot(body), "create-proposal");
@@ -281,7 +277,7 @@ export class FgProvider
     ctx: ProviderContext,
   ): Promise<PolicyIssuanceResult> {
     // Final step: bind the collected payment (Receipt) to the prior proposal
-    // (ClientID + QuotationNo) and issue the real policy. Same SOAP transport.
+    // (ClientID + QuotationNo) and issue the real policy. Same JSON transport.
     const { url, payload } = buildIssueProposalPayload(req, this.meta, ctx.requestId);
 
     const body = await this.withAuthRetry(this.motorToken, (token) =>
@@ -289,8 +285,7 @@ export class FgProvider
         method: "POST",
         url: this.url(url),
         token,
-        xmlBody: buildSoapEnvelope("issueProposal", payload),
-        soapAction: SOAP_ACTIONS.issueProposal,
+        jsonBody: payload,
       }),
     );
     assertFgSuccess(extractRoot(body), "policy-issuance");
