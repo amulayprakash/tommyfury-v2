@@ -41,8 +41,13 @@ const config: FgConfig = {
   payment: {
     url: "https://pay.example.com/WebAggPayNew.aspx",
     paymentOption: "3",
+    vendor: "1",
     responseUrl: "https://app.example.com/api/v1/fg/payment/callback",
     checksumSecret: "test-secret",
+    reconUrl: "https://pg.example.com/comservice.asmx/FetchTRNDetails",
+    reconSource: "webaggregator",
+    reconKey: "tid",
+    reconEnforce: false,
   },
   inspection: {
     baseUrl: "https://livechek.example.com/api",

@@ -92,13 +92,22 @@ const envSchema = z.object({
   /** Health agent code (samples use 60000272; falls back to FG_AGENT_CODE). */
   FG_HEALTH_AGENT_CODE: z.string().optional(),
 
-  // ── FG Web-Aggregator payment gateway (checksum-signed form POST) ──
-  /** Hosted payment page the signed form POSTs to (WebAggPayNew.aspx). */
+  // ── FG Web-Aggregator payment gateway (checksum-signed form POST, v1.41) ──
+  /** Hosted payment page the signed form POSTs to (WebAggPayNew.aspx, v1.41). */
   FG_PAYMENT_URL: z
     .string()
-    .default("https://fgnluat.fggeneral.in/Ecom_UAT/WEBAPPLN/UI/Common/WebAggPayNew.aspx"),
-  /** PaymentOption code (per PG Parameter details — e.g. "3"). */
+    .default(
+      "https://digiuat.generalicentralinsurance.com/Ecom_UAT/WEBAPPLN/UI/Common/WebAggPayNew.aspx",
+    ),
+  /** PaymentOption code: 1=PayTm, 2=HDFC, 3=PayU (PayU is mandated for web-agg). */
   FG_PAYMENT_OPTION: z.string().default("3"),
+  /**
+   * Integration mode flag sent as the `Vendor` field. "1" = PHP mode (FG returns
+   * plaintext result params on the ResponseURL; checksum appends a 12th timestamp
+   * field). Blank/"0" = .NET mode (DES-encrypted ResponseData; 11-field checksum).
+   * Default PHP because OpenSSL 3 disables legacy single-DES on this runtime.
+   */
+  FG_PAYMENT_VENDOR: z.string().default("1"),
   /** Absolute URL FG redirects back to after payment (our /payment/callback). */
   FG_PAYMENT_RESPONSE_URL: z.string().optional(),
   /** Reserved: FG's documented CheckSum is unsalted SHA-256 (see payment.ts). */
@@ -106,6 +115,39 @@ const envSchema = z.object({
   /** Absolute web URLs the callback 302-redirects the browser to. */
   FG_PAYMENT_SUCCESS_URL: z.string().optional(),
   FG_PAYMENT_FAILURE_URL: z.string().optional(),
+  /**
+   * Server-side reconciliation SOAP endpoint (FetchTRNDetails), v1.41. Defaults to
+   * the PDF-documented REST-style slash form (`.../comservice.asmx/FetchTRNDetails`).
+   * The `?op=FetchTRNDetails` form and the schema-stub method `GetQuickPayDetailsNew`
+   * are unconfirmed alternatives — see open confirmations before changing this.
+   */
+  FG_PAYMENT_RECON_URL: z
+    .string()
+    .default(
+      "https://pg.generalicentralinsurance.com/quick_pay/quickpay/comservice.asmx/FetchTRNDetails",
+    ),
+  /** `source` value in the FetchTRNDetails request (web-agg transactions). */
+  FG_PAYMENT_RECON_SOURCE: z.string().default("webaggregator"),
+  /**
+   * Which id `FetchTRNDetails` is keyed by: "tid" = our TransactionID
+   * (== quoteNo == pg.tid); "wsPId" = FG's PG txn id (WS_P_ID). UNVERIFIED — the
+   * v1.41 PDF sample ids (QP536987, T497555205) look like PG/quickpay ids, so if
+   * recon is keyed by WS_P_ID a "tid" guess returns "not found" for every real
+   * txn. Defaults to "tid" (our current assumption); confirm on live UAT before
+   * turning on FG_PAYMENT_RECON_ENFORCE (see open confirmations).
+   */
+  FG_PAYMENT_RECON_KEY: z.enum(["tid", "wsPId"]).default("tid"),
+  /**
+   * Hard-block issuance when recon fails / returns "not found". Defaults to
+   * **false** until FG_PAYMENT_RECON_KEY is confirmed on UAT — otherwise a wrong
+   * key guess would block 100% of issuance. While false, the callback LOGS both
+   * ids (tid + WS_P_ID) and the recon outcome, then proceeds to issuance. Flip to
+   * "true" only once the recon key + amount/id matching are verified live.
+   */
+  FG_PAYMENT_RECON_ENFORCE: z
+    .string()
+    .default("false")
+    .transform((v) => v === "true"),
 
   // ── LiveChek break-in / inspection (third-party REST) ──
   LIVECHEK_BASE_URL: z.string().default("https://newapi.test.livechek.com/api"),

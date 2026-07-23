@@ -58,10 +58,20 @@ export interface FgProductAuth {
 export interface FgPaymentConfig {
   url: string;
   paymentOption: string;
+  /** "1"=PHP (plaintext response, 12-field checksum); ""/"0"=.NET (DES, 11-field). */
+  vendor: string;
   responseUrl?: string;
   checksumSecret?: string;
   successUrl?: string;
   failureUrl?: string;
+  /** FetchTRNDetails SOAP recon endpoint. */
+  reconUrl: string;
+  /** `source` sent in the recon request (e.g. "webaggregator"). */
+  reconSource: string;
+  /** Which pg id FetchTRNDetails is keyed by: "tid" (our TransactionID) or "wsPId" (WS_P_ID). */
+  reconKey: "tid" | "wsPId";
+  /** Hard-block issuance on a recon miss. false = log both ids + outcome and proceed. */
+  reconEnforce: boolean;
 }
 
 export interface FgInspectionConfig {
@@ -134,10 +144,15 @@ export function loadFgConfig(): FgConfig {
     payment: {
       url: env.FG_PAYMENT_URL,
       paymentOption: env.FG_PAYMENT_OPTION,
+      vendor: env.FG_PAYMENT_VENDOR,
       responseUrl: env.FG_PAYMENT_RESPONSE_URL,
       checksumSecret: env.FG_PAYMENT_CHECKSUM_SECRET,
       successUrl: env.FG_PAYMENT_SUCCESS_URL,
       failureUrl: env.FG_PAYMENT_FAILURE_URL,
+      reconUrl: env.FG_PAYMENT_RECON_URL,
+      reconSource: env.FG_PAYMENT_RECON_SOURCE,
+      reconKey: env.FG_PAYMENT_RECON_KEY,
+      reconEnforce: env.FG_PAYMENT_RECON_ENFORCE,
     },
     inspection: {
       baseUrl: env.LIVECHEK_BASE_URL.replace(/\/$/, ""),
