@@ -1256,7 +1256,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Renewal quote — price an existing policy (FG motorRenewal) */
+        /** Renewal quote — fetch the expiring-policy snapshot (FG RenewalModify) */
         post: {
             parameters: {
                 query?: never;
@@ -1277,6 +1277,137 @@ export interface paths {
             };
             responses: {
                 /** @description Renewal quote */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            quoteNo: string;
+                            transactionId?: string;
+                            requestId: string;
+                            providerSlug: string;
+                            insurerId?: string;
+                            insurerName?: string;
+                            insurerLogoUrl?: string;
+                            policyType: string;
+                            vehicleCategory: string;
+                            idvValue: number;
+                            minIdv?: number;
+                            maxIdv?: number;
+                            policyStartDate?: string;
+                            policyEndDate?: string;
+                            isInspectionRequired?: boolean;
+                            basicOdPremium: number;
+                            thirdPartyPremium: number;
+                            addonPremiums: {
+                                zeroDep?: number;
+                                engineProtect?: number;
+                                rsa?: number;
+                                tyreProtect?: number;
+                                rimProtect?: number;
+                                rti?: number;
+                                consumables?: number;
+                                keyProtect?: number;
+                                garageCash?: number;
+                                lossOfBelongings?: number;
+                                batteryProtect?: number;
+                                drivingAccessories?: number;
+                                ncbProtection?: number;
+                                paOwner?: number;
+                                paUnnamedPassenger?: number;
+                                paNamedPassenger?: number;
+                                legalLiabilityPaidDriver?: number;
+                            };
+                            discounts: {
+                                ncbPercent?: number;
+                                ncbAmount?: number;
+                                aaaMembership?: number;
+                                antiTheft?: number;
+                                voluntaryDeductible?: number;
+                                ownDamageDiscount?: number;
+                                payU?: number;
+                            };
+                            totalAddonPremium: number;
+                            totalDiscount: number;
+                            netPremium: number;
+                            /** @default 18 */
+                            serviceTaxPercent: number;
+                            serviceTaxAmount: number;
+                            grossPremium: number;
+                            odDiscountPercent?: number;
+                            policyNumber?: string;
+                            paymentUrl?: string;
+                            contractDetails?: {
+                                [key: string]: unknown;
+                            };
+                            _rawResponse?: unknown;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/{provider}/motor/renewal/proposal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Renewal proposal — apply the modification delta and bind the premium (FG RenewalModify) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    provider: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        productCode: string;
+                        previousPolicyNo: string;
+                        proposalNo: string;
+                        clientCode: string;
+                        startDate: string;
+                        expiryDate: string;
+                        ckycNo?: string;
+                        ckycRefNo?: string;
+                        agentCode: string;
+                        branch: string;
+                        /** @enum {string} */
+                        coverCode: "CO" | "OD" | "LO";
+                        vehicleIdv: number;
+                        discountPercentage: number;
+                        /** @default [] */
+                        addonCodes?: string[];
+                        idvOfCngOrLpg?: number;
+                        electricalAccessoriesValues?: string;
+                        nonElectricalAccessoriesValues?: string;
+                        imt10?: string;
+                        imt15?: string;
+                        imt16?: string;
+                        imt20?: string;
+                        imt23?: string;
+                        imt28?: string;
+                        imt29?: string;
+                        inspectionNo?: string;
+                        inspectionDate?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Renewal proposal (bound premium) */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -1376,11 +1507,11 @@ export interface paths {
                 content: {
                     "application/json": {
                         policyNo: string;
-                        quoteNo: string;
-                        expiryDate?: string;
+                        clientId: string;
+                        proposalNo: string;
+                        agentCode: string;
+                        branchCode: string;
                         registrationNo?: string;
-                        ckycNo?: string;
-                        ckycRefNo?: string;
                         receipt: {
                             uniqueTranKey: string;
                             transactionDate: string;
@@ -2853,13 +2984,43 @@ export interface components {
             expiryDate?: string;
             registrationNo?: string;
         };
-        RenewalCreatePolicyRequest: {
-            policyNo: string;
-            quoteNo: string;
-            expiryDate?: string;
-            registrationNo?: string;
+        RenewalProposalRequest: {
+            productCode: string;
+            previousPolicyNo: string;
+            proposalNo: string;
+            clientCode: string;
+            startDate: string;
+            expiryDate: string;
             ckycNo?: string;
             ckycRefNo?: string;
+            agentCode: string;
+            branch: string;
+            /** @enum {string} */
+            coverCode: "CO" | "OD" | "LO";
+            vehicleIdv: number;
+            discountPercentage: number;
+            /** @default [] */
+            addonCodes: string[];
+            idvOfCngOrLpg?: number;
+            electricalAccessoriesValues?: string;
+            nonElectricalAccessoriesValues?: string;
+            imt10?: string;
+            imt15?: string;
+            imt16?: string;
+            imt20?: string;
+            imt23?: string;
+            imt28?: string;
+            imt29?: string;
+            inspectionNo?: string;
+            inspectionDate?: string;
+        };
+        RenewalCreatePolicyRequest: {
+            policyNo: string;
+            clientId: string;
+            proposalNo: string;
+            agentCode: string;
+            branchCode: string;
+            registrationNo?: string;
             receipt: {
                 uniqueTranKey: string;
                 transactionDate: string;
