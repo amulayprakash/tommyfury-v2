@@ -55,6 +55,8 @@ export interface FgProductAuth {
   clientBasic: string;
   /** Optional static gateway subscription key (CKYC `Token` header). */
   subscriptionToken?: string;
+  /** CKYC-only: return URL for the self-hosted redirect bridge (VISoF_Return_URL). */
+  returnUrl?: string;
 }
 
 export interface FgPaymentConfig {
@@ -130,6 +132,7 @@ export function loadFgConfig(): FgConfig {
       tokenUrl: env.FG_CKYC_TOKEN_URL ?? env.FG_TOKEN_URL,
       clientBasic: env.FG_CKYC_CLIENT_BASIC ?? env.FG_CLIENT_BASIC!,
       subscriptionToken: env.FG_CKYC_SUBSCRIPTION_TOKEN,
+      returnUrl: env.FG_CKYC_RETURN_URL,
     },
     renewal: {
       baseUrl: env.FG_RENEWAL_BASE_URL.replace(/\/$/, ""),

@@ -79,6 +79,8 @@ const envSchema = z.object({
   FG_CKYC_CLIENT_BASIC: z.string().optional(),
   /** Static gateway subscription key sent as the `Token` header on CKYC calls. */
   FG_CKYC_SUBSCRIPTION_TOKEN: z.string().optional(),
+  /** Absolute URL the eKYC portal returns the browser to after manual KYC (redirect bridge VISoF_Return_URL). */
+  FG_CKYC_RETURN_URL: z.string().optional(),
 
   // ── FG Motor Renewal (motorRenewal/1.0.0) — JSON product on legacy host ──
   FG_RENEWAL_BASE_URL: z
