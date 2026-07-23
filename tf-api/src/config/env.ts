@@ -82,10 +82,24 @@ const envSchema = z.object({
   /** Absolute URL the eKYC portal returns the browser to after manual KYC (redirect bridge VISoF_Return_URL). */
   FG_CKYC_RETURN_URL: z.string().optional(),
 
-  // ── FG Motor Renewal (motorRenewal/1.0.0) — JSON product on legacy host ──
+  // ── FG Motor Renewal (Renewal/1.0.0/RenewalModify) — full-JSON 3-op product ──
+  // Rebranded Generali Central gateway. Base is the RenewalModify context; the
+  // adapter appends /ModifyRenewalQuote, /ModifyRenewalProposal,
+  // /ModifyRenewalPolicyIssuance. Separate WSO2 product `GCMotorRenewalAPI`
+  // (own subscription/token, password grant). PROD URL is not in the kit yet —
+  // confirm with FG before go-live.
+  //
+  // ⚠ FG_RENEWAL_CLIENT_BASIC MUST be populated with the `GCMotorRenewalAPI`
+  // subscription's consumer Basic (UAT value in fg-rebranding-notes.md §9) — it
+  // is a DIFFERENT WSO2 product from motor. config.ts resolves the renewal creds
+  // as `env.FG_RENEWAL_CLIENT_BASIC ?? env.FG_CLIENT_BASIC` and
+  // `env.FG_RENEWAL_TOKEN_URL ?? env.FG_TOKEN_URL`, so if FG_RENEWAL_CLIENT_BASIC
+  // is left unset the renewal token is silently minted against the MOTOR
+  // subscription and every RenewalModify call 401/403s. Set FG_RENEWAL_TOKEN_URL
+  // too if the renewal token host differs from the motor token host.
   FG_RENEWAL_BASE_URL: z
     .string()
-    .default("https://uat-internal-apigw.futuregenerali.in:8243/motorRenewal/1.0.0/TCS-Renewal/API/MotorRenewal"),
+    .default("https://uat-internal-apigw.generalicentralinsurance.com:8243/Renewal/1.0.0/RenewalModify"),
   FG_RENEWAL_TOKEN_URL: z.string().optional(),
   FG_RENEWAL_CLIENT_BASIC: z.string().optional(),
 

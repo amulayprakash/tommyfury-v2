@@ -97,7 +97,7 @@ export interface FgConfig {
   credentialSetId: string;
   /** CKYC product (GCKYC/3.0.0) — falls back to motor token URL/client when unset. */
   ckyc: FgProductAuth;
-  /** Motor renewal product (motorRenewal/1.0.0). */
+  /** Motor renewal product (Renewal/1.0.0/RenewalModify — full-JSON 3-op). */
   renewal: FgProductAuth;
   /** Health products (TCS BO Service) — own WSO2 subscription + agent code. */
   health: FgHealthAuth;
