@@ -1,0 +1,37 @@
+{
+  "UID": "29575830657852659579",
+  "PreviousPolicyNo": "VD731720",
+  "ProposalNo": "00VD731720",
+  "ClientID": "72782626",
+  "AgentCode": "60084677",
+  "TotalPremium": 6595.71,
+  "gst": 1187.23,
+  "ODPremium": {
+    "GrossPremium": 4501.71,
+    "BasicIDVOD": 8184.92,
+    "TotalAddon": 0.0,
+    "NCB": 3683.21,
+    "NCBPercntage": 0.0,
+    "IMT10": 0.0,
+    "LoadingDiscount": 0.0,
+    "IMT23": 0.0,
+    "CNG": 0.0,
+    "DiscountPercentage": 0.0,
+    "VehicaleIDV": 0.0,
+    "ElectricalAccessoriesValues": 0.0,
+    "NonElectricalAccessoriesValues": 0.0,
+    "AddonPrice": []
+  },
+  "TPPremium": {
+    "GrossPremium": 2094.0,
+    "BasicIDVTP": 2094.0,
+    "CPA": 0.0,
+    "IMT15": 0.0,
+    "IMT16": 0.0,
+    "IMT28": 0.0,
+    "IMT29": 0.0,
+    "PAPD": 0.0,
+    "CNG": 0.0,
+    "IMT20": 0.0
+  }
+}

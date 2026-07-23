@@ -1,0 +1,79 @@
+{
+  "Status": "Success",
+  "UID": "60005682276951575996",
+  "FinalPremium": "7468.80",
+  "ServiceTax": "988.52",
+  "PolicyHolderDeatils": {
+    "ClientID": "72782626",
+    "CKYCStatus": "",
+    "FirstName": "PRAKASH",
+    "LastName": "KUMAR",
+    "DOB": "02/01/1981",
+    "PermanentAddress": {
+      "Address1": "PANDAUL",
+      "Address2": "MADHUBANI",
+      "Address3": "MADHUBANI",
+      "Pincode": "847234",
+      "City": "MADHUBANI",
+      "State": "BIHAR",
+      "MobileNo": null,
+      "EmailID": null
+    },
+    "CKYCAddress": {
+      "Address1": null,
+      "Address2": null,
+      "Address3": null,
+      "Pincode": null,
+      "City": null,
+      "State": null,
+      "MobileNo": null,
+      "EmailID": null
+    }
+  },
+  "VehicleDetails": {
+    "RegistrationNO": "BR-07-AL-4168",
+    "RegistrationDate": "14/01/2020",
+    "ENgineNo": "F8DN6287045",
+    "ChassiNo": "MA3EUA61S00F35293",
+    "VehicleIDV": "256,500"
+  },
+  "OldPolicyDetails": {
+    "AgentCode": "60046470",
+    "Branch": "2J",
+    "PolicyNo": "VD731720",
+    "ProposalNo": "00VD731720",
+    "ProductCode": "FPV",
+    "CoverCode": "CO",
+    "ExipryDate": "30/12/2025"
+  },
+  "ODPremium": {
+    "GrossPremium": "3017.77",
+    "BasicIDVOD": "8184.92",
+    "TotalAddon": "1667.26",
+    "NCB": "1104.97",
+    "NCBPercntage": null,
+    "IMT10": null,
+    "LoadingDiscount": "5729.44",
+    "IMT23": null,
+    "CNG": null,
+    "DiscountPercentage": "70",
+    "VehicaleIDV": "256,500",
+    "ElectricalAccessoriesValues": "",
+    "NonElectricalAccessoriesValues": "",
+    "AddonPrice": [
+      { "Price": 1667.26, "AddOn": "FPVSTZDP" }
+    ]
+  },
+  "TPPremium": {
+    "GrossPremium": "2474",
+    "BasicIDVTP": "2094",
+    "CPA": "330",
+    "IMT15": null,
+    "IMT16": null,
+    "IMT28": "50",
+    "IMT29": null,
+    "PAPD": null,
+    "CNG": null,
+    "IMT20": null
+  }
+}

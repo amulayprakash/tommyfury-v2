@@ -1,0 +1,89 @@
+{
+  "Status": "Success",
+  "UID": "06484976770475495974",
+  "FinalPremium": "8426.08",
+  "ServiceTax": "1115.22",
+  "ErrorCode": "0",
+  "ErrorDescription": "This is Break-in case go for inspection30/12/2025",
+  "PolicyHolderDeatils": {
+    "ClientID": "75919748",
+    "CKYCStatus": "Verified",
+    "FirstName": "RAZEENA",
+    "LastName": "NISAR",
+    "DOB": "03/03/1976",
+    "PermanentAddress": {
+      "Address1": "KANKAN CHIRA",
+      "Address2": "KALATH WARD AVALUKUNNU P O",
+      "Address3": "ARYAD SOUTH",
+      "Pincode": "688006",
+      "City": "ALAPPUZHA",
+      "State": "KERALA",
+      "MobileNo": "9946686855",
+      "EmailID": "BRIGHTINSURANCE007@GMAIL.COM"
+    },
+    "CKYCAddress": {
+      "Address1": null,
+      "Address2": null,
+      "Address3": null,
+      "Pincode": null,
+      "City": null,
+      "State": null,
+      "MobileNo": null,
+      "EmailID": null
+    }
+  },
+  "VehicleDetails": {
+    "RegistrationNO": "KL-04-AQ-0721",
+    "RegistrationDate": "10/02/2020",
+    "ENgineNo": "BBYWKJ43431",
+    "ChassiNo": "MD2A95AY5KWJ47517",
+    "VehicleIDV": "114,000"
+  },
+  "OldPolicyDetails": {
+    "AgentCode": "60064625",
+    "Branch": "39",
+    "PolicyNo": "VD735683",
+    "ProposalNo": "00VD735683",
+    "ProductCode": "FCV",
+    "CoverCode": "CO",
+    "ExipryDate": "30/12/2025",
+    "TPPolicyDetails": {
+      "TPInsuranceCompanyName": "",
+      "TPPolicyExpiryDate": "",
+      "TPPolicyInceptionDate": "",
+      "TPPolicyNumber": ""
+    }
+  },
+  "ODPremium": {
+    "PreviousPolicyNCB": "35",
+    "EligiblePolicyNCB": "45",
+    "GrossPremium": "372.64",
+    "BasicIDVOD": "1472.88",
+    "TotalAddon": "0",
+    "NCB": "304.88",
+    "IMT10": null,
+    "LoadingDiscount": "883.73",
+    "IMT23": "88.37",
+    "CNG": null,
+    "DiscountPercentage": "-60",
+    "VehicaleIDV": "114,000",
+    "ElectricalAccessoriesSumInsured": "0",
+    "NonElectricalAccessoriesSumInsured": "0",
+    "ElectronicsFittings": null,
+    "NonExtraElectronicsFittings": null,
+    "CNGLPGKitIDV": null,
+    "AddonPrice": null
+  },
+  "TPPremium": {
+    "GrossPremium": "5823",
+    "BasicIDVTP": "5773",
+    "CPA": null,
+    "IMT15": null,
+    "IMT16": null,
+    "IMT28": "50",
+    "IMT29": null,
+    "PAPD": null,
+    "CNG": null,
+    "IMT20": null
+  }
+}

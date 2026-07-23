@@ -1,0 +1,7 @@
+{
+  "UID": "64169184889290159463",
+  "QuotationNo": "VD929472",
+  "Status": "Fail",
+  "ErrorCode": "Failed",
+  "ErrorDescription": "Error During Fetch Policy Details : Please pass correct policy number"
+}
