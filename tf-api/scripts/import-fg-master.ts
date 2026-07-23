@@ -12,6 +12,9 @@
  */
 import { createRequire } from "node:module";
 import { PrismaClient, Prisma } from "@prisma/client";
+import {
+  FG_SHEETS, FG_MASTER_DEFAULT_PATH, normalizeFuel, deriveZone,
+} from "./lib/fg-master-sheets.ts";
 
 const require = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -19,24 +22,9 @@ const XLSX = require("xlsx") as typeof import("xlsx");
 
 const prisma = new PrismaClient();
 
-const XLS_PATH =
-  process.env.FG_MASTER_XLS ??
-  "c:/Users/ASUS/Desktop/QUAGNITIA/dock boyz/FG API Kit/FG API Kit/TCS Motor API KIT - XML Latest Revised Rebranding/TCS Motor API KIT - XML/TCS Motor API KIT - XML/Motor field  Master.xls";
-
-const METRO_CITIES = new Set([
-  "MUMBAI",
-  "NAVI MUMBAI",
-  "THANE",
-  "DELHI",
-  "NEW DELHI",
-  "KOLKATA",
-  "CHENNAI",
-  "BANGALORE",
-  "BENGALURU",
-  "HYDERABAD",
-  "AHMEDABAD",
-  "PUNE",
-]);
+// Workbook path precedence: --xls=<path>  >  FG_MASTER_XLS env  >  new JSON-kit default.
+const argXls = process.argv.find((a) => a.startsWith("--xls="))?.split("=")[1];
+const XLS_PATH = argXls ?? process.env.FG_MASTER_XLS ?? FG_MASTER_DEFAULT_PATH;
 
 type Row = Record<string, unknown>;
 const s = (v: unknown): string => (v == null ? "" : String(v).trim());
@@ -44,21 +32,6 @@ const intOrNull = (v: unknown): number | null => {
   const n = Number(s(v).replace(/[^0-9.-]/g, ""));
   return Number.isFinite(n) && s(v).toUpperCase() !== "NULL" && s(v) !== "" ? Math.round(n) : null;
 };
-
-function normalizeFuel(raw: string): string {
-  const v = raw.toUpperCase();
-  if (v.includes("HYBRID")) return "hybrid";
-  if (v.includes("DIESEL")) return "diesel";
-  if (v.includes("BATTERY") || v.includes("ELECTRIC")) return "electric";
-  if (v.includes("CNG")) return "cng";
-  if (v.includes("LPG")) return "lpg";
-  if (v.includes("PETROL")) return "petrol";
-  return "petrol";
-}
-
-function deriveZone(city: string): string {
-  return METRO_CITIES.has(city.toUpperCase()) ? "A" : "B";
-}
 
 function maxAge(raw: string): number | null {
   const m = raw.match(/([\d.]+)/);
@@ -150,9 +123,9 @@ async function main() {
       vehicleType: s(r.VEHICLE_TYPE) || null,
     });
   };
-  for (const r of sheet("PVT Car MMV")) pushMmv(r, "fourWheeler");
-  for (const r of sheet("GCV MMV")) pushMmv(r, "commercial");
-  for (const r of sheet("PCV MMV")) pushMmv(r, "commercial");
+  for (const r of sheet(FG_SHEETS.pvtCarMmv)) pushMmv(r, "fourWheeler");
+  for (const r of sheet(FG_SHEETS.gcvMmv)) pushMmv(r, "commercial");
+  for (const r of sheet(FG_SHEETS.pcvMmv)) pushMmv(r, "commercial");
   await upsertChunked("MmvMaster(fg)", mmvRows, (r) =>
     prisma.mmvMaster.upsert({
       where: {
@@ -167,7 +140,7 @@ async function main() {
 
   // ── RTO + derived zone ──
   const rtoSeen = new Set<string>();
-  const rtoRows = sheet("RTO Code")
+  const rtoRows = sheet(FG_SHEETS.rto)
     .map((r) => {
       const code = s(r["RTO Code"]).toUpperCase();
       const city = s(r["RTO City"]) || s(r["RTO DISTRICT"]);
@@ -195,7 +168,7 @@ async function main() {
   }[] = [];
   let section: { category: string; fuelClass: string } | null = null;
   let order = 0;
-  for (const row of grid("Add On Covers")) {
+  for (const row of grid(FG_SHEETS.addOnCovers)) {
     const c0 = s(row[0]);
     const c1 = s(row[1]);
     const head = c0.toUpperCase();
@@ -221,7 +194,7 @@ async function main() {
 
   // ── Pincodes (3 sheets) ──
   const pinRows: { pincode: string; area: string; city: string; state: string }[] = [];
-  for (const name of ["Pincode Master", "Pincode Master1", "Pincode Master2"]) {
+  for (const name of FG_SHEETS.pincode) {
     for (const r of sheet(name)) {
       const pincode = s(r.PINCODE);
       if (!pincode) continue;
@@ -239,7 +212,7 @@ async function main() {
 
   // ── Occupations ──
   const occSeen = new Set<string>();
-  const occRows = sheet("Occupation Code")
+  const occRows = sheet(FG_SHEETS.occupation)
     .map((r) => ({ code: s(r["Occupation Code"]), description: s(r["Occupation Description"]).slice(0, 191) }))
     .filter((r) => r.code && !occSeen.has(r.code) && occSeen.add(r.code));
   await insertChunked("OccupationMaster", occRows, (c) =>
@@ -249,7 +222,7 @@ async function main() {
   // ── FG insurers (PreviousTPInsDtls.PreviousInsurer code for standalone OD) ──
   // TP Policy Insurer sheet: [TPCompanyDescription, ClientCode].
   const insSeen = new Set<string>();
-  const insurerRows = grid("TP Policy Insurer")
+  const insurerRows = grid(FG_SHEETS.tpInsurer)
     .slice(1)
     .map((r) => ({ code: s(r[1]), name: s(r[0]).slice(0, 255) }))
     .filter((r) => r.code && r.name && !insSeen.has(r.code) && insSeen.add(r.code));

@@ -12,6 +12,9 @@ coverage/
 prisma/data-snapshot.json
 # Regenerable script artifacts (import sidecars, live-matrix outputs/logs).
 scripts/_*
+# ...but the _* glob above also matches scripts/__tests__ (starts with "_") — keep the
+# script test suites tracked despite that.
+!scripts/__tests__/
 # Local-only dev/probe scripts — not part of the deploy or any npm script.
 scripts/live-matrix.ts
 scripts/rc-csv.ts
