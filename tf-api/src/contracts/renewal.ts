@@ -42,7 +42,11 @@ export const RenewalProposalRequestSchema = z.object({
   coverCode: z.enum(["CO", "OD", "LO"]),
   /** Insured Declared Value in whole rupees. */
   vehicleIdv: z.number().int().nonnegative(),
-  /** Discount %, negative as returned by the quote (echo as-is). */
+  /**
+   * Discount %, negative as returned by the quote (echo as-is). The quote
+   * surfaces this as a number in `contractDetails.discountPercentage`, so callers
+   * thread it straight through.
+   */
   discountPercentage: z.number(),
   /** Add-on combo cover codes (e.g. "STZDP"). */
   addonCodes: z.array(z.string().min(1)).default([]),

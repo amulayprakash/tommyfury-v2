@@ -50,6 +50,20 @@ function rupees(v: unknown): number {
 const str = (v: unknown): string | undefined =>
   typeof v === "string" && v.trim() ? v.trim() : undefined;
 
+/**
+ * Parse an FG numeric string (possibly comma-grouped) to a float; 0 if
+ * blank/unparseable. Unlike `rupees()` this does NOT round — used for %-values
+ * (e.g. DiscountPercentage) that must keep their fractional part.
+ */
+const numf = (v: unknown): number => {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (typeof v === "string") {
+    const n = Number(v.replace(/,/g, "").trim());
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+};
+
 const obj = (v: unknown): Record<string, unknown> =>
   v && typeof v === "object" ? (v as Record<string, unknown>) : {};
 
@@ -194,8 +208,9 @@ export async function fgRenewalQuote(
       ckycStatus: str(holder.CKYCStatus),
       registrationNo: str(vehicle.RegistrationNO),
       expiryDate: str(old.ExipryDate),
-      // Echo the quote's discount % verbatim (negative) for the proposal step.
-      discountPercentage: str(od.DiscountPercentage),
+      // Echo the quote's discount % (negative) for the proposal step. Surfaced
+      // as a number so callers thread it straight into the proposal request.
+      discountPercentage: numf(od.DiscountPercentage),
       previousPolicyNCB: str(od.PreviousPolicyNCB),
       eligiblePolicyNCB: str(od.EligiblePolicyNCB),
     },

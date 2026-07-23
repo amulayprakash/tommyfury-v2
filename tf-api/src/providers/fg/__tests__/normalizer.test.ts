@@ -35,6 +35,7 @@ describe("normalizeQuote (Root-wrapped JSON)", () => {
   });
 
   it("maps known FG line codes to canonical add-on premiums", () => {
+    expect(r.addonPremiums.zeroDep).toBe(2233.64); // ZDCNS = Zero Dep + Consumable combo
     expect(r.addonPremiums.ncbProtection).toBe(916.37);
     expect(r.addonPremiums.paOwner).toBe(750);
     expect(r.addonPremiums.paUnnamedPassenger).toBe(375);

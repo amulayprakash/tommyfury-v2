@@ -73,10 +73,14 @@ async function main() {
     },
   });
 
+  // Demo canonical insurer for the ICICI provider-code mapping below. Tagged
+  // `source: "icici"` to match the partition of the ProviderInsurerCode it backs
+  // (it is not an FG-workbook row, so tagging it "fg" made the FG parity check
+  // report a spurious Δ=1 against the FG master).
   const insurer = await prisma.insurerMaster.upsert({
     where: { code: "ICICI_LOMBARD" },
-    update: { source: "fg" },
-    create: { code: "ICICI_LOMBARD", name: "ICICI Lombard", shortName: "ICICI", source: "fg" },
+    update: { source: "icici" },
+    create: { code: "ICICI_LOMBARD", name: "ICICI Lombard", shortName: "ICICI", source: "icici" },
   });
   await prisma.providerInsurerCode.upsert({
     where: { providerSlug_insurerId: { providerSlug: "icici", insurerId: insurer.id } },

@@ -128,6 +128,8 @@ describe("fgRenewalQuote", () => {
     expect(q.contractDetails?.proposalNo).toBe("00VD731720");
     expect(q.contractDetails?.agentCode).toBe("60046470");
     expect(q.contractDetails?.branch).toBe("2J");
+    // Surfaced as a NUMBER (FG "70") so it threads straight into the proposal.
+    expect(q.contractDetails?.discountPercentage).toBe(70);
   });
 
   it("flags a break-in Success as inspection-required (ErrorCode 0)", async () => {

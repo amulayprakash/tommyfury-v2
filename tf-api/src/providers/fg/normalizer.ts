@@ -63,9 +63,23 @@ interface Table1Row {
 
 /** Canonical add-on key ← FG premium-line Code (OD/TP section codes). */
 const ADDON_BY_CODE: Record<string, keyof CanonicalQuoteResult["addonPremiums"]> = {
-  ZCETR: "zeroDep", // bundled Zero Dep + Con + Eng + Tyre + RTI
-  STZDP: "zeroDep",
-  ZODEP: "zeroDep",
+  // Zero-Dep bundle codes (Motor field Master → "Add On Covers"). Each is a
+  // Zero-Dep-inclusive combo, so its premium line rolls up under `zeroDep`
+  // (same convention as ZCETR/STZDP). Standard private-car combos:
+  STZDP: "zeroDep", // Zero Dep + RSA + Personal Belonging + Key Loss
+  ZDCNS: "zeroDep", // + Consumable
+  ZDCNE: "zeroDep", // + Consumable + Engine Protector
+  ZDCNT: "zeroDep", // + Consumable + Tyre
+  ZDCET: "zeroDep", // + Consumable + Engine Protector + Tyre
+  ZCETR: "zeroDep", // + Consumable + Engine + Tyre + RTI
+  // Electric-vehicle Zero-Dep combos (Battery Guard family):
+  ZDCBG: "zeroDep",
+  ZCEBG: "zeroDep",
+  ZCTBG: "zeroDep",
+  ZDETB: "zeroDep",
+  ZCTRB: "zeroDep",
+  ZETRB: "zeroDep",
+  ZODEP: "zeroDep", // GCV Zero Dep
   CONSM: "consumables",
   STENG: "engineProtect",
   STTYR: "tyreProtect",
