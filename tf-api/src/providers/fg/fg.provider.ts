@@ -5,6 +5,7 @@ import type { PolicyIssuanceRequest, PolicyIssuanceResult } from "@/contracts/po
 import type { CkycRequest, KycResult, OvdRequest, OvdFile, OvdResult } from "@/contracts/kyc.ts";
 import type {
   RenewalQuoteRequest,
+  RenewalProposalRequest,
   RenewalCreatePolicyRequest,
 } from "@/contracts/renewal.ts";
 import type { InspectionRequest, InspectionResult } from "@/contracts/inspection.ts";
@@ -39,7 +40,7 @@ import {
 } from "./config.ts";
 import { fgTokenFetcher, fgProductTokenFetcher } from "./auth.ts";
 import { fgVerifyCkyc, fgGetCkycStatus, fgUploadDocBytes, fgCkycDocType } from "./ckyc.ts";
-import { fgRenewalQuote, fgRenewalCreatePolicy } from "./renewal.ts";
+import { fgRenewalQuote, fgRenewalProposal, fgRenewalCreatePolicy } from "./renewal.ts";
 import { createInspection, getInspectionStatus, inspectionRequired } from "./inspection.ts";
 import { FetchTransport, assertFgSuccess, type FgTransport } from "./http.ts";
 import {
@@ -372,6 +373,15 @@ export class FgProvider
   async renewalQuote(req: RenewalQuoteRequest, ctx: ProviderContext): Promise<CanonicalQuoteResult> {
     return this.withAuthRetry(this.renewalToken, (token) =>
       fgRenewalQuote(this.config, req, token, { requestId: ctx.requestId }),
+    );
+  }
+
+  async renewalProposal(
+    req: RenewalProposalRequest,
+    ctx: ProviderContext,
+  ): Promise<CanonicalQuoteResult> {
+    return this.withAuthRetry(this.renewalToken, (token) =>
+      fgRenewalProposal(this.config, req, token, { requestId: ctx.requestId }),
     );
   }
 

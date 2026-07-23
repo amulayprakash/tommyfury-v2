@@ -4,6 +4,7 @@ import {
   fgRenewalProposal,
   fgRenewalCreatePolicy,
 } from "../renewal.ts";
+import { FgProvider } from "../fg.provider.ts";
 import type { FgConfig } from "../config.ts";
 import {
   RenewalQuoteRequestSchema,
@@ -318,5 +319,37 @@ describe("fgRenewalCreatePolicy", () => {
     const { fn } = mockFetch(issuanceFailFixture);
     vi.stubGlobal("fetch", fn);
     await expect(fgRenewalCreatePolicy(config, req, "tok")).rejects.toThrow(/Duplicate found/);
+  });
+});
+
+describe("FgProvider renewal wiring (3 ops)", () => {
+  const provider = new FgProvider({
+    config,
+    renewalTokenProvider: async () => "tok",
+  });
+
+  it("dispatches renewalProposal through the provider", async () => {
+    const { fn, calls } = mockFetch(proposalFixture);
+    vi.stubGlobal("fetch", fn);
+    const result = await provider.renewalProposal(
+      {
+        productCode: "FPV",
+        previousPolicyNo: "VD731720",
+        proposalNo: "00VD731720",
+        clientCode: "72782626",
+        startDate: "2025-03-31",
+        expiryDate: "2026-03-30",
+        agentCode: "60081262",
+        branch: "12",
+        coverCode: "CO",
+        vehicleIdv: 603000,
+        discountPercentage: -80,
+        addonCodes: ["STZDP"],
+      },
+      { requestId: "p1" },
+    );
+    expect(calls[0]?.url).toContain("/ModifyRenewalProposal");
+    expect((calls[0]?.init.headers as Record<string, string>)["Internal-Key"]).toBe("tok");
+    expect(result.quoteNo).toBe("00VD731720");
   });
 });

@@ -17,6 +17,7 @@ import type {
 } from "@/contracts/policy.ts";
 import type {
   RenewalQuoteRequest,
+  RenewalProposalRequest,
   RenewalCreatePolicyRequest,
 } from "@/contracts/renewal.ts";
 import type { InspectionRequest, InspectionResult } from "@/contracts/inspection.ts";
@@ -71,6 +72,8 @@ export interface IssuanceProvider extends InsuranceProvider {
 export interface RenewalProvider extends InsuranceProvider {
   /** Prices the renewal of an existing policy (keyed by PolicyNo). */
   renewalQuote(req: RenewalQuoteRequest, ctx: ProviderContext): Promise<CanonicalQuoteResult>;
+  /** Applies the modification delta to a fetched renewal → bound premium. */
+  renewalProposal(req: RenewalProposalRequest, ctx: ProviderContext): Promise<CanonicalQuoteResult>;
   /** Issues the renewal directly with the collected payment receipt. */
   renewalCreatePolicy(
     req: RenewalCreatePolicyRequest,
@@ -128,6 +131,7 @@ export function supportsRenewal(p: InsuranceProvider): p is RenewalProvider {
   return (
     p.operations.has("renewal") &&
     typeof (p as RenewalProvider).renewalQuote === "function" &&
+    typeof (p as RenewalProvider).renewalProposal === "function" &&
     typeof (p as RenewalProvider).renewalCreatePolicy === "function"
   );
 }
