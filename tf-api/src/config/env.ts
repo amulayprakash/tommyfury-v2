@@ -57,7 +57,19 @@ const envSchema = z.object({
   FG_BRANCH_CODE: z.string().default("10"),
 
   // ── FG CKYC (GCKYC/3.0.0) — separate WSO2 product (own client subscription) ──
-  /** CKYC gateway base (e.g. …/GCKYC/3.0.0). */
+  /**
+   * CKYC gateway base (…/GCKYC/3.0.0). ENV-DRIVEN — never hardcode the host.
+   * Two UAT candidates exist post-rebrand and only ONE answers on UAT:
+   *   - rebranded (default here): uat-internal-apigw.generalicentralinsurance.com:8243/GCKYC/3.0.0
+   *   - legacy/live-verified:     uat-internal-apigw.futuregenerali.in:8243/GCKYC/3.0.0
+   * Memory records the live-verified working UAT CKYC host as futuregenerali.in,
+   * so the current live .env points there. Before flipping .env to the rebranded
+   * host, the operator MUST confirm which one answers:
+   *   npx tsx --env-file=.env scripts/verify-fg-ckyc-host.ts
+   *   npx tsx --env-file=.env scripts/verify-fg-ckyc-host.ts --host <candidate>
+   * The legacy host stays reachable simply by setting this env var — do not
+   * remove that capability.
+   */
   FG_CKYC_BASE_URL: z
     .string()
     .default("https://uat-internal-apigw.generalicentralinsurance.com:8243/GCKYC/3.0.0"),
