@@ -141,7 +141,7 @@ const EMPTY_ADDRESS = {
   EmailAddr: "",
 };
 
-/** Full Client column set (SOAP DataTable); ENQ sends it empty. */
+/** Full Client column set (FG BANCS DataTable); ENQ sends it empty. */
 const EMPTY_CLIENT = {
   ClientType: "I",
   CreationType: "C",
@@ -162,7 +162,7 @@ const EMPTY_CLIENT = {
   Address2: { ...EMPTY_ADDRESS, AddressType: "K" },
 };
 
-// FG's SOAP engine reads each block into a typed .NET DataTable, so EVERY column
+// FG's BANCS engine reads each block into a typed .NET DataTable, so EVERY column
 // must be present (even empty) in the sample's order — a subset throws
 // "Column 'X' does not belong to table". Full set per the XML gateway sample.
 function buildAdditionalBenefit(req: MotorQuoteRequest, cpaReq: "Y" | "N"): Record<string, unknown> {
@@ -335,7 +335,7 @@ function buildVehicle(
   };
 }
 
-// Trailing Risk-level fields the SOAP engine expects after PreviousInsDtls.
+// Trailing Risk-level fields the BANCS engine expects after PreviousInsDtls.
 const RISK_TAIL = {
   ZLLOTFLG: "",
   GARAGE: "",
@@ -506,7 +506,7 @@ export function buildCreateProposalPayload(
   return { url: endpoints.createProposal(), payload };
 }
 
-// ─── PolicyIssuance (PolicyIssuance_Vendors) ──────────────────────────────────
+// ─── IssueProposal (was SOAP PolicyIssuance_Vendors) ──────────────────────────
 // Binds the collected payment to the prior proposal (ClientID + the
 // QuotationNo as strPolicyQuoteNumber) and returns the real PolicyNo. The
 // Receipt block carries the payment-gateway result captured on the callback.

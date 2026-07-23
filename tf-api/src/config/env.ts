@@ -34,7 +34,7 @@ const envSchema = z.object({
     .string()
     .default("false")
     .transform((v) => v === "true"),
-  /** API gateway base (SOAP motor endpoints live under /MotorNB/1.0.0). */
+  /** API gateway base (JSON motor endpoints live under /MotorAPI/1.0.0). */
   FG_BASE_URL: z
     .string()
     .default("https://uat-internal-apigw.generalicentralinsurance.com:8243"),
