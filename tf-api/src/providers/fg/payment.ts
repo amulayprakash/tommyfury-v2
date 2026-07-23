@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { FgConfig } from "./config.ts";
 import type { PaymentReceipt } from "@/contracts/policy.ts";
+import { AppError } from "@/errors/app-error.ts";
 
 /**
  * FG Web-Aggregator payment gateway (WebAggPayNew.aspx). The aggregator builds a
@@ -153,6 +154,14 @@ export function parsePgFields(raw: Record<string, unknown>): PgResult {
   const encrypted = typeof raw.ResponseData === "string" ? raw.ResponseData : undefined;
   let flat: Record<string, string> = {};
   if (encrypted) {
+    if (!desAvailable()) {
+      throw new AppError(
+        500,
+        "FG returned .NET-encrypted ResponseData but this runtime lacks legacy single-DES; " +
+          "configure PHP mode (FG_PAYMENT_VENDOR=1) or enable the OpenSSL legacy provider.",
+        "DES_UNAVAILABLE",
+      );
+    }
     const text = decryptPaymentResponse(encrypted);
     if (text.includes("=")) {
       for (const [k, v] of new URLSearchParams(text).entries()) flat[k] = v;

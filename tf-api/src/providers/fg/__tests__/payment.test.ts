@@ -9,6 +9,7 @@ import {
   pgSucceeded,
 } from "../payment.ts";
 import type { FgConfig } from "../config.ts";
+import { AppError } from "@/errors/app-error.ts";
 
 // DES-CBC params from NewPaymentIntegration_v1.40.pdf (do not change).
 const DES_KEY = Buffer.from("&%#@?,:*", "utf8");
@@ -175,5 +176,31 @@ describe("FG payment response", () => {
     const pg = parsePgFields({ TID: "Q9", PGID: "PG9", Premium: "500", Response: "Failure" });
     expect(pg.tid).toBe("Q9");
     expect(pgSucceeded(pg)).toBe(false);
+  });
+});
+
+describe("FG payment .NET DES guard", () => {
+  it("reports a boolean for DES availability", () => {
+    expect(typeof desAvailable()).toBe("boolean");
+  });
+
+  it("throws a typed error when ResponseData needs DES but the runtime lacks it", () => {
+    if (desAvailable()) return; // only meaningful when DES is disabled (OpenSSL 3)
+    try {
+      parsePgFields({ ResponseData: "BUYidAjRUV6Bklug$azoD" });
+      throw new Error("expected parsePgFields to throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(AppError);
+      expect((err as AppError).code).toBe("DES_UNAVAILABLE");
+    }
+  });
+
+  // Guarded: only runs where legacy single-DES is enabled.
+  const desIt2 = desAvailable() ? it : it.skip;
+  desIt2("decrypts .NET ResponseData when DES is available", () => {
+    // encrypt() + DES_KEY/DES_IV already defined at the top of this file.
+    const plain = "WS_P_ID=TCX&TID=Q123&PGID=PGX&Premium=2530&Response=Success";
+    const pg = parsePgFields({ ResponseData: encrypt(plain) });
+    expect(pg.response).toBe("Success");
   });
 });
