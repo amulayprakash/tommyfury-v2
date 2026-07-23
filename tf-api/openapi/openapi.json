@@ -2546,6 +2546,123 @@
           "policyNo"
         ]
       },
+      "RenewalProposalRequest": {
+        "type": "object",
+        "properties": {
+          "productCode": {
+            "type": "string",
+            "minLength": 1
+          },
+          "previousPolicyNo": {
+            "type": "string",
+            "minLength": 1
+          },
+          "proposalNo": {
+            "type": "string",
+            "minLength": 1
+          },
+          "clientCode": {
+            "type": "string",
+            "minLength": 1
+          },
+          "startDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "expiryDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "ckycNo": {
+            "type": "string"
+          },
+          "ckycRefNo": {
+            "type": "string"
+          },
+          "agentCode": {
+            "type": "string",
+            "minLength": 1
+          },
+          "branch": {
+            "type": "string",
+            "minLength": 1
+          },
+          "coverCode": {
+            "type": "string",
+            "enum": [
+              "CO",
+              "OD",
+              "LO"
+            ]
+          },
+          "vehicleIdv": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "discountPercentage": {
+            "type": "number"
+          },
+          "addonCodes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "default": []
+          },
+          "idvOfCngOrLpg": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "electricalAccessoriesValues": {
+            "type": "string"
+          },
+          "nonElectricalAccessoriesValues": {
+            "type": "string"
+          },
+          "imt10": {
+            "type": "string"
+          },
+          "imt15": {
+            "type": "string"
+          },
+          "imt16": {
+            "type": "string"
+          },
+          "imt20": {
+            "type": "string"
+          },
+          "imt23": {
+            "type": "string"
+          },
+          "imt28": {
+            "type": "string"
+          },
+          "imt29": {
+            "type": "string"
+          },
+          "inspectionNo": {
+            "type": "string"
+          },
+          "inspectionDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          }
+        },
+        "required": [
+          "productCode",
+          "previousPolicyNo",
+          "proposalNo",
+          "clientCode",
+          "startDate",
+          "expiryDate",
+          "agentCode",
+          "branch",
+          "coverCode",
+          "vehicleIdv",
+          "discountPercentage"
+        ]
+      },
       "RenewalCreatePolicyRequest": {
         "type": "object",
         "properties": {
@@ -2553,21 +2670,23 @@
             "type": "string",
             "minLength": 1
           },
-          "quoteNo": {
+          "clientId": {
             "type": "string",
             "minLength": 1
           },
-          "expiryDate": {
+          "proposalNo": {
             "type": "string",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            "minLength": 1
+          },
+          "agentCode": {
+            "type": "string",
+            "minLength": 1
+          },
+          "branchCode": {
+            "type": "string",
+            "minLength": 1
           },
           "registrationNo": {
-            "type": "string"
-          },
-          "ckycNo": {
-            "type": "string"
-          },
-          "ckycRefNo": {
             "type": "string"
           },
           "receipt": {
@@ -2623,7 +2742,10 @@
         },
         "required": [
           "policyNo",
-          "quoteNo",
+          "clientId",
+          "proposalNo",
+          "agentCode",
+          "branchCode",
           "receipt"
         ]
       },
@@ -7717,7 +7839,7 @@
     },
     "/api/v1/{provider}/motor/renewal/quote": {
       "post": {
-        "summary": "Renewal quote — price an existing policy (FG motorRenewal)",
+        "summary": "Renewal quote — fetch the expiring-policy snapshot (FG RenewalModify)",
         "parameters": [
           {
             "schema": {
@@ -7993,6 +8115,382 @@
         }
       }
     },
+    "/api/v1/{provider}/motor/renewal/proposal": {
+      "post": {
+        "summary": "Renewal proposal — apply the modification delta and bind the premium (FG RenewalModify)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "icici"
+            },
+            "required": true,
+            "name": "provider",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "productCode": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "previousPolicyNo": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "proposalNo": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "clientCode": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "startDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "expiryDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "ckycNo": {
+                    "type": "string"
+                  },
+                  "ckycRefNo": {
+                    "type": "string"
+                  },
+                  "agentCode": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "branch": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "coverCode": {
+                    "type": "string",
+                    "enum": [
+                      "CO",
+                      "OD",
+                      "LO"
+                    ]
+                  },
+                  "vehicleIdv": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "discountPercentage": {
+                    "type": "number"
+                  },
+                  "addonCodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "default": []
+                  },
+                  "idvOfCngOrLpg": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "electricalAccessoriesValues": {
+                    "type": "string"
+                  },
+                  "nonElectricalAccessoriesValues": {
+                    "type": "string"
+                  },
+                  "imt10": {
+                    "type": "string"
+                  },
+                  "imt15": {
+                    "type": "string"
+                  },
+                  "imt16": {
+                    "type": "string"
+                  },
+                  "imt20": {
+                    "type": "string"
+                  },
+                  "imt23": {
+                    "type": "string"
+                  },
+                  "imt28": {
+                    "type": "string"
+                  },
+                  "imt29": {
+                    "type": "string"
+                  },
+                  "inspectionNo": {
+                    "type": "string"
+                  },
+                  "inspectionDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  }
+                },
+                "required": [
+                  "productCode",
+                  "previousPolicyNo",
+                  "proposalNo",
+                  "clientCode",
+                  "startDate",
+                  "expiryDate",
+                  "agentCode",
+                  "branch",
+                  "coverCode",
+                  "vehicleIdv",
+                  "discountPercentage"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Renewal proposal (bound premium)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "quoteNo": {
+                      "type": "string"
+                    },
+                    "transactionId": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "providerSlug": {
+                      "type": "string"
+                    },
+                    "insurerId": {
+                      "type": "string"
+                    },
+                    "insurerName": {
+                      "type": "string"
+                    },
+                    "insurerLogoUrl": {
+                      "type": "string"
+                    },
+                    "policyType": {
+                      "type": "string"
+                    },
+                    "vehicleCategory": {
+                      "type": "string"
+                    },
+                    "idvValue": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "minIdv": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "maxIdv": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "policyStartDate": {
+                      "type": "string"
+                    },
+                    "policyEndDate": {
+                      "type": "string"
+                    },
+                    "isInspectionRequired": {
+                      "type": "boolean"
+                    },
+                    "basicOdPremium": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "thirdPartyPremium": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "addonPremiums": {
+                      "type": "object",
+                      "properties": {
+                        "zeroDep": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "engineProtect": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "rsa": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "tyreProtect": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "rimProtect": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "rti": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "consumables": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "keyProtect": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "garageCash": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "lossOfBelongings": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "batteryProtect": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "drivingAccessories": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "ncbProtection": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "paOwner": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "paUnnamedPassenger": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "paNamedPassenger": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "legalLiabilityPaidDriver": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      }
+                    },
+                    "discounts": {
+                      "type": "object",
+                      "properties": {
+                        "ncbPercent": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "ncbAmount": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "aaaMembership": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "antiTheft": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "voluntaryDeductible": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "ownDamageDiscount": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "payU": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      }
+                    },
+                    "totalAddonPremium": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "totalDiscount": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "netPremium": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "serviceTaxPercent": {
+                      "type": "number",
+                      "minimum": 0,
+                      "default": 18
+                    },
+                    "serviceTaxAmount": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "grossPremium": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "odDiscountPercent": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "policyNumber": {
+                      "type": "string"
+                    },
+                    "paymentUrl": {
+                      "type": "string"
+                    },
+                    "contractDetails": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "_rawResponse": {
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "quoteNo",
+                    "requestId",
+                    "providerSlug",
+                    "policyType",
+                    "vehicleCategory",
+                    "idvValue",
+                    "basicOdPremium",
+                    "thirdPartyPremium",
+                    "addonPremiums",
+                    "discounts",
+                    "totalAddonPremium",
+                    "totalDiscount",
+                    "netPremium",
+                    "serviceTaxAmount",
+                    "grossPremium"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/{provider}/motor/renewal/create": {
       "post": {
         "summary": "Renewal create — issue the renewed policy with the payment receipt",
@@ -8017,21 +8515,23 @@
                     "type": "string",
                     "minLength": 1
                   },
-                  "quoteNo": {
+                  "clientId": {
                     "type": "string",
                     "minLength": 1
                   },
-                  "expiryDate": {
+                  "proposalNo": {
                     "type": "string",
-                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                    "minLength": 1
+                  },
+                  "agentCode": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "branchCode": {
+                    "type": "string",
+                    "minLength": 1
                   },
                   "registrationNo": {
-                    "type": "string"
-                  },
-                  "ckycNo": {
-                    "type": "string"
-                  },
-                  "ckycRefNo": {
                     "type": "string"
                   },
                   "receipt": {
@@ -8087,7 +8587,10 @@
                 },
                 "required": [
                   "policyNo",
-                  "quoteNo",
+                  "clientId",
+                  "proposalNo",
+                  "agentCode",
+                  "branchCode",
                   "receipt"
                 ]
               }

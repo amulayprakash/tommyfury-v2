@@ -3,6 +3,7 @@ import { validate } from "@/middleware/validate.ts";
 import { MotorQuoteRequestSchema, MotorFullQuoteRequestSchema } from "@/contracts/quote-request.ts";
 import {
   RenewalQuoteRequestSchema,
+  RenewalProposalRequestSchema,
   RenewalCreatePolicyRequestSchema,
 } from "@/contracts/renewal.ts";
 import {
@@ -10,7 +11,11 @@ import {
   handleGetFullQuote,
   handleRetrieveQuote,
 } from "@/controllers/quote.controller.ts";
-import { handleRenewalQuote, handleRenewalCreate } from "@/controllers/renewal.controller.ts";
+import {
+  handleRenewalQuote,
+  handleRenewalProposal,
+  handleRenewalCreate,
+} from "@/controllers/renewal.controller.ts";
 
 const router = Router();
 
@@ -59,11 +64,16 @@ router.post(
   handleGetFullQuote,
 );
 
-// Renewal of an existing policy (FG: separate motorRenewal JSON API)
+// Renewal of an existing policy (FG: Renewal/1.0.0/RenewalModify — 3 ops)
 router.post(
   "/:provider/motor/renewal/quote",
   validate(RenewalQuoteRequestSchema),
   handleRenewalQuote,
+);
+router.post(
+  "/:provider/motor/renewal/proposal",
+  validate(RenewalProposalRequestSchema),
+  handleRenewalProposal,
 );
 router.post(
   "/:provider/motor/renewal/create",

@@ -34,9 +34,8 @@ const {
   PolicyIssuanceResultSchema,
   PaymentInitiateRequestSchema,
 } = await import("@/contracts/policy.ts");
-const { RenewalQuoteRequestSchema, RenewalCreatePolicyRequestSchema } = await import(
-  "@/contracts/renewal.ts"
-);
+const { RenewalQuoteRequestSchema, RenewalProposalRequestSchema, RenewalCreatePolicyRequestSchema } =
+  await import("@/contracts/renewal.ts");
 const { InspectionRequestSchema, InspectionResultSchema } = await import("@/contracts/inspection.ts");
 const {
   HealthQuoteRequestSchema,
@@ -64,6 +63,7 @@ registry.register("PolicyIssuanceRequest", PolicyIssuanceRequestSchema);
 registry.register("PolicyIssuanceResult", PolicyIssuanceResultSchema);
 registry.register("PaymentInitiateRequest", PaymentInitiateRequestSchema);
 registry.register("RenewalQuoteRequest", RenewalQuoteRequestSchema);
+registry.register("RenewalProposalRequest", RenewalProposalRequestSchema);
 registry.register("RenewalCreatePolicyRequest", RenewalCreatePolicyRequestSchema);
 registry.register("InspectionRequest", InspectionRequestSchema);
 registry.register("InspectionResult", InspectionResultSchema);
@@ -230,13 +230,26 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/api/v1/{provider}/motor/renewal/quote",
-  summary: "Renewal quote — price an existing policy (FG motorRenewal)",
+  summary: "Renewal quote — fetch the expiring-policy snapshot (FG RenewalModify)",
   request: {
     params: providerParam,
     body: { content: { "application/json": { schema: RenewalQuoteRequestSchema } } },
   },
   responses: {
     200: { description: "Renewal quote", content: { "application/json": { schema: CanonicalQuoteResultSchema } } },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/v1/{provider}/motor/renewal/proposal",
+  summary: "Renewal proposal — apply the modification delta and bind the premium (FG RenewalModify)",
+  request: {
+    params: providerParam,
+    body: { content: { "application/json": { schema: RenewalProposalRequestSchema } } },
+  },
+  responses: {
+    200: { description: "Renewal proposal (bound premium)", content: { "application/json": { schema: CanonicalQuoteResultSchema } } },
   },
 });
 

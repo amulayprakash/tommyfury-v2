@@ -4,7 +4,11 @@ import { supportsRenewal } from "@/providers/insurance-provider.ts";
 import { AppError } from "@/errors/app-error.ts";
 import type { CanonicalQuoteResult } from "@/contracts/quote-result.ts";
 import type { PolicyIssuanceResult } from "@/contracts/policy.ts";
-import type { RenewalQuoteRequest, RenewalCreatePolicyRequest } from "@/contracts/renewal.ts";
+import type {
+  RenewalQuoteRequest,
+  RenewalProposalRequest,
+  RenewalCreatePolicyRequest,
+} from "@/contracts/renewal.ts";
 
 function renewalProvider(providerSlug: string) {
   const provider = getProvider(providerSlug);
@@ -20,6 +24,13 @@ export async function renewalQuote(
   req: RenewalQuoteRequest,
 ): Promise<CanonicalQuoteResult> {
   return renewalProvider(providerSlug).renewalQuote(req, { requestId: randomUUID() });
+}
+
+export async function renewalProposal(
+  providerSlug: string,
+  req: RenewalProposalRequest,
+): Promise<CanonicalQuoteResult> {
+  return renewalProvider(providerSlug).renewalProposal(req, { requestId: randomUUID() });
 }
 
 export async function renewalCreatePolicy(
