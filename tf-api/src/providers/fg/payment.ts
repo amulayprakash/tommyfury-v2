@@ -196,10 +196,10 @@ export function pgSucceeded(pg: PgResult): boolean {
 }
 
 /**
- * Maps the PG result to the issuance Receipt. UniqueTranKey is our quoteNo-keyed
- * transaction id; TranRefNo is the gateway id (PGID). Dates default to now in
- * FG's DD/MM/YYYY HH:mm:ss format. NOTE: confirm the exact Receipt field mapping
- * with FG against a live UAT transaction.
+ * Maps the PG result to the issuance Receipt (v1.41 PG params): WS_P_ID →
+ * UniqueTranKey, PGID → TranRefNo, ReceiptType "IVR", Amount in whole rupees.
+ * Dates default to now in FG's DD/MM/YYYY HH:mm:ss format. For Razorpay (on
+ * request only; PayU is mandated) swap UniqueTranKey ↔ TranRefNo.
  */
 export function pgResultToReceipt(
   pg: PgResult,
@@ -209,11 +209,11 @@ export function pgResultToReceipt(
 ): PaymentReceipt {
   const stamp = formatFgDateTime(now);
   return {
-    uniqueTranKey: pg.tid ?? pg.wsPId ?? "",
+    uniqueTranKey: pg.wsPId ?? pg.tid ?? "", // WS_P_ID → UniqueTranKey (v1.41 PG params)
     transactionDate: stamp,
     receiptType: "IVR",
     amount,
-    tranRefNo: pg.pgId ?? pg.wsPId ?? "",
+    tranRefNo: pg.pgId ?? pg.wsPId ?? "", // PGID → TranRefNo
     tranRefNoDate: stamp,
     pgType: PG_TYPE_BY_OPTION[config.payment.paymentOption] ?? "PAYU",
   };

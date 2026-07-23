@@ -7,6 +7,7 @@ import {
   desAvailable,
   parsePgFields,
   pgSucceeded,
+  pgResultToReceipt,
 } from "../payment.ts";
 import type { FgConfig } from "../config.ts";
 import { AppError } from "@/errors/app-error.ts";
@@ -202,5 +203,21 @@ describe("FG payment .NET DES guard", () => {
     const plain = "WS_P_ID=TCX&TID=Q123&PGID=PGX&Premium=2530&Response=Success";
     const pg = parsePgFields({ ResponseData: encrypt(plain) });
     expect(pg.response).toBe("Success");
+  });
+});
+
+describe("FG payment receipt mapping (v1.41 PG params)", () => {
+  it("maps WS_P_ID → uniqueTranKey and PGID → tranRefNo", () => {
+    const receipt = pgResultToReceipt(
+      { wsPId: "TC101212", tid: "Q123", pgId: "1332323234647", premium: "2530", response: "Success" },
+      baseConfig("1"), // PaymentOption "3" → PGType "PAYU"
+      2530,
+      new Date(2025, 4, 27, 16, 26, 0),
+    );
+    expect(receipt.uniqueTranKey).toBe("TC101212"); // WS_P_ID, NOT the TID
+    expect(receipt.tranRefNo).toBe("1332323234647"); // PGID
+    expect(receipt.receiptType).toBe("IVR");
+    expect(receipt.amount).toBe(2530);
+    expect(receipt.pgType).toBe("PAYU");
   });
 });
