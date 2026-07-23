@@ -2257,6 +2257,9 @@
           "displayMessage": {
             "type": "string"
           },
+          "proposalId": {
+            "type": "string"
+          },
           "_rawResponse": {
             "nullable": true
           }
@@ -7306,6 +7309,9 @@
                       "type": "boolean"
                     },
                     "displayMessage": {
+                      "type": "string"
+                    },
+                    "proposalId": {
                       "type": "string"
                     },
                     "_rawResponse": {
