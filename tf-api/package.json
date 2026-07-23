@@ -28,6 +28,7 @@
     "db:import:fg": "tsx --env-file=.env scripts/import-fg-master.ts",
     "db:import:health": "tsx --env-file=.env scripts/import-fg-health-master.ts",
     "db:import:icici": "tsx --env-file=.env scripts/import-icici-master.ts",
+    "db:verify:fg": "tsx --env-file=.env scripts/verify-fg-master-parity.ts",
     "openapi:gen": "tsx scripts/gen-openapi.ts"
   },
   "prisma": {
