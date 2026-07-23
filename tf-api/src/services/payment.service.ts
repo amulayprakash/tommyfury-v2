@@ -1,7 +1,7 @@
 import { env } from "@/config/env.ts";
 import { logger } from "@/lib/logger.ts";
 import { AppError } from "@/errors/app-error.ts";
-import { loadFgConfig } from "@/providers/fg/config.ts";
+import { loadFgConfig, type FgConfig } from "@/providers/fg/config.ts";
 import {
   buildPaymentForm,
   parsePgFields,
@@ -10,9 +10,14 @@ import {
   type PaymentForm,
 } from "@/providers/fg/payment.ts";
 import { findQuoteByTransactionId } from "@/repositories/quote.repository.ts";
-import { PolicyIssuanceRequestSchema } from "@/contracts/policy.ts";
+import {
+  PolicyIssuanceRequestSchema,
+  type PolicyIssuanceRequest,
+  type PolicyIssuanceResult,
+} from "@/contracts/policy.ts";
 import type { VehicleCategory, PolicyType } from "@/contracts/enums.ts";
 import { issuePolicy } from "./policy.service.ts";
+import { reconcilePayment, type ReconInput, type ReconResult } from "@/providers/fg/payment-recon.ts";
 
 export interface PaymentInitiateBody {
   quoteNo: string;
@@ -37,19 +42,39 @@ export interface PaymentCallbackOutcome {
   redirectUrl: string;
 }
 
+/** Collaborators of the callback flow — injectable so tests avoid the DB/network. */
+export interface PaymentCallbackDeps {
+  loadConfig: () => FgConfig;
+  findQuote: typeof findQuoteByTransactionId;
+  reconcile: (config: FgConfig, input: ReconInput) => Promise<ReconResult>;
+  issue: (providerSlug: string, req: PolicyIssuanceRequest) => Promise<PolicyIssuanceResult>;
+}
+
+const defaultCallbackDeps: PaymentCallbackDeps = {
+  loadConfig: loadFgConfig,
+  findQuote: findQuoteByTransactionId,
+  reconcile: (config, input) => reconcilePayment(config, input),
+  issue: issuePolicy,
+};
+
 /**
- * Handles FG's payment ResponseURL callback: parses the PG result, and on
- * success binds the receipt to the prior proposal and issues the policy. Returns
- * the browser redirect target (success/failure web page).
+ * Handles FG's payment ResponseURL callback (v1.41): parses the PG result; on a
+ * reported success, re-verifies the transaction via the FetchTRNDetails recon
+ * service against the server-known proposal premium. Because the exact recon key
+ * (our TID vs FG's WS_P_ID) is UNVERIFIED on UAT, a recon miss only hard-blocks
+ * issuance when `payment.reconEnforce` is set; otherwise it LOGS both ids + the
+ * outcome and proceeds (a wrong key guess must not block 100% of issuance).
+ * Returns the browser redirect target (success/failure web page).
  */
 export async function handlePaymentCallback(
   providerSlug: string,
   rawBody: Record<string, unknown>,
+  deps: PaymentCallbackDeps = defaultCallbackDeps,
 ): Promise<PaymentCallbackOutcome> {
   if (providerSlug !== "fg") {
     throw new AppError(501, `Payment is not supported for provider "${providerSlug}"`, "NOT_IMPLEMENTED");
   }
-  const config = loadFgConfig();
+  const config = deps.loadConfig();
   const pg = parsePgFields(rawBody);
   const quoteNo = pg.tid ?? "";
 
@@ -58,7 +83,7 @@ export async function handlePaymentCallback(
     return { ok: false, redirectUrl: failureRedirect(config.payment.failureUrl, quoteNo) };
   }
 
-  const row = await findQuoteByTransactionId(providerSlug, quoteNo);
+  const row = await deps.findQuote(providerSlug, quoteNo);
   if (!row?.clientId) {
     throw new AppError(
       409,
@@ -67,7 +92,44 @@ export async function handlePaymentCallback(
     );
   }
 
-  const amount = pg.premium ? Number(pg.premium) : (row.grossPremium ?? 0);
+  // Reconcile the SERVER-known premium (defends against a tampered browser
+  // Premium). Fall back to the PG-reported premium only when we have no stored
+  // proposal amount.
+  const expectedAmount = row.grossPremium ?? (pg.premium ? Number(pg.premium) : 0);
+  // Which id FetchTRNDetails is keyed by is UNVERIFIED on UAT — send whichever pg
+  // id FG_PAYMENT_RECON_KEY selects (our TID, or FG's WS_P_ID). Note the DB lookup
+  // above always uses our TID (quoteNo); only the recon call uses the chosen key.
+  const reconTransactionId = (config.payment.reconKey === "wsPId" ? pg.wsPId : pg.tid) ?? "";
+  const recon = await deps.reconcile(config, {
+    transactionId: reconTransactionId,
+    expectedAmount,
+    source: config.payment.reconSource,
+  });
+  if (!recon.ok) {
+    // Log BOTH ids + the recon outcome so a wrong recon-key guess is diagnosable
+    // from a single line, and only hard-block when recon is trusted. Until
+    // FG_PAYMENT_RECON_KEY is confirmed live, a wrong key returns "not found" for
+    // every real txn — blocking here would reject 100% of payments — so proceed.
+    logger.warn(
+      {
+        providerSlug,
+        quoteNo,
+        tid: pg.tid,
+        wsPId: pg.wsPId,
+        reconKey: config.payment.reconKey,
+        reconEnforce: config.payment.reconEnforce,
+        reason: recon.reason,
+      },
+      "FG payment recon did not pass",
+    );
+    if (config.payment.reconEnforce) {
+      return { ok: false, redirectUrl: failureRedirect(config.payment.failureUrl, quoteNo) };
+    }
+  }
+
+  // Issue the recon-authoritative amount when recon passed; otherwise the
+  // server-known proposal premium (whole rupees).
+  const amount = recon.paymentAmount ?? expectedAmount;
   const issuanceReq = PolicyIssuanceRequestSchema.parse({
     quoteNo,
     clientId: row.clientId,
@@ -76,7 +138,7 @@ export async function handlePaymentCallback(
     receipt: pgResultToReceipt(pg, config, amount),
   });
 
-  const result = await issuePolicy(providerSlug, issuanceReq);
+  const result = await deps.issue(providerSlug, issuanceReq);
   return {
     ok: Boolean(result.policyNumber),
     policyNumber: result.policyNumber,
