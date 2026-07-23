@@ -97,9 +97,9 @@ describe("FG integration (fixtures)", () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("success");
     expect(res.body.response.providerSlug).toBe("fg");
-    expect(res.body.response.transactionId).toBe("0000621254");
-    expect(res.body.response.basicOdPremium).toBe(7390.93);
-    expect(res.body.response.grossPremium).toBeCloseTo(35385.899, 1);
+    expect(res.body.response.transactionId).toBe("0000925782");
+    expect(res.body.response.basicOdPremium).toBe(7521.08);
+    expect(res.body.response.grossPremium).toBeCloseTo(26651.5862, 1);
     // FG's DISCPERC must surface so the proposal can echo it (else FG re-rates
     // the CRT without the special discount).
     expect(res.body.response.odDiscountPercent).toBe(60);
@@ -131,7 +131,7 @@ describe("FG integration (fixtures)", () => {
   it("binds a proposal (CreateProposal) returning the ClientId", async () => {
     const res = await request(app).post("/api/v1/fg/motor/full-quote").send(proposalBody);
     expect(res.status).toBe(200);
-    expect(res.body.response.contractDetails.clientId).toBe("72590187");
+    expect(res.body.response.contractDetails.clientId).toBe("80036976");
   });
 
   it("fails fast with INSPECTION_REQUIRED for a break-in proposal without a report", async () => {
@@ -152,7 +152,7 @@ describe("FG integration (fixtures)", () => {
         inspectionDate: "2026-07-14",
       });
     expect(res.status).toBe(200);
-    expect(res.body.response.contractDetails.clientId).toBe("72590187");
+    expect(res.body.response.contractDetails.clientId).toBe("80036976");
   });
 
   it("issues a policy returning the real PolicyNo", async () => {
@@ -175,9 +175,9 @@ describe("FG integration (fixtures)", () => {
       });
     expect(res.status).toBe(200);
     expect(res.body.response.status).toBe("ISSUED");
-    expect(res.body.response.policyNumber).toBe("132/02/22/0526/MTP/2410006867");
-    expect(res.body.response.applicationNo).toBe("Z2243303");
-    expect(res.body.response.receiptNo).toBe("Z2243303");
+    expect(res.body.response.policyNumber).toBe("132/14/11/0529/MTP/2410002509");
+    expect(res.body.response.applicationNo).toBe("54/26/FGI/16/0001247");
+    expect(res.body.response.receiptNo).toBe("54/26/FGI/16/0001247");
   });
 
   it("quotes a commercial (GCV) vehicle", async () => {

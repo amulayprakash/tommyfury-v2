@@ -1,28 +1,16 @@
 {
-  "PolicyIssuance_VendorsResult": {
-    "Client": {
-      "Status": "Successful",
-      "ClientId": "72600518",
-      "ErrorMessage": ""
+  "Client": { "Status": "Successful", "ClientId": "80036976", "ErrorMessage": "" },
+  "Receipt": { "Status": "Successful", "ReceiptNo": "54/26/FGI/16/0001247", "Message": "" },
+  "Policy": {
+    "Status": "Successful",
+    "ApplicationNo": "54/26/FGI/16/0001247",
+    "InwardNo": "",
+    "PolicyNo": "132/14/11/0529/MTP/2410002509",
+    "ErrorMessage": "",
+    "NewDataSet": {
+      "Table": { "LdrErrLvl": "0", "PolNo": "132/14/11/0529/MTP/2410002509" },
+      "Table1": []
     },
-    "Receipt": {
-      "Status": "Successful",
-      "ReceiptNo": "Z2243303",
-      "Message": ""
-    },
-    "Policy": {
-      "Status": "Successful",
-      "ApplicationNo": "Z2243303",
-      "InwardNo": "",
-      "PolicyNo": "132/02/22/0526/MTP/2410006867",
-      "ErrorMessage": "",
-      "NewDataSet": {
-        "Table": [{ "LdrErrLvl": "0", "PolNo": "132/02/22/0526/MTP/2410006867" }],
-        "Table1": [
-          { "RskNo": "1", "Code": "Gross Premium", "Description": "Gross Premium", "Type": "", "BOValue": "", "DBValue": "0.00" }
-        ]
-      },
-      "VehicleIDV": ""
-    }
+    "VehicleIDV": ""
   }
 }

@@ -1,35 +1,32 @@
 {
-  "CreateProposalResult": {
-    "Client": {
-      "Status": "Successful",
-      "ClientId": "72590187",
-      "QuotationNo": "0000771450",
-      "ErrorMessage": ""
-    },
-    "Receipt": {
-      "Status": "Successful",
-      "ReceiptNo": "",
-      "ErrorMessage": ""
-    },
+  "Root": {
+    "Client": { "Status": "Successful", "ClientId": "80036976", "QuotationNo": "0000112799", "ErrorMessage": null },
+    "Receipt": { "Status": "Successful", "ReceiptNo": "", "ErrorMessage": null },
     "Policy": {
       "Status": "Successful",
       "PolicyNo": "",
       "ErrorMessage": "",
       "NewDataSet": {
-        "Table": [{ "LdrErrLvl": "0", "PolNo": "Successful" }],
+        "Table": { "LdrErrLvl": "0", "PolNo": "Successful" },
         "Table1": [
-          { "RskNo": "1", "Code": "ZCETR", "Description": "Zero Dep+Con+Eng+Tyre+RTI", "Type": "OD", "BOValue": "3658.33", "DBValue": "0" },
-          { "RskNo": "1", "Code": "OD", "Description": "Total Basic OD Premium", "Type": "OD", "BOValue": "7390.93", "DBValue": "0" },
-          { "RskNo": "1", "Code": "TOTALADDON", "Description": "Total ADDON Premium", "Type": "OD", "BOValue": "7958.84", "DBValue": "0" },
-          { "RskNo": "1", "Code": "Gross Premium", "Description": "Gross Premium", "Type": "OD", "BOValue": "16478.06", "DBValue": "0" },
-          { "RskNo": "1", "Code": "ServTax", "Description": "ServTax", "Type": "OD", "BOValue": "2966.0508", "DBValue": "0" },
+          { "RskNo": "1", "Code": "IDV", "Description": "IDV", "Type": "OD", "BOValue": "18802.69", "DBValue": "0" },
+          { "RskNo": "1", "Code": "ZDCNS", "Description": "Zero Dep. + Consumable", "Type": "OD", "BOValue": "2233.63", "DBValue": "0" },
+          { "RskNo": "1", "Code": "OD", "Description": "Less: Total Special Discount", "Type": "OD", "BOValue": "11281.62", "DBValue": "0" },
+          { "RskNo": "1", "Code": "OD", "Description": "Total Basic OD Premium", "Type": "OD", "BOValue": "7521.08", "DBValue": "0" },
+          { "RskNo": "1", "Code": "STNCB", "Description": "Premium for Protection of NCB(CV15)", "Type": "OD", "BOValue": "916.37", "DBValue": "0" },
+          { "RskNo": "1", "Code": "TOTALADDON", "Description": "Total ADDON Premium", "Type": "OD", "BOValue": "3150", "DBValue": "0" },
+          { "RskNo": "1", "Code": "Gross Premium", "Description": "Gross Premium", "Type": "OD", "BOValue": "10671.07", "DBValue": "0" },
+          { "RskNo": "1", "Code": "ServTax", "Description": "ServTax", "Type": "OD", "BOValue": "1920.7925999999998", "DBValue": "0" },
           { "RskNo": "1", "Code": "TP", "Description": "Total Basic TP  Premium (TP)", "Type": "TP", "BOValue": "10640.01", "DBValue": "0" },
-          { "RskNo": "1", "Code": "CPA", "Description": "CPA", "Type": "TP", "BOValue": "890", "DBValue": "0" },
-          { "RskNo": "1", "Code": "Gross Premium", "Description": "Gross Premium", "Type": "TP", "BOValue": "13509.99", "DBValue": "0" },
-          { "RskNo": "1", "Code": "ServTax", "Description": "ServTax", "Type": "TP", "BOValue": "2431.7982", "DBValue": "0" }
+          { "RskNo": "1", "Code": "CPA", "Description": "CPA", "Type": "TP", "BOValue": "750", "DBValue": "0" },
+          { "RskNo": "1", "Code": "IMT16", "Description": "Add: Total Unnamed Passenger PA Premium (IMT16)", "Type": "TP", "BOValue": "375", "DBValue": "0" },
+          { "RskNo": "1", "Code": "IMT28", "Description": "Add: Total LL for paid driver and / or cleaner Premium (IMT28)", "Type": "TP", "BOValue": "150", "DBValue": "0" },
+          { "RskNo": "1", "Code": "Gross Premium", "Description": "Gross Premium", "Type": "TP", "BOValue": "11915.01", "DBValue": "0" },
+          { "RskNo": "1", "Code": "ServTax", "Description": "ServTax", "Type": "TP", "BOValue": "2144.7018", "DBValue": "0" },
+          { "RskNo": "1", "Code": "DISCPERC", "Description": "DISCPERC", "Type": "OD", "BOValue": "-60", "DBValue": "0" }
         ]
       },
-      "VehicleIDV": "738,908",
+      "VehicleIDV": "572,729",
       "AppliedDiscount": "",
       "ProductUINNo": ""
     }
