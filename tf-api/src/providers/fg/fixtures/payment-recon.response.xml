@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Response xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://tempuri.org/">
+  <validationError/>
+  <exceptionError/>
+  <listQuickPayFields>
+    <QuickPayField>
+      <Srno>0</Srno>
+      <PGTransactionID>18387194847</PGTransactionID>
+      <AgentCode/>
+      <TransactionDate>2023-10-20T10:11:56</TransactionDate>
+      <TransactionStatus>Success</TransactionStatus>
+      <AuthCode>009274</AuthCode>
+      <TransactionId>T497555205</TransactionId>
+      <ClientName>ABDUL</ClientName>
+      <PaymentAmount>2530</PaymentAmount>
+      <PaymentGateway>payu</PaymentGateway>
+      <EmailID>ratnadeepdaslaskar@gmail.com</EmailID>
+      <MobileNo>6009943866</MobileNo>
+      <FG_Transaction_ID>TD960044</FG_Transaction_ID>
+    </QuickPayField>
+  </listQuickPayFields>
+</Response>

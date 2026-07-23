@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import crypto from "node:crypto";
+import { readFileSync } from "node:fs";
 import {
   paymentChecksum,
   buildPaymentForm,
@@ -9,6 +10,12 @@ import {
   pgSucceeded,
   pgResultToReceipt,
 } from "../payment.ts";
+import {
+  buildReconSoapBody,
+  parseReconResponse,
+  reconcilePayment,
+  type ReconTransport,
+} from "../payment-recon.ts";
 import type { FgConfig } from "../config.ts";
 import { AppError } from "@/errors/app-error.ts";
 
@@ -219,5 +226,84 @@ describe("FG payment receipt mapping (v1.41 PG params)", () => {
     expect(receipt.receiptType).toBe("IVR");
     expect(receipt.amount).toBe(2530);
     expect(receipt.pgType).toBe("PAYU");
+  });
+});
+
+const RECON_XML = readFileSync(
+  new URL("../fixtures/payment-recon.response.xml", import.meta.url),
+  "utf8",
+);
+const reconConfig = {
+  payment: {
+    reconUrl: "https://pg.example.com/comservice.asmx/FetchTRNDetails",
+    reconSource: "webaggregator",
+  },
+} as unknown as FgConfig;
+
+describe("FG payment recon", () => {
+  it("builds the FetchTRNDetails SOAP body with the transactionId and source", () => {
+    const body = buildReconSoapBody("T497555205", "webaggregator");
+    expect(body).toContain('<FetchTRNDetails xmlns="http://tempuri.org/">');
+    expect(body).toContain("<transactionId>T497555205</transactionId>");
+    expect(body).toContain("<source>webaggregator</source>");
+  });
+
+  it("parses the recon record from either response envelope shape", () => {
+    const rec = parseReconResponse(RECON_XML);
+    expect(rec).not.toBeNull();
+    expect(rec?.status).toBe("Success");
+    expect(rec?.transactionId).toBe("T497555205");
+    expect(rec?.paymentAmount).toBe(2530);
+    expect(rec?.fgTransactionId).toBe("TD960044");
+    expect(rec?.pgTransactionId).toBe("18387194847");
+  });
+
+  it("returns null when no transaction record is present", () => {
+    expect(parseReconResponse("<Response><listQuickPayFields/></Response>")).toBeNull();
+  });
+
+  it("reconciles ok when status/id/amount all match", async () => {
+    const transport: ReconTransport = async () => RECON_XML;
+    const res = await reconcilePayment(
+      reconConfig,
+      { transactionId: "T497555205", expectedAmount: 2530, source: "webaggregator" },
+      transport,
+    );
+    expect(res.ok).toBe(true);
+    expect(res.paymentAmount).toBe(2530);
+    expect(res.fgTransactionId).toBe("TD960044");
+  });
+
+  it("refuses when the returned amount does not match (tamper guard)", async () => {
+    const transport: ReconTransport = async () => RECON_XML;
+    const res = await reconcilePayment(
+      reconConfig,
+      { transactionId: "T497555205", expectedAmount: 9999, source: "webaggregator" },
+      transport,
+    );
+    expect(res.ok).toBe(false);
+    expect(res.reason).toMatch(/amount/i);
+  });
+
+  it("refuses when the returned transactionId does not match", async () => {
+    const transport: ReconTransport = async () => RECON_XML;
+    const res = await reconcilePayment(
+      reconConfig,
+      { transactionId: "SOMETHING_ELSE", expectedAmount: 2530, source: "webaggregator" },
+      transport,
+    );
+    expect(res.ok).toBe(false);
+    expect(res.reason).toMatch(/transaction/i);
+  });
+
+  it("refuses when there is no recon record", async () => {
+    const transport: ReconTransport = async () => "<Response><listQuickPayFields/></Response>";
+    const res = await reconcilePayment(
+      reconConfig,
+      { transactionId: "T1", expectedAmount: 1, source: "webaggregator" },
+      transport,
+    );
+    expect(res.ok).toBe(false);
+    expect(res.reason).toMatch(/not found/i);
   });
 });
