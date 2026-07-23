@@ -4,13 +4,18 @@ import { FG_SLUG } from "./config.ts";
 
 /**
  * Injectable transport so tests can supply a fake FG backend driven by recorded
- * fixtures (returning the parsed `Root` object) without touching the network.
+ * fixtures without touching the network. Motor uses `jsonBody` (JSON gateway);
+ * the health line still uses `xmlBody`/`soapAction` (SOAP) through this same
+ * transport, so both shapes are supported.
  */
 export interface FgTransport {
   request(args: {
     method: "GET" | "POST";
     url: string;
     token: string;
+    /** Motor JSON body (application/json). Presence selects JSON mode. */
+    jsonBody?: unknown;
+    /** Health SOAP body (text/xml). */
     xmlBody?: string;
     soapAction?: string;
   }): Promise<unknown>;
@@ -48,23 +53,32 @@ export function parseSoapResponse(text: string): unknown {
   return parsed.Root ?? parsed;
 }
 
-/** Default transport backed by global fetch (SOAP/XML over HTTPS). */
+/** Default transport backed by global fetch: JSON for motor, SOAP/XML for health. */
 export class FetchTransport implements FgTransport {
   async request(args: {
     method: "GET" | "POST";
     url: string;
     token: string;
+    jsonBody?: unknown;
     xmlBody?: string;
     soapAction?: string;
   }): Promise<unknown> {
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${args.token}`,
-      "Content-Type": "text/xml",
-      accept: "application/json",
-    };
+    const isJson = args.jsonBody !== undefined;
+    const headers: Record<string, string> = isJson
+      ? {
+          Authorization: `Bearer ${args.token}`,
+          "Content-Type": "application/json",
+          accept: "*/*",
+        }
+      : {
+          Authorization: `Bearer ${args.token}`,
+          "Content-Type": "text/xml",
+          accept: "application/json",
+        };
     if (args.soapAction) headers["SOAPAction"] = args.soapAction;
 
-    const response = await fetch(args.url, { method: args.method, headers, body: args.xmlBody });
+    const body = isJson ? JSON.stringify(args.jsonBody) : args.xmlBody;
+    const response = await fetch(args.url, { method: args.method, headers, body });
     const text = await response.text().catch(() => "");
 
     if (!response.ok) {
@@ -74,6 +88,14 @@ export class FetchTransport implements FgTransport {
         `FG request failed [${response.status}]`,
         text.slice(0, 500),
       );
+    }
+
+    if (isJson) {
+      try {
+        return text ? JSON.parse(text) : {};
+      } catch {
+        throw new ProviderError(FG_SLUG, response.status, "FG returned a non-JSON body", text.slice(0, 500));
+      }
     }
     return parseSoapResponse(text);
   }
