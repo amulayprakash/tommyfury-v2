@@ -6,6 +6,7 @@ import {
   buildCreateProposalPayload,
   buildIssueProposalPayload,
   toFgDate,
+  toNumericUid,
   type FgResolvedCodes,
   type FgPayloadMeta,
 } from "../mapper.ts";
@@ -73,8 +74,20 @@ describe("buildGetQuotePayload", () => {
     expect(vehicle(p).ModelCode).toBe("HO0002");
     expect(vehicle(p).IDV).toBe("0");
     expect(vehicle(p).RegistrationDate).toBe("04/06/2024");
-    expect(p.payload.Uid).toBe("req-1");
+    expect(p.payload.Uid).toMatch(/^\d+$/); // FG MotorAPI requires a numeric Uid
     expect(p.payload.VendorCode).toBe("Webagg");
+  });
+
+  it("carries the registration number into Vehicle.RegistrationNo (rollover ENQ)", () => {
+    // FG's JSON MotorAPI rejects a rollover ENQ with a blank RegistrationNo.
+    const p = buildGetQuotePayload(baseQuote({ registrationNumber: "MH01AB1234" }), codes, meta, "r");
+    expect(vehicle(p).RegistrationNo).toBe("MH01AB1234");
+  });
+
+  it("emits a numeric Uid derived from the (UUID) requestId", () => {
+    const p = buildGetQuotePayload(baseQuote(), codes, meta, "3523f7b3-17a3-40d4-9e97-f2d0ff63b22c");
+    expect(p.payload.Uid).toMatch(/^\d+$/);
+    expect(String(p.payload.Uid).length).toBeLessThanOrEqual(20);
   });
 
   it("defaults IDV to 0 (FG computes it) and reprices when a user IDV is given", () => {
@@ -233,6 +246,24 @@ describe("buildCreateProposalPayload", () => {
 describe("toFgDate", () => {
   it("converts ISO to DD/MM/YYYY", () => {
     expect(toFgDate("2026-03-11")).toBe("11/03/2026");
+  });
+});
+
+describe("toNumericUid", () => {
+  it("extracts the numeric digits from a UUID requestId (≤20 digits)", () => {
+    const uid = toNumericUid("3523f7b3-17a3-40d4-9e97-f2d0ff63b22c");
+    expect(uid).toMatch(/^\d+$/);
+    expect(uid.length).toBeGreaterThanOrEqual(8);
+    expect(uid.length).toBeLessThanOrEqual(20);
+  });
+
+  it("falls back to a numeric digest when the requestId has too few digits", () => {
+    expect(toNumericUid("req-1")).toMatch(/^\d+$/);
+    expect(toNumericUid("abc")).toMatch(/^\d+$/);
+  });
+
+  it("is deterministic for a given requestId (stable mapper output)", () => {
+    expect(toNumericUid("req-xyz-9")).toBe(toNumericUid("req-xyz-9"));
   });
 });
 

@@ -46,6 +46,21 @@ export function toFgDate(isoDate: string): string {
   return `${d}/${m}/${y}`;
 }
 
+/**
+ * FG's JSON MotorAPI requires `Uid` to be a numeric string (2-20 digits, unique
+ * per hit) — it rejects the canonical UUID requestId at ENQ/CRT with
+ * "UID must be a valid numeric value". Derive a numeric Uid from the requestId's
+ * digits (deterministic, so mapper output stays test-stable); a char-code digest
+ * covers the rare requestId that has too few digits.
+ */
+export function toNumericUid(requestId: string): string {
+  const digits = requestId.replace(/\D/g, "");
+  if (digits.length >= 8) return digits.slice(0, 18);
+  let acc = 0n;
+  for (const ch of requestId) acc = (acc * 131n + BigInt(ch.charCodeAt(0))) % 10n ** 18n;
+  return acc.toString();
+}
+
 function addYearsIso(isoDate: string, years: number): string {
   const [y, m, d] = isoDate.split("-").map(Number);
   // End date is one day before the anniversary (insurer convention).
@@ -408,9 +423,11 @@ export function buildGetQuotePayload(
   // IDV "0" lets FG compute its default; a user-supplied IDV reprices the OD
   // cover (mirrors CreateProposal so the IDV control actually moves the quote).
   const idv = req.idvValue && req.idvValue > 0 ? String(req.idvValue) : "0";
-  const vehicle = buildVehicle(req, codes, { idv });
+  // Pass the registration number through (blank for a brand-new vehicle). FG's
+  // JSON MotorAPI rejects a rollover ENQ with a blank RegistrationNo.
+  const vehicle = buildVehicle(req, codes, { idv, registrationNo: req.registrationNumber });
   const payload = {
-    Uid: requestId,
+    Uid: toNumericUid(requestId),
     VendorCode: meta.vendorCode,
     VendorUserId: meta.vendorCode,
     PolicyHeader: policyHeader(req, meta, "ENQ"),
@@ -461,7 +478,7 @@ export function buildCreateProposalPayload(
   };
 
   const payload = {
-    Uid: requestId,
+    Uid: toNumericUid(requestId),
     VendorCode: meta.vendorCode,
     VendorUserId: meta.vendorCode,
     PolicyHeader: policyHeader(req, meta, "CRT", { quoteNo: req.quoteId }),
@@ -524,7 +541,7 @@ export function buildIssueProposalPayload(
   };
   const r = req.receipt;
   const payload = {
-    Uid: requestId,
+    Uid: toNumericUid(requestId),
     VendorCode: meta.vendorCode,
     PolicyHeader: policyHeader,
     Receipt: {
