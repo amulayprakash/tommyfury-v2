@@ -996,6 +996,7 @@ export interface paths {
                             customerName?: string;
                             isKycSuccess: boolean;
                             displayMessage?: string;
+                            proposalId?: string;
                             _rawResponse?: unknown;
                         };
                     };
@@ -2777,6 +2778,7 @@ export interface components {
             customerName?: string;
             isKycSuccess: boolean;
             displayMessage?: string;
+            proposalId?: string;
             _rawResponse?: unknown;
         };
         PolicyStatusRequest: {
