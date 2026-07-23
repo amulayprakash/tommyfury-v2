@@ -7,6 +7,7 @@ import {
   buildIssueProposalPayload,
   toFgDate,
   toNumericUid,
+  fgSalutation,
   type FgResolvedCodes,
   type FgPayloadMeta,
 } from "../mapper.ts";
@@ -41,6 +42,7 @@ const fullQuote = (over: Record<string, unknown> = {}) =>
       email: "ck@example.com",
       mobile: "9821550969",
       dob: "1987-12-02",
+      gender: "M",
       panNumber: "ATYPK2714N",
     },
     address: {
@@ -241,6 +243,43 @@ describe("buildCreateProposalPayload", () => {
     const p = buildCreateProposalPayload(fullQuote(), codes, meta, "r");
     expect((p.payload.Client as Record<string, unknown>).CKYCNo).toBe("10097186172315");
   });
+
+  const femaleProposer = {
+    firstName: "Meenu",
+    lastName: "Gupta",
+    email: "m@example.com",
+    mobile: "9696895446",
+    dob: "1990-01-01",
+    gender: "F",
+    panNumber: "DHQPG4064J",
+  };
+
+  it("derives the Salutation from Gender so it matches FG's sex check (F → MRS)", () => {
+    const male = buildCreateProposalPayload(fullQuote(), codes, meta, "r");
+    expect((male.payload.Client as Record<string, unknown>).Salutation).toBe("MR");
+    const female = buildCreateProposalPayload(fullQuote({ proposer: femaleProposer }), codes, meta, "r");
+    const c = female.payload.Client as Record<string, unknown>;
+    expect(c.Salutation).toBe("MRS");
+    expect(c.Gender).toBe("F");
+  });
+
+  it("throws VALIDATION when the proposer gender is missing (FG null-refs on blank)", () => {
+    const noGender = { ...femaleProposer };
+    delete (noGender as { gender?: string }).gender;
+    expect(() =>
+      buildCreateProposalPayload(fullQuote({ proposer: noGender }), codes, meta, "r"),
+    ).toThrowError(/gender/i);
+  });
+
+  it("includes the full Client column set (ClientCategory / VIPFlag / VIPCategory)", () => {
+    const c = buildCreateProposalPayload(fullQuote(), codes, meta, "r").payload.Client as Record<
+      string,
+      unknown
+    >;
+    expect(c.ClientCategory).toBe("");
+    expect(c.VIPFlag).toBe("N");
+    expect(c.VIPCategory).toBe("");
+  });
 });
 
 describe("toFgDate", () => {
@@ -264,6 +303,15 @@ describe("toNumericUid", () => {
 
   it("is deterministic for a given requestId (stable mapper output)", () => {
     expect(toNumericUid("req-xyz-9")).toBe(toNumericUid("req-xyz-9"));
+  });
+});
+
+describe("fgSalutation", () => {
+  it("maps gender to a sex-matching salutation (M→MR, F→MRS)", () => {
+    expect(fgSalutation("M")).toBe("MR");
+    expect(fgSalutation("F")).toBe("MRS");
+    expect(fgSalutation("O")).toBe("MR");
+    expect(fgSalutation(undefined)).toBe("MR");
   });
 });
 

@@ -61,6 +61,16 @@ export function toNumericUid(requestId: string): string {
   return acc.toString();
 }
 
+/**
+ * FG cross-validates the Client Salutation against Gender during CreateProposal
+ * ("Salut Sex not = Clnt Sex"), and NULL-REFs on a blank Gender ("Error During
+ * Client Creation"). Derive a salutation whose sex agrees with the gender so the
+ * two never disagree — a bare title (e.g. always "MR") breaks female proposers.
+ */
+export function fgSalutation(gender: string | undefined): string {
+  return gender === "F" ? "MRS" : "MR";
+}
+
 function addYearsIso(isoDate: string, years: number): string {
   const [y, m, d] = isoDate.split("-").map(Number);
   // End date is one day before the anniversary (insurer convention).
@@ -158,6 +168,7 @@ const EMPTY_ADDRESS = {
 
 /** Full Client column set (FG BANCS DataTable); ENQ sends it empty. */
 const EMPTY_CLIENT = {
+  ClientCategory: "",
   ClientType: "I",
   CreationType: "C",
   Salutation: "",
@@ -175,6 +186,8 @@ const EMPTY_CLIENT = {
   CKYCRefNo: "",
   Address1: EMPTY_ADDRESS,
   Address2: { ...EMPTY_ADDRESS, AddressType: "K" },
+  VIPFlag: "N",
+  VIPCategory: "",
 };
 
 // FG's BANCS engine reads each block into a typed .NET DataTable, so EVERY column
@@ -455,6 +468,15 @@ export function buildCreateProposalPayload(
       "KYC_INCOMPLETE",
     );
   }
+  // FG null-refs during Client creation on a blank Gender (and cross-checks it
+  // against the Salutation) — fail fast with a clear message instead.
+  if (!proposer.gender) {
+    throw new AppError(
+      422,
+      "FG requires the proposer's gender for the proposal. Select a gender and resubmit.",
+      "VALIDATION",
+    );
+  }
   const idv = req.idvValue && req.idvValue > 0 ? String(req.idvValue) : "0";
 
   const vehicleBlock = buildVehicle(req, codes, {
@@ -485,7 +507,7 @@ export function buildCreateProposalPayload(
     POS_MISP: { Type: "", PanNo: "" },
     Client: {
       ...EMPTY_CLIENT,
-      Salutation: proposer.title ? proposer.title.toUpperCase() : "MR",
+      Salutation: fgSalutation(proposer.gender),
       FirstName: proposer.firstName,
       LastName: proposer.lastName,
       DOB: toFgDate(proposer.dob),

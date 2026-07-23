@@ -122,6 +122,7 @@ describe("FG integration (fixtures)", () => {
       email: "ck@example.com",
       mobile: "9821550969",
       dob: "1987-12-02",
+      gender: "M",
       panNumber: "ATYPK2714N",
     },
     address: {

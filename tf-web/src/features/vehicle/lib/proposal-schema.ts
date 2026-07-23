@@ -8,7 +8,8 @@ export const proposalSchema = z.object({
   email: z.email("Enter a valid email address"),
   mobile: z.string().regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit mobile number"),
   dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter the date of birth"),
-  gender: z.enum(["M", "F", "O"]).optional(),
+  // Required: FG rejects a proposal without gender (Salutation is derived from it).
+  gender: z.enum(["M", "F", "O"], { message: "Please select a gender" }),
 
   addressLine1: z.string().min(1, "Enter the address"),
   addressLine2: z.string().optional(),
