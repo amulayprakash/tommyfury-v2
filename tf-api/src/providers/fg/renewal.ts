@@ -1,180 +1,344 @@
-import { XMLParser } from "fast-xml-parser";
 import { ProviderError } from "@/errors/app-error.ts";
 import type { CanonicalQuoteResult } from "@/contracts/quote-result.ts";
 import type { PolicyIssuanceResult } from "@/contracts/policy.ts";
-import type { RenewalQuoteRequest, RenewalCreatePolicyRequest } from "@/contracts/renewal.ts";
+import type {
+  RenewalQuoteRequest,
+  RenewalProposalRequest,
+  RenewalCreatePolicyRequest,
+} from "@/contracts/renewal.ts";
 import { FG_SLUG, FG_DISPLAY_NAME } from "./config.ts";
 import type { FgConfig } from "./config.ts";
 import { toFgDate } from "./mapper.ts";
+import { classifyFgError } from "./http.ts";
 
 /**
- * FG Motor Renewal (motorRenewal/1.0.0) — JSON request, XML `<Root>` response.
- * GetQuote prices an existing policy by number; CreatePolicy issues it directly
- * with the payment receipt. Spec: TCS-Renewal API Documentation UAT v1.2 +
- * GateWay_Motor_Renewal_API.postman_collection.
+ * FG (Generali Central) Motor RenewalModify — Renewal/1.0.0/RenewalModify.
+ * Full JSON, three POST ops on the rebranded gateway:
+ *   ModifyRenewalQuote          → fetch the expiring-policy snapshot + base premium
+ *   ModifyRenewalProposal       → echo the snapshot + a constrained modify delta
+ *   ModifyRenewalPolicyIssuance → bind the payment receipt → new policyNumber
+ *
+ * ⚠ AUTH HEADER: the token is a WSO2 password-grant token (fetched exactly like
+ * every other FG product) but is sent in an `Internal-Key` header — NOT
+ * `Authorization: Bearer`. The GCI docx prose says "Bearer Token"; every actual
+ * curl uses `Internal-Key`. We follow the curls. CONFIRM with FG. A
+ * `Cookie: sess_map` appears in some samples — treated as optional and omitted.
+ *
+ * ⚠ Load-bearing FG misspellings are preserved verbatim in the JSON keys we read
+ * and write: PolicyHolderDeatils, ExipryDate, ChassiNo, ENgineNo, VehicaleIDV,
+ * NCBPercntage, RegistrationNO. Do not "correct" them.
+ *
+ * Spec: GCI Motor Modify Renewal Document (+ kit CURLs).
  */
 
-const xml = new XMLParser({
-  ignoreAttributes: true,
-  removeNSPrefix: true,
-  parseTagValue: false,
-  processEntities: true,
-  trimValues: true,
-});
+// ── value helpers ────────────────────────────────────────────────────────────
 
-const num = (v: unknown): number => {
-  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+/**
+ * FG money/IDV values arrive as comma-grouped decimal strings ("256,500",
+ * "7468.80") on the Quote response and as plain floats on the Proposal response.
+ * Strip separators and round to whole rupees — canonical money is INR integers.
+ */
+function rupees(v: unknown): number {
+  if (typeof v === "number") return Number.isFinite(v) ? Math.round(v) : 0;
   if (typeof v === "string") {
     const n = Number(v.replace(/,/g, "").trim());
-    return Number.isFinite(n) ? n : 0;
+    return Number.isFinite(n) ? Math.round(n) : 0;
   }
   return 0;
-};
-const str = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined);
-const asArray = <T>(v: unknown): T[] =>
-  Array.isArray(v) ? (v as T[]) : v && typeof v === "object" ? [v as T] : [];
+}
 
-async function postJson(url: string, token: string, body: unknown): Promise<string> {
+const str = (v: unknown): string | undefined =>
+  typeof v === "string" && v.trim() ? v.trim() : undefined;
+
+const obj = (v: unknown): Record<string, unknown> =>
+  v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+
+// CoverCode → canonical policy type; ProductCode → canonical vehicle category.
+const COVER_TO_POLICY: Record<string, string> = {
+  CO: "comprehensive",
+  OD: "standAloneOD",
+  LO: "thirdParty",
+};
+function productToCategory(code: string): string {
+  // FCV/FGV/FPC are commercial; FPV/FVO/F13 (and default) are four-wheeler.
+  return code.startsWith("FC") || code === "FGV" || code === "FPC"
+    ? "commercial"
+    : "fourWheeler";
+}
+
+// ── transport ────────────────────────────────────────────────────────────────
+
+/** POST JSON to a RenewalModify op with the token in an `Internal-Key` header. */
+async function postJson(
+  url: string,
+  token: string,
+  body: unknown,
+): Promise<Record<string, unknown>> {
   const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      accept: "application/xml",
-      Authorization: `Bearer ${token}`,
+      accept: "*/*",
+      "Internal-Key": token,
     },
     body: JSON.stringify(body),
   });
   const text = await res.text().catch(() => "");
   if (!res.ok) {
-    throw new ProviderError(FG_SLUG, res.status, `FG renewal request failed [${res.status}]`, text.slice(0, 500));
+    throw new ProviderError(
+      FG_SLUG,
+      res.status,
+      `FG renewal request failed [${res.status}]`,
+      text.slice(0, 500),
+    );
   }
-  return text;
+  try {
+    return obj(JSON.parse(text));
+  } catch {
+    throw new ProviderError(FG_SLUG, 200, "FG renewal returned non-JSON", text.slice(0, 500));
+  }
 }
 
-/** Unwraps the `<Root>` from a renewal XML response. */
-function parseRoot(text: string): Record<string, unknown> {
-  const parsed = xml.parse(text) as Record<string, unknown>;
-  const root = (parsed.Root ?? parsed) as Record<string, unknown>;
-  return root && typeof root === "object" ? root : {};
+/**
+ * FG renewal signals failure via a `Status`/`status` of "Fail"/"Failed" plus an
+ * `ErrorCode`/`ErrorDescription`. A *Success* carrying `ErrorCode: "0"` + a
+ * Break-in `ErrorDescription` is NOT a failure (it flags the inspection
+ * requirement) — Status stays "Success", so this guard lets it through.
+ */
+function assertRenewalSuccess(body: Record<string, unknown>, context: string): void {
+  const status = (str(body.Status) ?? str(body.status) ?? "").toLowerCase();
+  if (!status.startsWith("fail") && !status.startsWith("error")) return;
+  const message =
+    str(body.ErrorDescription) ??
+    str(body.errorDescription) ??
+    str(body.ErrorCode) ??
+    str(body.errorCode) ??
+    "unknown error";
+  throw new ProviderError(
+    FG_SLUG,
+    200,
+    `FG ${context} failed: ${message}`,
+    body,
+    classifyFgError(message),
+  );
 }
 
-interface RenewalRow {
-  Code?: string;
-  Type?: string;
-  BOValue?: unknown;
-}
+// ── ModifyRenewalQuote ───────────────────────────────────────────────────────
 
-/** Prices a renewal; maps the `<PremiumBreakup>` table to the canonical result. */
+/** Prices an existing policy; returns the expiring-policy snapshot + base premium. */
 export async function fgRenewalQuote(
   config: FgConfig,
   req: RenewalQuoteRequest,
   token: string,
-  ctx: { requestId: string; vehicleCategory: string; policyType: string },
+  ctx: { requestId: string },
 ): Promise<CanonicalQuoteResult> {
   const body = {
-    PolicyNo: req.policyNo,
-    ExpiryDate: req.expiryDate ? toFgDate(req.expiryDate) : "",
-    RegistrationNo: req.registrationNo ?? "",
-    VendorCode: config.vendorCode,
+    policyNo: req.policyNo,
+    expiryDate: req.expiryDate ? toFgDate(req.expiryDate) : "",
+    registrationNo: req.registrationNo ?? "",
+    vendorCode: config.vendorCode,
   };
-  const root = parseRoot(await postJson(`${config.renewal.baseUrl}/GetQuote`, token, body));
+  const root = await postJson(`${config.renewal.baseUrl}/ModifyRenewalQuote`, token, body);
+  assertRenewalSuccess(root, "renewal-quote");
 
-  const quotationNo = str(root.QuotationNo);
-  if (!quotationNo) {
-    throw new ProviderError(FG_SLUG, 200, "FG renewal returned no QuotationNo", root);
-  }
+  const old = obj(root.OldPolicyDetails);
+  const holder = obj(root.PolicyHolderDeatils);
+  const vehicle = obj(root.VehicleDetails);
+  const od = obj(root.ODPremium);
+  const tp = obj(root.TPPremium);
 
-  const dataset = (root.PremiumBreakup as Record<string, unknown> | undefined)?.NewDataSet as
-    | Record<string, unknown>
-    | undefined;
-  const rows = asArray<RenewalRow>(dataset?.Table);
+  const proposalNo = str(old.ProposalNo) ?? `00${req.policyNo}`;
+  const coverCode = str(old.CoverCode) ?? "CO";
+  const productCode = str(old.ProductCode) ?? "FPV";
 
-  let grossOd = 0;
-  let grossTp = 0;
-  let servTaxOd = 0;
-  let servTaxTp = 0;
-  let finalPremium = 0;
-  let idv = 0;
-  for (const r of rows) {
-    const code = (r.Code ?? "").trim();
-    const isTp = (r.Type ?? "").toUpperCase() === "TP";
-    const value = num(r.BOValue);
-    if (code === "Final Premium") finalPremium = value;
-    else if (code === "Gross Premium") {
-      if (isTp) grossTp = value;
-      else grossOd = value;
-    } else if (code === "ServTax") {
-      if (isTp) servTaxTp = value;
-      else servTaxOd = value;
-    } else if (code === "VehicaleIDV" || code === "VehicleIDV") idv = value;
-  }
-  const netPremium = grossOd + grossTp;
-  const serviceTaxAmount = servTaxOd + servTaxTp;
-  const grossPremium = finalPremium || netPremium + serviceTaxAmount;
+  const grossPremium = rupees(root.FinalPremium);
+  const serviceTaxAmount = rupees(root.ServiceTax);
+  const basicOdPremium = rupees(od.GrossPremium);
+  const thirdPartyPremium = rupees(tp.GrossPremium);
+  const totalAddonPremium = rupees(od.TotalAddon);
+  const idvValue = rupees(vehicle.VehicleIDV);
+  const netPremium = Math.max(grossPremium - serviceTaxAmount, 0);
+
+  // A Success with a Break-in ErrorDescription flags the inspection requirement.
+  const errorDesc = str(root.ErrorDescription) ?? "";
+  const isInspectionRequired = /break-?in/i.test(errorDesc);
 
   return {
-    quoteNo: quotationNo,
-    transactionId: quotationNo,
+    quoteNo: proposalNo,
+    transactionId: proposalNo,
     requestId: ctx.requestId,
     providerSlug: FG_SLUG,
     insurerName: FG_DISPLAY_NAME,
-    policyType: ctx.policyType,
-    vehicleCategory: ctx.vehicleCategory,
-    idvValue: idv,
-    basicOdPremium: grossOd,
-    thirdPartyPremium: grossTp,
+    policyType: COVER_TO_POLICY[coverCode] ?? "comprehensive",
+    vehicleCategory: productToCategory(productCode),
+    idvValue,
+    basicOdPremium,
+    thirdPartyPremium,
     addonPremiums: {},
     discounts: {},
-    totalAddonPremium: 0,
+    totalAddonPremium,
     totalDiscount: 0,
     netPremium,
     serviceTaxPercent: 18,
     serviceTaxAmount,
     grossPremium,
-    contractDetails: { quotationNo, renewalOfPolicy: req.policyNo },
+    isInspectionRequired,
+    contractDetails: {
+      previousPolicyNo: str(old.PolicyNo) ?? req.policyNo,
+      proposalNo,
+      productCode,
+      coverCode,
+      agentCode: str(old.AgentCode),
+      branch: str(old.Branch),
+      clientCode: str(holder.ClientID),
+      ckycStatus: str(holder.CKYCStatus),
+      registrationNo: str(vehicle.RegistrationNO),
+      expiryDate: str(old.ExipryDate),
+      // Echo the quote's discount % verbatim (negative) for the proposal step.
+      discountPercentage: str(od.DiscountPercentage),
+      previousPolicyNCB: str(od.PreviousPolicyNCB),
+      eligiblePolicyNCB: str(od.EligiblePolicyNCB),
+    },
     _rawResponse: root,
   };
 }
 
-/** Issues the renewal directly with the collected payment receipt. */
+// ── ModifyRenewalProposal ────────────────────────────────────────────────────
+
+/** Echoes the quote snapshot + applies the modification delta; returns the
+ *  bound (re-rated) premium plus the ClientID/AgentCode needed for issuance. */
+export async function fgRenewalProposal(
+  config: FgConfig,
+  req: RenewalProposalRequest,
+  token: string,
+  ctx: { requestId: string },
+): Promise<CanonicalQuoteResult> {
+  const payload = {
+    ProductCode: req.productCode,
+    PolicyDetails: {
+      PreviousPolicyNo: req.previousPolicyNo,
+      ProposalNo: req.proposalNo,
+      StartDate: toFgDate(req.startDate),
+      ExipryDate: toFgDate(req.expiryDate), // ← preserve misspelling
+      ClientCode: req.clientCode,
+      ...(req.ckycNo ? { CKYCNo: req.ckycNo } : {}),
+      ...(req.ckycRefNo ? { CKYCRefNo: req.ckycRefNo } : {}),
+    },
+    ModifyDetails: {
+      AgentCode: req.agentCode,
+      Branch: req.branch,
+      CoverCode: req.coverCode,
+      VehicleIDV: String(req.vehicleIdv),
+      DiscountPercentage: String(req.discountPercentage),
+      ElectricalAccessoriesValues: req.electricalAccessoriesValues ?? "",
+      NonElectricalAccessoriesValues: req.nonElectricalAccessoriesValues ?? "",
+      IMT23: req.imt23 ?? "",
+      IMT10: req.imt10 ?? "",
+      IMT15: req.imt15 ?? "",
+      IMT16: req.imt16 ?? "",
+      IMT28: req.imt28 ?? "",
+      IMT29: req.imt29 ?? "",
+      IMT20: req.imt20 ?? "",
+      ...(req.idvOfCngOrLpg !== undefined ? { IDVOfCNGOrLPG: String(req.idvOfCngOrLpg) } : {}),
+      AddonCode: req.addonCodes.map((c) => ({ CoverCode: c })),
+    },
+    InspectionNo: req.inspectionNo ?? "",
+    InspectionDate: req.inspectionDate ? toFgDate(req.inspectionDate) : "",
+  };
+  const root = await postJson(`${config.renewal.baseUrl}/ModifyRenewalProposal`, token, payload);
+  assertRenewalSuccess(root, "renewal-proposal");
+
+  const od = obj(root.ODPremium);
+  const tp = obj(root.TPPremium);
+  const proposalNo = str(root.ProposalNo) ?? req.proposalNo;
+
+  // In ModifyRenewalProposal, `TotalPremium` is the NET (pre-tax) premium and
+  // `gst` is added ON TOP (canonical grossPremium is tax-INCLUSIVE, matching the
+  // Quote path where FinalPremium is gross). Corroboration: net 6595.71 + gst
+  // 1187.23 = 7782.94 → gross 7783 == the ModifyRenewalPolicyIssuance sample
+  // Receipt.Amount "7783" (the real payable). Do NOT invert these.
+  const serviceTaxAmount = rupees(root.gst);
+  const netPremium = rupees(root.TotalPremium);
+  const grossPremium = netPremium + serviceTaxAmount;
+  const basicOdPremium = rupees(od.GrossPremium);
+  const thirdPartyPremium = rupees(tp.GrossPremium);
+  const totalAddonPremium = rupees(od.TotalAddon);
+
+  return {
+    quoteNo: proposalNo,
+    transactionId: proposalNo,
+    requestId: ctx.requestId,
+    providerSlug: FG_SLUG,
+    insurerName: FG_DISPLAY_NAME,
+    policyType: COVER_TO_POLICY[req.coverCode] ?? "comprehensive",
+    vehicleCategory: productToCategory(req.productCode),
+    idvValue: req.vehicleIdv,
+    basicOdPremium,
+    thirdPartyPremium,
+    addonPremiums: {},
+    discounts: {},
+    totalAddonPremium,
+    totalDiscount: 0,
+    netPremium,
+    serviceTaxPercent: 18,
+    serviceTaxAmount,
+    grossPremium,
+    contractDetails: {
+      previousPolicyNo: str(root.PreviousPolicyNo) ?? req.previousPolicyNo,
+      proposalNo,
+      clientId: str(root.ClientID) ?? req.clientCode,
+      agentCode: str(root.AgentCode) ?? req.agentCode,
+      branchCode: req.branch,
+    },
+    _rawResponse: root,
+  };
+}
+
+// ── ModifyRenewalPolicyIssuance ──────────────────────────────────────────────
+
+/** Issues the renewal with the collected payment receipt; returns the new policy. */
 export async function fgRenewalCreatePolicy(
   config: FgConfig,
   req: RenewalCreatePolicyRequest,
   token: string,
 ): Promise<PolicyIssuanceResult> {
   const r = req.receipt;
-  const body = {
+  const payload = {
     PolicyNo: req.policyNo,
     VendorCode: config.vendorCode,
-    ExpiryDate: req.expiryDate ? toFgDate(req.expiryDate) : "",
+    ClientID: req.clientId,
     RegistrationNo: req.registrationNo ?? "",
-    QuotationNo: req.quoteNo,
-    CKYCRefNo: req.ckycRefNo ?? "",
-    CKYCNo: req.ckycNo ?? "",
+    ProposalNo: req.proposalNo,
+    AgentCode: req.agentCode,
+    BranchCode: req.branchCode,
     Receipt: {
       UniqueTranKey: r.uniqueTranKey,
       CheckType: r.checkType ?? "",
       BSBCode: r.bsbCode ?? "",
       TransactionDate: r.transactionDate,
       ReceiptType: r.receiptType,
-      Amount: r.amount,
-      TCSAmount: r.tcsAmount ?? "",
+      Amount: String(r.amount),
       TranRefNo: r.tranRefNo,
       TranRefNoDate: r.tranRefNoDate,
+      // Renewal issuance uses `PaymentType` (motor NB uses `PGType`).
+      PaymentType: r.pgType ?? "",
     },
   };
-  const root = parseRoot(await postJson(`${config.renewal.baseUrl}/CreatePolicy`, token, body));
+  const root = await postJson(
+    `${config.renewal.baseUrl}/ModifyRenewalPolicyIssuance`,
+    token,
+    payload,
+  );
+  assertRenewalSuccess(root, "renewal-issuance");
 
-  const policy = (root.Policy as Record<string, unknown> | undefined) ?? root;
-  const policyNumber = str(policy.PolicyNo) ?? str(root.PolicyNo);
+  const policyNumber = str(root.policyNumber) ?? str(root.PolicyNo);
   return {
     providerSlug: FG_SLUG,
     insurerName: FG_DISPLAY_NAME,
     status: policyNumber ? "ISSUED" : "IN_PROGRESS",
     policyNumber,
-    applicationNo: str(policy.ApplicationNo),
-    receiptNo: str((root.Receipt as Record<string, unknown> | undefined)?.ReceiptNo),
-    quoteNo: req.quoteNo,
+    quoteNo: str(root.proposalNumber) ?? req.proposalNo,
+    clientId: req.clientId,
     _rawResponse: root,
   };
 }

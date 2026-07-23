@@ -371,11 +371,7 @@ export class FgProvider
 
   async renewalQuote(req: RenewalQuoteRequest, ctx: ProviderContext): Promise<CanonicalQuoteResult> {
     return this.withAuthRetry(this.renewalToken, (token) =>
-      fgRenewalQuote(this.config, req, token, {
-        requestId: ctx.requestId,
-        vehicleCategory: "fourWheeler",
-        policyType: "comprehensive",
-      }),
+      fgRenewalQuote(this.config, req, token, { requestId: ctx.requestId }),
     );
   }
 
