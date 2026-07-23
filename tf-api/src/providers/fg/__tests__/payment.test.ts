@@ -2,11 +2,13 @@ import { describe, it, expect } from "vitest";
 import crypto from "node:crypto";
 import {
   paymentChecksum,
+  buildPaymentForm,
   decryptPaymentResponse,
   desAvailable,
   parsePgFields,
   pgSucceeded,
 } from "../payment.ts";
+import type { FgConfig } from "../config.ts";
 
 // DES-CBC params from NewPaymentIntegration_v1.40.pdf (do not change).
 const DES_KEY = Buffer.from("&%#@?,:*", "utf8");
@@ -35,6 +37,120 @@ describe("FG payment checksum", () => {
       Email: "test@test.com",
     });
     expect(hash).toBe("b27f0d7b168c58818164ad732f55a185d51469abc564daa7ac15c1b6367d087a");
+  });
+
+  it("matches the documented Node.js SHA-256 vector (11-field, trailing pipe)", () => {
+    // v1.41 PDF p7 Node.js example.
+    const hash = paymentChecksum({
+      TransactionID: "AJ026789",
+      PaymentOption: "3",
+      ResponseURL: "http://localhost:48658/ECOM/WEBAPPLN/UI/Common/WebAggData.htm",
+      ProposalNumber: "A321456987",
+      PremiumAmount: "1000",
+      UserIdentifier: "TestAgg",
+      UserId: "456",
+      FirstName: "tester",
+      LastName: "tester",
+      Mobile: "987654321",
+      Email: "test@test.com",
+    });
+    expect(hash).toBe("5d597e923b13bd897c0ff4401d167b06961d91c8b1856e98ddd5a1f0b912862d");
+  });
+
+  // CHANGE-DETECTION LOCK — not a live-FG conformance vector. The `php12` hash
+  // below is computed over the .NET example's ResponseURL + timestamp, NOT the
+  // v1.41 PDF's printed PHP example string (that uses
+  // `digiuat.generalicentralinsurance.com` and shows a trailing space after
+  // "AM"). This only pins our 12-field implementation against accidental change;
+  // it does NOT prove the checksum matches what FG's live gateway computes. The
+  // exact 12th-field format (trailing space, AM/PM 12-hour, local timezone) is an
+  // open confirmation — validate against a real UAT txn (see open confirmations).
+  it("PHP mode appends a 12th timestamp field (change-detection lock, not a live-FG vector)", () => {
+    const base = {
+      TransactionID: "AJ123456789",
+      PaymentOption: "3",
+      ResponseURL: "http://fglpg001.futuregenerali.in/ECOM_NL/WEBAPPLN/UI/Common/WebAggData.aspx",
+      ProposalNumber: "A321456987",
+      PremiumAmount: "1000",
+      UserIdentifier: "TestAgg",
+      UserId: "456",
+      FirstName: "tester",
+      LastName: "tester",
+      Mobile: "987654321",
+      Email: "test@test.com",
+    };
+    const net11 = paymentChecksum(base);
+    const php12 = paymentChecksum(base, "17/04/2018 11:16:14 AM");
+    expect(net11).toBe("b27f0d7b168c58818164ad732f55a185d51469abc564daa7ac15c1b6367d087a");
+    expect(php12).toBe("b98c3e8f70fbed57499a42409365b15425f84785bb61c7aee42b7e92c1000733");
+    expect(php12).not.toBe(net11);
+  });
+});
+
+const baseConfig = (vendor: string): FgConfig =>
+  ({
+    vendorCode: "Webagg",
+    agentCode: "60001464",
+    payment: {
+      url: "https://pay.example.com/WebAggPayNew.aspx",
+      paymentOption: "3",
+      vendor,
+      responseUrl: "https://app.example.com/api/v1/fg/payment/callback",
+      reconUrl: "https://pg.example.com/comservice.asmx/FetchTRNDetails",
+      reconSource: "webaggregator",
+    },
+  }) as unknown as FgConfig;
+
+const payInput = {
+  quoteNo: "Q123",
+  premiumAmount: 2530,
+  firstName: "Raj",
+  lastName: "Sharma",
+  mobile: "9809801234",
+  email: "raj@test.com",
+};
+
+describe("FG payment form (Vendor-aware)", () => {
+  it("PHP mode: sends Vendor=1 and a 12-field checksum with the timestamp", () => {
+    const now = new Date(2018, 3, 17, 11, 16, 14); // 17/04/2018 11:16:14 (local)
+    const form = buildPaymentForm(baseConfig("1"), payInput, now);
+    expect(form.fields.Vendor).toBe("1");
+    const expected = paymentChecksum(
+      {
+        TransactionID: "Q123",
+        PaymentOption: "3",
+        ResponseURL: "https://app.example.com/api/v1/fg/payment/callback",
+        ProposalNumber: "Q123",
+        PremiumAmount: "2530",
+        UserIdentifier: "Webagg",
+        UserId: "60001464",
+        FirstName: "Raj",
+        LastName: "Sharma",
+        Mobile: "9809801234",
+        Email: "raj@test.com",
+      },
+      "17/04/2018 11:16:14 AM",
+    );
+    expect(form.fields.CheckSum).toBe(expected);
+  });
+
+  it(".NET mode: sends blank Vendor and an 11-field checksum (no timestamp)", () => {
+    const form = buildPaymentForm(baseConfig(""), payInput);
+    expect(form.fields.Vendor).toBe("");
+    const expected = paymentChecksum({
+      TransactionID: "Q123",
+      PaymentOption: "3",
+      ResponseURL: "https://app.example.com/api/v1/fg/payment/callback",
+      ProposalNumber: "Q123",
+      PremiumAmount: "2530",
+      UserIdentifier: "Webagg",
+      UserId: "60001464",
+      FirstName: "Raj",
+      LastName: "Sharma",
+      Mobile: "9809801234",
+      Email: "raj@test.com",
+    });
+    expect(form.fields.CheckSum).toBe(expected);
   });
 });
 

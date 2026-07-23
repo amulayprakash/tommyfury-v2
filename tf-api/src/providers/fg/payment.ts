@@ -36,42 +36,63 @@ export interface PaymentForm {
 }
 
 /**
- * SHA-256 hex over the pipe-joined request params, trailing "|" after Email —
- * exactly the .NET format in the integration doc. No salt/secret is applied
- * (the doc's checksum is unsalted).
+ * SHA-256 hex over the pipe-joined request params with a trailing "|".
+ * `.NET`/Node mode = 11 fields. PHP mode passes `phpTimestamp`, which is appended
+ * as a 12th field before the trailing "|" (v1.41 PDF p6). No salt/secret is
+ * applied (FG's checksum is unsalted). `Vendor` and `CheckSum` are never hashed.
  */
-export function paymentChecksum(fields: {
-  TransactionID: string;
-  PaymentOption: string;
-  ResponseURL: string;
-  ProposalNumber: string;
-  PremiumAmount: string;
-  UserIdentifier: string;
-  UserId: string;
-  FirstName: string;
-  LastName: string;
-  Mobile: string;
-  Email: string;
-}): string {
-  const text =
-    [
-      fields.TransactionID,
-      fields.PaymentOption,
-      fields.ResponseURL,
-      fields.ProposalNumber,
-      fields.PremiumAmount,
-      fields.UserIdentifier,
-      fields.UserId,
-      fields.FirstName,
-      fields.LastName,
-      fields.Mobile,
-      fields.Email,
-    ].join("|") + "|";
+export function paymentChecksum(
+  fields: {
+    TransactionID: string;
+    PaymentOption: string;
+    ResponseURL: string;
+    ProposalNumber: string;
+    PremiumAmount: string;
+    UserIdentifier: string;
+    UserId: string;
+    FirstName: string;
+    LastName: string;
+    Mobile: string;
+    Email: string;
+  },
+  phpTimestamp?: string,
+): string {
+  const parts = [
+    fields.TransactionID,
+    fields.PaymentOption,
+    fields.ResponseURL,
+    fields.ProposalNumber,
+    fields.PremiumAmount,
+    fields.UserIdentifier,
+    fields.UserId,
+    fields.FirstName,
+    fields.LastName,
+    fields.Mobile,
+    fields.Email,
+  ];
+  if (phpTimestamp !== undefined) parts.push(phpTimestamp);
+  const text = parts.join("|") + "|";
   return crypto.createHash("sha256").update(text, "utf8").digest("hex");
 }
 
+/**
+ * Formats a Date as FG's PHP-mode checksum timestamp: `dd/MM/yyyy hh:mm:ss AM/PM`
+ * (12-hour clock, uppercase meridiem), e.g. "17/04/2018 11:16:14 AM".
+ */
+function formatPgTimestamp(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  const meridiem = d.getHours() < 12 ? "AM" : "PM";
+  let hour = d.getHours() % 12;
+  if (hour === 0) hour = 12;
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(hour)}:${p(d.getMinutes())}:${p(d.getSeconds())} ${meridiem}`;
+}
+
 /** Builds the action URL + signed field set for the auto-submitting form. */
-export function buildPaymentForm(config: FgConfig, input: PaymentInitiateInput): PaymentForm {
+export function buildPaymentForm(
+  config: FgConfig,
+  input: PaymentInitiateInput,
+  now = new Date(),
+): PaymentForm {
   if (!config.payment.responseUrl) {
     throw new Error("FG_PAYMENT_RESPONSE_URL is not configured");
   }
@@ -88,12 +109,13 @@ export function buildPaymentForm(config: FgConfig, input: PaymentInitiateInput):
     Mobile: input.mobile,
     Email: input.email,
   };
-  const CheckSum = paymentChecksum(base);
-  // Vendor=1 → PHP integration mode: FG returns the result as plain query/form
-  // params on the ResponseURL (no DES decryption needed — portable on Node /
-  // OpenSSL 3, which disables legacy single-DES). Blank/0 selects .NET mode
-  // (encrypted ResponseData), handled defensively by parsePgFields.
-  return { url: config.payment.url, fields: { ...base, Vendor: "1", CheckSum } };
+  // vendor "1" = PHP mode: FG returns plaintext result params on the ResponseURL
+  // (no DES needed) and the checksum carries a 12th timestamp field. Blank/"0" =
+  // .NET mode (DES-encrypted ResponseData, 11-field checksum).
+  const vendor = config.payment.vendor;
+  const phpTimestamp = vendor === "1" ? formatPgTimestamp(now) : undefined;
+  const CheckSum = paymentChecksum(base, phpTimestamp);
+  return { url: config.payment.url, fields: { ...base, Vendor: vendor, CheckSum } };
 }
 
 export interface PgResult {
