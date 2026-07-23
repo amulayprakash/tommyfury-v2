@@ -133,6 +133,21 @@ export interface OvdUploadBody {
   proofOfAddress: File;
 }
 
+/** Mirrors tf-api's multer limit (`lifecycle.routes.ts`) so we fail before uploading. */
+export const OVD_MAX_FILE_BYTES = 5 * 1024 * 1024;
+/** ICICI runs automatic document recognition, so only real scans/photos are useful. */
+export const OVD_ACCEPTED_MIME = ["image/jpeg", "image/png", "application/pdf"] as const;
+
+/** Returns a human-readable reason the file is unusable, or null when it's fine. */
+export function validateOvdFile(file: File, label: string): string | null {
+  if (!OVD_ACCEPTED_MIME.includes(file.type as (typeof OVD_ACCEPTED_MIME)[number]))
+    return `${label} must be a JPG, PNG or PDF.`;
+  if (file.size > OVD_MAX_FILE_BYTES)
+    return `${label} is ${(file.size / 1024 / 1024).toFixed(1)} MB — the limit is 5 MB.`;
+  if (file.size === 0) return `${label} is empty.`;
+  return null;
+}
+
 /** Alternate KYC: uploads ID + address proofs (multipart) to the OVD endpoint. */
 export async function initiateOvd(
   providerSlug: string,
@@ -148,6 +163,10 @@ export async function initiateOvd(
   const { data } = await vendorClient.post<ApiEnvelope<OvdResult>>(
     `/${providerSlug}/kyc/ovd`,
     form,
+    // vendorClient defaults to `application/json`; axios's transformRequest sees
+    // that and serialises FormData to JSON (files become `{}`), so multer never
+    // gets a multipart body. Clearing it lets axios set the boundary itself.
+    { headers: { "Content-Type": undefined } },
   );
   return data.response;
 }

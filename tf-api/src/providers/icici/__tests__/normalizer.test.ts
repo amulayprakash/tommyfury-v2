@@ -76,6 +76,25 @@ describe("normalizeCkyc / normalizeOvd", () => {
     expect(r.kycId).toBe("kyc_5k4grUGluqgq7VB29pLCh");
     expect(r.isKycSuccess).toBe(true);
   });
+
+  // ICICI auto-reads the uploaded scans; an accepted upload (Success:true) whose
+  // documents failed recognition must NOT be treated as verified KYC, or the
+  // proposal downstream is rejected with ErrorCode 443 "KYC PENDING".
+  it("treats an accepted upload with failed recognition as unverified", () => {
+    const r = normalizeOvd({
+      isKycSuccess: false,
+      Success: true,
+      KycID: null,
+      ErrorMessage: "Kyc Failed.. Re-upload Documents",
+    });
+    expect(r.isKycSuccess).toBe(false);
+    expect(r.displayMessage).toBe("Kyc Failed.. Re-upload Documents");
+  });
+
+  it("falls back to Success when isKycSuccess is absent", () => {
+    expect(normalizeOvd({ Success: true }).isKycSuccess).toBe(true);
+    expect(normalizeOvd({ Success: false }).isKycSuccess).toBe(false);
+  });
 });
 
 describe("normalizePolicyStatus", () => {

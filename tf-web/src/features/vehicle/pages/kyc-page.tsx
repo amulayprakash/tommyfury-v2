@@ -15,6 +15,7 @@ import { apiErrorCode, apiErrorMessage } from "@/lib/api/error-message";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { validateOvdFile } from "../api/vehicle-api";
 import { useCkyc, useOvd, useProviders } from "../api/hooks";
 import { OVD_DOC_TYPES, type KycResult, type OvdDocType } from "../api/types";
 import { WizardSteps } from "../components/wizard-steps";
@@ -48,6 +49,7 @@ export function KycPage() {
   const [poaType, setPoaType] = useState<OvdDocType>("AADHAAR");
   const [poiFile, setPoiFile] = useState<File | null>(null);
   const [poaFile, setPoaFile] = useState<File | null>(null);
+  const [ovdError, setOvdError] = useState<string | null>(null);
 
   // CKYC runs after the proposer details are captured and before the bound
   // proposal (FG flow: Quote → CKYC → Proposal).
@@ -133,11 +135,27 @@ export function KycPage() {
     );
   };
 
+  /** Validates on selection so a bad file is caught before the upload round-trip. */
+  const pickFile = (setFile: (f: File | null) => void, label: string) => {
+    return (file: File | null) => {
+      const problem = file ? validateOvdFile(file, label) : null;
+      setOvdError(problem);
+      setFile(problem ? null : file);
+    };
+  };
+
   const runOvd = () => {
     if (!poiFile || !poaFile) {
-      toast.error("Upload both an identity and an address proof.");
+      setOvdError("Upload both an identity and an address proof.");
       return;
     }
+    const problem =
+      validateOvdFile(poiFile, "Identity proof") ?? validateOvdFile(poaFile, "Address proof");
+    if (problem) {
+      setOvdError(problem);
+      return;
+    }
+    setOvdError(null);
     ovd.mutate(
       {
         provider: selected.providerSlug,
@@ -155,13 +173,23 @@ export function KycPage() {
             // OVD has no CKYC number; ICICI links the KYC by TransactionId.
             setCkyc(null, result.kycId ?? null);
             setKyc(result.kycId ?? "verified");
+            setOvdError(null);
             toast.success("KYC verified");
             void goToProposal();
           } else {
-            toast.error("KYC could not be completed with the uploaded documents.");
+            // ICICI auto-reads the scans and rejects unreadable ones — surface
+            // their verbatim reason so the user knows what to re-upload.
+            const reason =
+              result.displayMessage ?? "KYC could not be completed with the uploaded documents.";
+            setOvdError(reason);
+            toast.error(reason);
           }
         },
-        onError: (err) => toast.error(apiErrorMessage(err, "Document upload failed.")),
+        onError: (err) => {
+          const reason = apiErrorMessage(err, "Document upload failed.");
+          setOvdError(reason);
+          toast.error(reason);
+        },
       },
     );
   };
@@ -311,8 +339,10 @@ export function KycPage() {
                           </select>
                           <Input
                             type="file"
-                            accept="image/*,application/pdf"
-                            onChange={(e) => setPoiFile(e.target.files?.[0] ?? null)}
+                            accept="image/jpeg,image/png,application/pdf"
+                            onChange={(e) =>
+                              pickFile(setPoiFile, "Identity proof")(e.target.files?.[0] ?? null)
+                            }
                           />
                         </label>
                         <label className="space-y-1">
@@ -330,11 +360,18 @@ export function KycPage() {
                           </select>
                           <Input
                             type="file"
-                            accept="image/*,application/pdf"
-                            onChange={(e) => setPoaFile(e.target.files?.[0] ?? null)}
+                            accept="image/jpeg,image/png,application/pdf"
+                            onChange={(e) =>
+                              pickFile(setPoaFile, "Address proof")(e.target.files?.[0] ?? null)
+                            }
                           />
                         </label>
                       </div>
+                      <p className="text-xs text-muted-foreground">
+                        JPG, PNG or PDF, up to 5 MB each. Upload a clear scan — the insurer reads
+                        the documents automatically and rejects unreadable ones.
+                      </p>
+                      {ovdError ? <p className="text-xs text-destructive">{ovdError}</p> : null}
                       <Button
                         variant="outline"
                         className="w-full"

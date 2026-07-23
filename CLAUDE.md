@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Tommy & Furry v2 is a vendor insurance aggregator. It contains **two independent npm projects** (not a workspace — each has its own `package.json`, `node_modules`, and tooling):
 
-- **`tf-api/`** — Express + TypeScript backend that adapts multiple insurer vendor APIs (Future Generali, ICICI Lombard) behind one canonical motor-insurance API. Persists with Prisma + MySQL.
+- **`tf-api/`** — Express + TypeScript backend that adapts multiple insurer vendor APIs (Future Generali, ICICI Lombard) behind one canonical API. Covers **two lines of business — motor and health** (each with its own contracts, routes, and provider capability); motor is the more mature. Persists with Prisma + MySQL.
 - **`tf-web/`** — React 19 + Vite frontend (the customer journey UI) that consumes both `tf-api` and an existing legacy Laravel API.
 
 The two are coupled by an OpenAPI contract: `tf-api` generates `openapi/openapi.json` from its zod schemas, and `tf-web` regenerates typed bindings from it.
@@ -40,7 +40,11 @@ npm run db:up        # docker compose up MySQL
 npm run db:migrate   # prisma migrate dev
 npm run db:seed      # seed masters + providers (tsx prisma/seed.ts)
 npm run db:studio    # prisma studio
-npm run db:import:fg # import FG master spreadsheet → DB (scripts/import-fg-master.ts)
+npm run db:import:fg     # import FG motor master spreadsheet → DB (scripts/import-fg-master.ts)
+npm run db:import:health # import FG health "Field Masters" workbooks → health master tables
+npm run db:import:icici  # import ICICI master → source-tagged canonical rows + ProviderXCode
+npm run db:export        # dump seed-relevant tables to a snapshot (scripts/export-data.ts)
+npm run db:import        # load a snapshot (scripts/import-data.ts); db:seed:snapshot seeds from one
 npm run openapi:gen  # regenerate openapi/openapi.json from zod contracts
 ```
 
@@ -66,10 +70,10 @@ After changing any `tf-api` contract under `src/contracts/`, run `npm run openap
 **Provider adapter pattern** is the core abstraction:
 
 - Every vendor implements the base `InsuranceProvider` interface (`src/providers/insurance-provider.ts`): `slug`, capability sets (`capabilities` = vehicle categories, `operations` = lifecycle ops, `motorCapabilities` = per-category plan types + add-ons), plus `getQuote`/`getFullQuote`.
-- Lifecycle features beyond quoting are **optional capability interfaces** (`KycCapableProvider`, `IssuanceProvider`, `RenewalProvider`, `InspectionProvider`, `PolicyStatusProvider`, `CertificateProvider`). A provider opts in by implementing the interface **and** listing the op in its `operations` set. Controllers dispatch through the `supports*()` type-guards in that file — always gate optional calls behind the guard.
+- Lifecycle features beyond motor quoting are **optional capability interfaces** (`KycCapableProvider`, `IssuanceProvider`, `RenewalProvider`, `InspectionProvider`, `PolicyStatusProvider`, `CertificateProvider`). The **health line of business** is itself one such optional capability: `HealthProvider` (its own `healthCapabilities` matrix + `getHealthQuote`/`getHealthProposal`/`issueHealthPolicy`, entirely separate from the motor methods on the base interface). A provider opts in by implementing the interface **and** listing the op in its `operations` set (e.g. `healthQuote`). Controllers dispatch through the `supports*()` type-guards in that file (`supportsHealth()`, etc.) — always gate optional calls behind the guard.
 - Providers self-register into an in-memory `Map` (`provider-registry.ts`) via `registerXProvider()` calls at the top of `app.ts`. Look up by slug with `getProvider`; `compare.service.ts` fans a quote out to every eligible provider in parallel via `Promise.allSettled` so one slow/failing vendor never blocks the others.
 
-**Per-provider folder layout** (`src/providers/fg/`, `src/providers/icici/`): `config.ts` (env → typed config + capability constants), `auth.ts` (token fetcher), `http.ts` (transport), `mapper.ts` (canonical request → vendor payload), `normalizer.ts` (vendor response → canonical result), `db-code-resolver.ts` (canonical IDs → vendor master codes), `<provider>.provider.ts` (the class), `index.ts` (`registerXProvider`). FG speaks **SOAP/XML** for motor and JSON for CKYC/renewal; ICICI uses an **AES-encrypted login → JWT**. Both providers are off by default (`FG_ENABLED` / `ICICI_ENABLED`).
+**Per-provider folder layout** (`src/providers/fg/`, `src/providers/icici/`): `config.ts` (env → typed config + capability constants), `auth.ts` (token fetcher), `http.ts` (transport), `mapper.ts` (canonical request → vendor payload), `normalizer.ts` (vendor response → canonical result), `db-code-resolver.ts` (canonical IDs → vendor master codes), `<provider>.provider.ts` (the class), `index.ts` (`registerXProvider`). The **health capability lives in a nested `health/` subfolder** with its own `config.ts`/`mapper.ts`/`normalizer.ts`/`db-code-resolver.ts` (e.g. `src/providers/fg/health/`), so the motor and health adapters stay isolated within one provider. FG speaks **SOAP/XML** for motor and JSON for health/CKYC/renewal; ICICI uses an **AES-encrypted login → JWT**. Both providers are off by default (`FG_ENABLED` / `ICICI_ENABLED`).
 
 **Canonical contracts** (`src/contracts/`) are zod schemas — the stable seam between providers and the rest of the app, and the single source of truth for the generated OpenAPI doc. Mappers/normalizers exist precisely so vendor-specific shapes never leak past this boundary.
 

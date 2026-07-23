@@ -995,6 +995,7 @@ export interface paths {
                             kycId?: string;
                             customerName?: string;
                             isKycSuccess: boolean;
+                            displayMessage?: string;
                             _rawResponse?: unknown;
                         };
                     };
@@ -2775,6 +2776,7 @@ export interface components {
             kycId?: string;
             customerName?: string;
             isKycSuccess: boolean;
+            displayMessage?: string;
             _rawResponse?: unknown;
         };
         PolicyStatusRequest: {

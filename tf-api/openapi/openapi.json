@@ -2254,6 +2254,9 @@
           "isKycSuccess": {
             "type": "boolean"
           },
+          "displayMessage": {
+            "type": "string"
+          },
           "_rawResponse": {
             "nullable": true
           }
@@ -7301,6 +7304,9 @@
                     },
                     "isKycSuccess": {
                       "type": "boolean"
+                    },
+                    "displayMessage": {
+                      "type": "string"
                     },
                     "_rawResponse": {
                       "nullable": true

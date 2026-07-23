@@ -76,6 +76,8 @@ export const OvdResultSchema = z.object({
   kycId: z.string().optional(),
   customerName: z.string().optional(),
   isKycSuccess: z.boolean(),
+  /** Vendor's verbatim reason when the uploaded documents were rejected. */
+  displayMessage: z.string().optional(),
   _rawResponse: z.unknown().optional(),
 });
 

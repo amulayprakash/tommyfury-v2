@@ -145,7 +145,14 @@ export function normalizeOvd(body: unknown): OvdResult {
   return {
     kycId: str(b.KycID),
     customerName: str(b.CustomerName),
-    isKycSuccess: b.isKycSuccess === true || b.Success === true,
+    // `Success` only means the upload was accepted; `isKycSuccess` is what says
+    // the documents actually passed ICICI's automatic recognition. Treating the
+    // two as interchangeable would advance a customer whose scans were rejected,
+    // and the proposal would then fail with ErrorCode 443 "KYC PENDING".
+    isKycSuccess: b.isKycSuccess === undefined ? b.Success === true : b.isKycSuccess === true,
+    // OVD reports failures in `ErrorMessage` (CKYC uses `DisplayMessage`), e.g.
+    // "Kyc Failed.. Re-upload Documents" — surface it so the user can act on it.
+    displayMessage: str(b.ErrorMessage) ?? str(b.DisplayMessage),
     _rawResponse: body,
   };
 }
