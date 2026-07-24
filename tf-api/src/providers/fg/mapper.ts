@@ -86,19 +86,23 @@ function addDaysIso(isoDate: string, days: number): string {
   return next.toISOString().slice(0, 10);
 }
 
-function policyDates(req: MotorQuoteRequest, tenureYears: number): { start: string; end: string } {
+/**
+ * Risk-start date (ISO) for the new policy. Rollover convention: risk starts the
+ * day after the previous policy expires — FG flags any gap OR overlap against
+ * PreviousPolExpDt as a "break-in Scenario" at CRT (live-observed 2026-07-14 on
+ * a policy that started today while the previous one was still active).
+ * Break-ins (expired/unknown previous expiry) and new business start today.
+ */
+export function policyStartIso(req: MotorQuoteRequest): string {
+  if (req.policyStartDate) return req.policyStartDate;
   const today = new Date().toISOString().slice(0, 10);
-  let start = req.policyStartDate;
-  if (!start) {
-    // Rollover convention: risk starts the day after the previous policy
-    // expires — FG flags any gap OR overlap against PreviousPolExpDt as a
-    // "break-in Scenario" at CRT (live-observed 2026-07-14 on a policy that
-    // started today while the previous one was still active). Break-ins
-    // (expired/unknown previous expiry) start today.
-    const isRollover = req.businessType === "rollover" || req.businessType === "renewal";
-    const expiry = req.previousPolicyExpiryDate;
-    start = isRollover && expiry && expiry >= today ? addDaysIso(expiry, 1) : today;
-  }
+  const isRollover = req.businessType === "rollover" || req.businessType === "renewal";
+  const expiry = req.previousPolicyExpiryDate;
+  return isRollover && expiry && expiry >= today ? addDaysIso(expiry, 1) : today;
+}
+
+function policyDates(req: MotorQuoteRequest, tenureYears: number): { start: string; end: string } {
+  const start = policyStartIso(req);
   const end = req.policyEndDate ?? addYearsIso(start, tenureYears);
   return { start: toFgDate(start), end: toFgDate(end) };
 }
@@ -476,6 +480,21 @@ export function buildCreateProposalPayload(
       "FG requires the proposer's gender for the proposal. Select a gender and resubmit.",
       "VALIDATION",
     );
+  }
+  // Standalone OD is a full 1-year Own-Damage cover; the existing Third-Party
+  // policy must stay in force through that whole period. FG rejects "OD Policy
+  // Expiry cannot be after TP policy expiry date" when the TP expires first — a
+  // partial OD term is not allowed ("Invalid Policy Period"), so surface a clear
+  // message instead of the raw vendor error.
+  if (req.selectedPolicy === "standAloneOD" && req.previousTpExpiryDate) {
+    const odEnd = addYearsIso(policyStartIso(req), 1);
+    if (req.previousTpExpiryDate < odEnd) {
+      throw new AppError(
+        422,
+        `Standalone Own-Damage cover runs until ${odEnd}, but your Third-Party policy expires ${req.previousTpExpiryDate}. The TP policy must stay in force for the full OD year — choose Comprehensive, or renew once the TP covers that period.`,
+        "VALIDATION",
+      );
+    }
   }
   const idv = req.idvValue && req.idvValue > 0 ? String(req.idvValue) : "0";
 

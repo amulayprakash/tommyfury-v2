@@ -280,6 +280,37 @@ describe("buildCreateProposalPayload", () => {
     expect(c.VIPFlag).toBe("N");
     expect(c.VIPCategory).toBe("");
   });
+
+  it("rejects Standalone OD when the TP policy expires before the OD year ends", () => {
+    // OD start 2027-06-12 → OD ends 2028-06-11; TP expires 2027-06-11 (too soon).
+    expect(() =>
+      buildCreateProposalPayload(
+        fullQuote({
+          selectedPolicy: "standAloneOD",
+          policyStartDate: "2027-06-12",
+          previousTpExpiryDate: "2027-06-11",
+        }),
+        codes,
+        meta,
+        "r",
+      ),
+    ).toThrowError(/must stay in force for the full OD year/i);
+  });
+
+  it("allows Standalone OD when the TP policy covers the full OD year", () => {
+    expect(() =>
+      buildCreateProposalPayload(
+        fullQuote({
+          selectedPolicy: "standAloneOD",
+          policyStartDate: "2026-08-16",
+          previousTpExpiryDate: "2028-06-11",
+        }),
+        codes,
+        meta,
+        "r",
+      ),
+    ).not.toThrow();
+  });
 });
 
 describe("toFgDate", () => {
