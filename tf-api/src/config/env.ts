@@ -77,6 +77,13 @@ const envSchema = z.object({
   FG_CKYC_TOKEN_URL: z.string().optional(),
   /** Base64 client for the CKYC product (distinct subscription from motor). */
   FG_CKYC_CLIENT_BASIC: z.string().optional(),
+  /**
+   * Dedicated CKYC resource-owner login (FG TechSupport: GCCKYC_Dev/GCKYC@dev26).
+   * The CKYC WSO2 product issues its token to this user, not the shared motor
+   * login; both fall back to FG_USERNAME/FG_PASSWORD when unset.
+   */
+  FG_CKYC_USERNAME: z.string().optional(),
+  FG_CKYC_PASSWORD: z.string().optional(),
   /** Static gateway subscription key sent as the `Token` header on CKYC calls. */
   FG_CKYC_SUBSCRIPTION_TOKEN: z.string().optional(),
   /** Absolute URL the eKYC portal returns the browser to after manual KYC (redirect bridge VISoF_Return_URL). */

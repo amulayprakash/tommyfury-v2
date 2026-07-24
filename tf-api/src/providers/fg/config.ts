@@ -53,6 +53,14 @@ export interface FgProductAuth {
   baseUrl: string;
   tokenUrl: string;
   clientBasic: string;
+  /**
+   * Product-specific resource-owner credentials. Some WSO2 products issue their
+   * token to a dedicated user rather than the shared motor login (FG TechSupport:
+   * CKYC uses GCCKYC_Dev/GCKYC@dev26). Falls back to the motor username/password
+   * when unset.
+   */
+  username?: string;
+  password?: string;
   /** Optional static gateway subscription key (CKYC `Token` header). */
   subscriptionToken?: string;
   /** CKYC-only: return URL for the self-hosted redirect bridge (VISoF_Return_URL). */
@@ -131,6 +139,10 @@ export function loadFgConfig(): FgConfig {
       baseUrl: env.FG_CKYC_BASE_URL.replace(/\/$/, ""),
       tokenUrl: env.FG_CKYC_TOKEN_URL ?? env.FG_TOKEN_URL,
       clientBasic: env.FG_CKYC_CLIENT_BASIC ?? env.FG_CLIENT_BASIC!,
+      // CKYC has its own resource-owner login (per FG TechSupport); fall back to
+      // the shared motor credentials when the dedicated ones aren't set.
+      username: env.FG_CKYC_USERNAME,
+      password: env.FG_CKYC_PASSWORD,
       subscriptionToken: env.FG_CKYC_SUBSCRIPTION_TOKEN,
       returnUrl: env.FG_CKYC_RETURN_URL,
     },

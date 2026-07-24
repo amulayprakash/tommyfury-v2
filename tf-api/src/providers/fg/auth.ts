@@ -18,14 +18,16 @@ export function fgTokenFetcher(config: FgConfig): TokenFetcher {
 
 /**
  * Token fetcher for a non-motor FG product (CKYC, renewal). Same password grant
- * with the shared username/password, but the product's own client subscription
- * (clientBasic) and token URL — each WSO2 product issues its own token.
+ * with the product's own client subscription (clientBasic) and token URL — each
+ * WSO2 product issues its own token. A product may also have its own resource-
+ * owner login (e.g. CKYC's GCCKYC_Dev); it falls back to the shared motor
+ * username/password when the product doesn't override them.
  */
 export function fgProductTokenFetcher(config: FgConfig, product: FgProductAuth): TokenFetcher {
   return oauth2PasswordFetcher({
     clientBasic: product.clientBasic,
-    username: config.username,
-    password: config.password,
+    username: product.username ?? config.username,
+    password: product.password ?? config.password,
     tokenUrl: product.tokenUrl,
   });
 }
