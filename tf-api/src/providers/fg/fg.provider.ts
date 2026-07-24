@@ -194,10 +194,23 @@ export class FgProvider
     try {
       return await fn(token);
     } catch (err) {
-      if (!(err instanceof ProviderError) || err.upstreamStatus !== 401) throw err;
-      tokenHandle.invalidate();
-      logger.warn({ provider: FG_SLUG }, "FG rejected cached token (401); retrying with a fresh token");
-      return fn(await tokenHandle.get());
+      if (!(err instanceof ProviderError)) throw err;
+      if (err.upstreamStatus === 401) {
+        tokenHandle.invalidate();
+        logger.warn({ provider: FG_SLUG }, "FG rejected cached token (401); retrying with a fresh token");
+        return fn(await tokenHandle.get());
+      }
+      // FG's UAT BANCS backend is intermittently flaky (transient IIS 5xx /
+      // reinsurance system exceptions). Give one retry before surfacing it.
+      if (err.upstreamStatus >= 500 || err.code === "UPSTREAM_UNAVAILABLE") {
+        logger.warn(
+          { provider: FG_SLUG, code: err.code, status: err.upstreamStatus },
+          "FG transient upstream failure; retrying once",
+        );
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        return fn(await tokenHandle.get());
+      }
+      throw err;
     }
   }
 

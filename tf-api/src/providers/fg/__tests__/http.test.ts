@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { FetchTransport, assertFgSuccess, parseSoapResponse } from "../http.ts";
+import { FetchTransport, assertFgSuccess, parseSoapResponse, classifyFgError } from "../http.ts";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -35,6 +35,31 @@ describe("FetchTransport — JSON mode (motor)", () => {
     await expect(
       new FetchTransport().request({ method: "POST", url: "https://gw/x", token: "t", jsonBody: {} }),
     ).rejects.toMatchObject({ upstreamStatus: 401, providerSlug: "fg" });
+  });
+
+  it("marks a FG 5xx (IIS outage) as UPSTREAM_UNAVAILABLE with a friendly message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("<html>500 - Internal server error</html>", { status: 500 })),
+    );
+    await expect(
+      new FetchTransport().request({ method: "POST", url: "https://gw/x", token: "t", jsonBody: {} }),
+    ).rejects.toMatchObject({ upstreamStatus: 500, code: "UPSTREAM_UNAVAILABLE" });
+  });
+});
+
+describe("classifyFgError", () => {
+  it("classifies FG BANCS reinsurance/system exceptions as UPSTREAM_UNAVAILABLE (transient)", () => {
+    expect(classifyFgError("POLICY HAS NOT BEEN ISSUED due to User-Defined Exception from Reinsurance")).toBe(
+      "UPSTREAM_UNAVAILABLE",
+    );
+    expect(classifyFgError("Error During Quote Issuance")).toBe("UPSTREAM_UNAVAILABLE");
+  });
+
+  it("keeps user-actionable declines/KYC/break-in as their specific codes", () => {
+    expect(classifyFgError("Referral due to: Declined Vehicle")).toBe("REFERRAL_DECLINED");
+    expect(classifyFgError("CKYC error: No record exist.")).toBe("KYC_INCOMPLETE");
+    expect(classifyFgError("This is a break-in scenario")).toBe("INSPECTION_REQUIRED");
   });
 });
 

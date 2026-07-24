@@ -82,11 +82,18 @@ export class FetchTransport implements FgTransport {
     const text = await response.text().catch(() => "");
 
     if (!response.ok) {
+      // FG's UAT BANCS backend intermittently returns bare IIS 5xx pages while
+      // the gateway/token stay healthy — treat those as a transient upstream
+      // outage (retryable) with a friendly message rather than a raw dump.
+      const transient = response.status >= 500;
       throw new ProviderError(
         FG_SLUG,
         response.status,
-        `FG request failed [${response.status}]`,
+        transient
+          ? "FG's service is temporarily unavailable. Please try again in a moment."
+          : `FG request failed [${response.status}]`,
         text.slice(0, 500),
+        transient ? "UPSTREAM_UNAVAILABLE" : "PROVIDER_ERROR",
       );
     }
 
@@ -165,6 +172,14 @@ export function classifyFgError(message: string): string {
   if (m.includes("policy period")) return "INVALID_POLICY_PERIOD";
   if (m.includes("vendorcode") && m.includes("vendoruserid")) return "VENDOR_CONFIG";
   if (m.includes("unable to connect") || m.includes("remote server") || m.includes("timeout"))
+    return "UPSTREAM_UNAVAILABLE";
+  // FG BANCS system exceptions (not user-actionable) — the reinsurance module or
+  // issuance stage flaking. Treat as a transient upstream failure (retryable).
+  if (
+    m.includes("reinsurance") ||
+    m.includes("user-defined exception") ||
+    m.includes("error during quote issuance")
+  )
     return "UPSTREAM_UNAVAILABLE";
   return "PROVIDER_ERROR";
 }
