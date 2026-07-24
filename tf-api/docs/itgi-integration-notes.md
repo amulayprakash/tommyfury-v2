@@ -172,24 +172,63 @@ Not needed for issuance.
   `breakInofMorethan90days` Y/N mandatory when prev-policy details blank; NCB allowed only if renewed within 90d.
 - CPA / PA Owner-Driver: `validDrivingLicence` + `AlternatePACover` govern issuance (see Annexure XI scenarios).
 - Default covers always present: Legal Liability to Driver, PA Owner/Driver, TPPD (TWP 100000 / PCP 750000).
-- Add-ons allowed: Depreciation/Zero-Dep (+ Limited Dep), Towing & Related, Consumable, RIM (PCP), Tyre (PCP, ≤4y),
-  Engine Gear Box (PCP), Helmet (TWP, SI ≤50000), Pay As You Drive (odometer in `number`, plan B01–B06 in `sumInsured`).
+- Add-ons allowed: Depreciation/Zero-Dep (+ Limited Dep), Towing & Related, Consumable, Helmet (TWP, SI ≤50000),
+  Pay As You Drive (odometer in `number`, plan B01–B06 in `sumInsured`), and **RIM / Tyre Protection / Engine Gear
+  Box Protection — now valid for BOTH Private Car and Two Wheeler** (updated in the "(1) - new" kit; the older doc
+  said PCP-only). Tyre cover only for vehicles ≤4 years old.
 - Single-year OD renewal (`type=OD`) needs the running package TP policy details.
 
 ---
 
+## 7a. Which kit folders to use (vendor shared duplicates — 2026-07-24)
+
+- **Motor: use `ITGI_PARTNER_MOTOR_INTEGRATION_KIT_v4.0 (1) - new`.** It equals the older copy plus one new file
+  (`ServicesAndSamples/Two Wheeler_EngineTyreRimTWP_curl.xml`) and one help-doc line: Engine/Tyre/RIM add-ons
+  extended from PCP-only to **Private Car + Two Wheeler**. Coverage `.xls` differs only cosmetically (identical coverage lists).
+- **CKYC: use `ITGI_PARTNER_CKYC_KIT_V1.4.1` — NOT `CKYC-Kit- new`.** The "new" CKYC folder is a **regression**:
+  it ships search API **v1.2 (Jan 2023)** vs the v1.4 (May 2024) we already have, and **omits** the update API
+  (v1.1 Jul 2025), the validate/resend-OTP API, and two sample files.
+
+**Evidence from the new curl sample** (first real working call in the kit) — worth keeping:
+- Headers are only `SOAPAction;` (empty), `Content-Type: application/xml`, and a `JSESSIONID` cookie →
+  **confirms no API key/token on SOAP**; auth really is `partnerCode` in body (+ presumed IP whitelist).
+- Shows a live partner code belonging to **another partner** (`ITGIMOT216` / branch `PHONEPE_INSURANCE`) —
+  confirms the format `ITGIMOT###` + branch = partner-name string. Not usable by us.
+- `regictrationCity` is sent as plain **`DELHI`** (readable city name), whereas other samples use `CHHDHAMT`.
+  → ⚠ Ask ITGI whether `rtoCity`/`regictrationCity` accepts city names/standard RTO codes; if yes, the missing
+  RTO master (gap #3) downgrades from blocker to nice-to-have.
+- Confirms the dual `autocoverage=false/true` response pair, add-on premiums as a single `coveragePremium`.
+
 ## 8. Gaps / open confirmations (⚠ blockers before build/UAT)
 
-1. **CKYC auth mechanism** — no header in any doc → confirm it is IP-whitelisting; register our public IP(s).
-2. **Partner credentials** — real `partnerCode` / `partnerBranch` / `subBranch` for PCP and TWP (samples inconsistent:
-   `ITGIMOT003` vs `ITGMOT003` vs `...040/042/050/205`). Also HTTP Basic user/pass for policy download.
-3. **RTO master** — obtain ITGI's RTO code/city/state file (not in kit) to build `ProviderRtoCode`.
-4. **Live Master Data Service** — endpoint/creds to pull current MMV/RTO/coverage masters (kit Excels are stale).
-5. **Production host/URLs** — only staging given.
-6. **Payment authorization fields** — what values `authorizationCode/Status/Decision` must carry from our PG (gateway-specific).
-7. **Policy PDF delivery** — staging returns placeholder; confirm real download/COI mechanism for prod.
-8. **RESPONSE_URL / partner config** — ITGI needs our request IP, request URL, response URL, logo/contact to provision the partner code.
-9. **CVI (commercial)** — no masters in kit; defer unless ITGI provides them.
+Re-verified against the two "new" folders ITGI shared on 2026-07-24 — **none of these were resolved by them.**
+Production URLs deliberately excluded (not needed for now).
+
+### Hard blockers — cannot make a single successful live call
+1. **Partner credentials** — real `partnerCode` / `partnerBranch` / `subBranch` for PCP and TWP. Every SOAP call
+   authenticates via these in the body. Kit only has other partners' / inconsistent samples (`ITGIMOT003` vs
+   `ITGMOT003` vs `...040/042/050/205`, and `ITGIMOT216`=PhonePe). Also **HTTP Basic user/pass** for policy download.
+2. **CKYC auth mechanism** — no auth header appears in any CKYC doc → confirm it is IP-whitelisting and register
+   our public IP(s). Until confirmed we cannot call fetch/create.
+3. **RTO master** — canonical→ITGI `rtoCity` code table (absent from kit; verified across the whole tree).
+   ⚠ May downgrade to a clarification if ITGI confirms the field accepts city names / standard RTO codes (see §7a).
+
+### Our-side prerequisite that unlocks the above
+4. **Partner provisioning inputs** — ITGI issues the partner code + whitelists us only after we send our **public IP,
+   request URL, response URL, and logo/contact**.
+
+### Missing artifacts we can work around
+5. **Three WSDLs absent** — kit ships WSDLs only for IDV, Premium, Proposal. `PaymentUpdateWS`, `CheckPolicyStatus`
+   and `PartnerDownloadPolicyCopy` have **sample req/res only**, no schema. Envelopes are hand-buildable from samples.
+6. **UAT smoke-test data** — no known-good make+RTO+coverage combo that ITGI UAT will accept end-to-end
+   (this is what slowed FG/ICICI). Needs to come from ITGI's team.
+7. **Live Master Data Service** — endpoint/creds for current masters; kit Excels seed dev fine (their ReadMe flags them stale).
+
+### Minor clarifications (resolve during integration)
+8. **Payment authorization fields** — what `authorizationCode` / `authorizationStatus` / `authorizationDecision` must
+   carry from our PG on `updatePaymentDetails`.
+9. **Policy PDF delivery** — staging returns a placeholder; confirm the real download/COI mechanism.
+10. **CVI (commercial)** — no masters in kit; defer unless ITGI provides them.
 
 ---
 
