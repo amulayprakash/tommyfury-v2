@@ -88,6 +88,25 @@ describe("assertFgSuccess — JSON business failures (HTTP 200)", () => {
     }
   });
 
+  it("replaces a transient reinsurance/issuance fault with a friendly retryable message", () => {
+    const root = {
+      Status: "Failed!",
+      Message: "Error During Quote Issuance",
+      Description: "POLICY HAS NOT BEEN ISSUED due to 0 1******User-Defined Exception from Reinsurance",
+    };
+    try {
+      assertFgSuccess(root, "create-proposal");
+      expect.unreachable("should have thrown");
+    } catch (err) {
+      expect((err as Error).message).toBe(
+        "FG's service is temporarily unavailable. Please try again in a moment.",
+      );
+      expect((err as { code?: string }).code).toBe("UPSTREAM_UNAVAILABLE");
+      // raw FG detail preserved for logs
+      expect((err as { details?: unknown }).details).toMatchObject({ Message: "Error During Quote Issuance" });
+    }
+  });
+
   it("unwraps a nested CKYC error and classifies it as KYC_INCOMPLETE", () => {
     const root = {
       Client: {},

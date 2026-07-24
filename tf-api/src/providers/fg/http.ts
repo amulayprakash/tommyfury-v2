@@ -202,11 +202,14 @@ export function assertFgSuccess(root: Record<string, unknown>, context: string):
   if (!topFailed && !sectionFailed) return;
 
   const message = extractFgError(root) || "unknown error";
-  throw new ProviderError(
-    FG_SLUG,
-    200,
-    `FG ${context} failed: ${message}`,
-    root,
-    classifyFgError(message),
-  );
+  const code = classifyFgError(message);
+  // Transient FG BANCS faults (reinsurance/issuance module flaking) are not
+  // user-actionable — surface the same friendly, retryable wording we use for a
+  // raw FG 5xx rather than FG's internal exception text. The raw detail is kept
+  // in `details` for logs/debugging.
+  const userMessage =
+    code === "UPSTREAM_UNAVAILABLE"
+      ? "FG's service is temporarily unavailable. Please try again in a moment."
+      : `FG ${context} failed: ${message}`;
+  throw new ProviderError(FG_SLUG, 200, userMessage, root, code);
 }
