@@ -93,10 +93,11 @@ export function successEnvelope<T>(
   requestId: string,
   debugPayload?: unknown,
   enableDebug = false,
+  message = "Quote fetched successfully",
 ) {
   return {
     status: "success" as const,
-    message: "Quote fetched successfully",
+    message,
     requestId,
     response: data,
     ...(enableDebug && debugPayload !== undefined ? { payload: debugPayload } : {}),

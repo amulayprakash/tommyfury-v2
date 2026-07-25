@@ -43,6 +43,26 @@ describe("inspectionRequired (break-in rules)", () => {
     ).toBe(false);
   });
 
+  it("does NOT flag a seamless renewal (new start = prev expiry + 1 day) as break-in", () => {
+    // The standard rollover starts the day the previous policy ends — zero gap.
+    // This must NOT self-flag as a break-in.
+    expect(
+      inspectionRequired({
+        ...base,
+        previousPolicyExpiryDate: "2026-08-01",
+        policyStartDate: "2026-08-02",
+      }),
+    ).toBe(false);
+    // A genuine gap (start beyond expiry + 1 day) is still a break-in.
+    expect(
+      inspectionRequired({
+        ...base,
+        previousPolicyExpiryDate: "2026-08-01",
+        policyStartDate: "2026-08-03",
+      }),
+    ).toBe(true);
+  });
+
   it("requires inspection on a TP→Comprehensive upgrade", () => {
     expect(
       inspectionRequired({ ...base, previousPolicyType: "thirdParty", selectedPolicy: "comprehensive" }),

@@ -39,9 +39,18 @@ export async function handleIssuePolicy(
   try {
     const { provider } = req.params as { provider: string };
     const result = await issuePolicy(provider, req.body as never);
+    const issued = Boolean(result.policyNumber);
     res
       .status(200)
-      .json(successEnvelope(result, req.requestId, result._rawResponse, env.ENABLE_DEBUG_PAYLOAD));
+      .json(
+        successEnvelope(
+          result,
+          req.requestId,
+          result._rawResponse,
+          env.ENABLE_DEBUG_PAYLOAD,
+          issued ? "Policy issued successfully" : "Policy issuance in progress",
+        ),
+      );
   } catch (err) {
     next(err);
   }

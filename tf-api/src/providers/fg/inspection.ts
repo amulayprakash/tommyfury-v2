@@ -11,6 +11,13 @@ import type { FgConfig } from "./config.ts";
  * is recommended/approved. Spec: Inspection Service/API_Doc_UAT_FG.pdf.
  */
 
+/** Adds `days` to an ISO YYYY-MM-DD date, returning ISO YYYY-MM-DD (UTC-safe). */
+function addDaysIso(isoDate: string, days: number): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const dt = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, (d ?? 1) + days));
+  return dt.toISOString().slice(0, 10);
+}
+
 /** Maps a LiveChek status string to the canonical lifecycle status. */
 export function mapLivechekStatus(raw: string | undefined): PolicyLifecycleStatus {
   const s = (raw ?? "").toLowerCase();
@@ -49,12 +56,16 @@ export function inspectionRequired(req: MotorQuoteRequest): boolean {
   const isRollover = req.businessType === "rollover" || req.businessType === "renewal";
   if (!isRollover) return false;
   if (!req.previousPolicyNumber) return true; // PYP skipped
-  // Derived break-in: previous policy expiry unknown, or before the new
-  // policy's start (ISO YYYY-MM-DD strings compare lexicographically).
+  // Derived break-in: previous policy expiry unknown, or a real GAP before the
+  // new policy starts. A seamless renewal (new start = expiry + 1 day) is NOT a
+  // break-in, so compare against expiry+1, not expiry — otherwise the standard
+  // rollover (start = prevExpiry+1) self-flags as break-in. ISO YYYY-MM-DD
+  // strings compare lexicographically.
   const expiry = req.previousPolicyExpiryDate;
   if (!expiry) return true;
   const start = req.policyStartDate ?? new Date().toISOString().slice(0, 10);
-  return expiry < start;
+  const seamlessStart = addDaysIso(expiry, 1);
+  return start > seamlessStart;
 }
 
 async function livechek(

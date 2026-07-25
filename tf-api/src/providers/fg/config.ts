@@ -226,6 +226,14 @@ export function resolveContract(req: ContractInput): FgContractResolution {
   if (req.selectedPolicy === "standAloneOD") {
     return { contractType: "FVO", riskType: "FVO", cover, tenureYears: 1 };
   }
+  // Third-party-only is never the *bundled* F13 (1yr OD + 3yr TP) product — FG
+  // rejects a "new + TP under F13" ENQ with the misleading "Incorrect AgentCode
+  // Combination Passed". A standalone TP rides the annual private-car product
+  // (FPV, cover LO) for both new and rollover, matching the live-verified
+  // rollover-TP path.
+  if (req.selectedPolicy === "thirdParty") {
+    return { contractType: "FPV", riskType: "FPV", cover, tenureYears: 1 };
+  }
   if (req.businessType === "new" || req.vehicleType === "newVehicle") {
     // Bundled new vehicle = 1yr OD + 3yr TP → 3-year policy period.
     return { contractType: "F13", riskType: "F13", cover, tenureYears: 3 };

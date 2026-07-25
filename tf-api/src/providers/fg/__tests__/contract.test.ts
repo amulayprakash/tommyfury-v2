@@ -42,6 +42,17 @@ describe("resolveContract — master Contract Type matrix", () => {
     expect(r).toMatchObject({ contractType: "FPV", riskType: "FPV", cover: "LO" });
   });
 
+  it("NEW-business Third Party → FPV (not the bundled F13), LO", () => {
+    // A TP-only cover must never ride the bundled F13 (1yr OD + 3yr TP) product —
+    // FG rejects "new + TP under F13" with "Incorrect AgentCode Combination Passed".
+    const r = resolveContract({
+      vehicleType: "fourWheeler",
+      selectedPolicy: "thirdParty",
+      businessType: "new",
+    });
+    expect(r).toMatchObject({ contractType: "FPV", riskType: "FPV", cover: "LO", tenureYears: 1 });
+  });
+
   it("Goods Carrying (GCV) → FCV/FGV", () => {
     const r = resolveContract({
       vehicleType: "commercial",
