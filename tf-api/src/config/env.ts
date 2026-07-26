@@ -29,6 +29,26 @@ const envSchema = z.object({
   /** node:crypto cipher name; exact scheme to be confirmed with ICICI. */
   ICICI_AES_MODE: z.string().default("aes-256-ecb"),
 
+  // ── IFFCO-Tokio (ITGI) — credentials env-only, never in DB/code ──
+  // Hybrid vendor: SOAP/XML for motor, REST/JSON for CKYC + policy download.
+  // There is no OAuth/token — SOAP auth is the partner code in the request body,
+  // plus (presumed) IP whitelisting, so there is no token manager for ITGI.
+  ITGI_ENABLED: z
+    .string()
+    .default("false")
+    .transform((v) => v === "true"),
+  ITGI_SOAP_BASE_URL: z.string().default("https://staging.iffcotokio.co.in/portaltest/services"),
+  ITGI_REST_BASE_URL: z.string().default("https://staging.iffcotokio.co.in/partner-services"),
+  /** PLACEHOLDER — ITGI has not yet issued our partner code (see docs/itgi-integration-notes.md §8). */
+  ITGI_PARTNER_CODE: z.string().default(""),
+  ITGI_PARTNER_BRANCH: z.string().default(""),
+  ITGI_PARTNER_SUB_BRANCH: z.string().default(""),
+  /** Echoed back in the proposal payload's responseURL tag. */
+  ITGI_RESPONSE_URL: z.string().default(""),
+  /** PLACEHOLDER — Basic-auth credentials for the policy-download REST API. */
+  ITGI_DOWNLOAD_USER: z.string().default(""),
+  ITGI_DOWNLOAD_PASSWORD: z.string().default(""),
+
   // ── Future Generali (TCS Motor API) — credentials env-only, never in DB/code ──
   FG_ENABLED: z
     .string()
