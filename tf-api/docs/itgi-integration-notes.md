@@ -208,8 +208,15 @@ Production URLs deliberately excluded (not needed for now).
 1. **Partner credentials** — real `partnerCode` / `partnerBranch` / `subBranch` for PCP and TWP. Every SOAP call
    authenticates via these in the body. Kit only has other partners' / inconsistent samples (`ITGIMOT003` vs
    `ITGMOT003` vs `...040/042/050/205`, and `ITGIMOT216`=PhonePe). Also **HTTP Basic user/pass** for policy download.
-2. **CKYC auth mechanism** — no auth header appears in any CKYC doc → confirm it is IP-whitelisting and register
-   our public IP(s). Until confirmed we cannot call fetch/create.
+2. **IP whitelisting — EMPIRICALLY CONFIRMED BLOCKED (probed 2026-07-26).** Run `npx tsx --env-file=.env
+   scripts/itgi-uat-probe.ts` to reproduce. Evidence:
+   - `staging.iffcotokio.co.in` resolves to **220.227.8.74** (the same IP hard-coded in the kit's WSDL
+     `<soap:address>` — so it is the real staging host, not a placeholder).
+   - TCP :443 to that host **times out with no SYN-ACK** — packets are silently dropped (firewall DROP).
+   - From the same machine, `www.iffcotokio.co.in:443` connects in ~96 ms and `example.com` returns 200,
+     so this is not a local network problem.
+   → ITGI must whitelist our egress IP before *any* live call (SOAP or CKYC REST) can be made. This also
+   means the CKYC "no auth header" question cannot be tested until the IP is registered.
 3. **RTO master** — canonical→ITGI `rtoCity` code table (absent from kit; verified across the whole tree).
    ⚠ May downgrade to a clarification if ITGI confirms the field accepts city names / standard RTO codes (see §7a).
 
