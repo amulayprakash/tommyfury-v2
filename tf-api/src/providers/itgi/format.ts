@@ -2,7 +2,7 @@ import type { VehicleCategory } from "@/contracts/enums.ts";
 
 /** ISO `YYYY-MM-DD` → ITGI `MM/DD/YYYY`. */
 export function toItgiDate(iso: string): string {
-  const [y, m, d] = iso.split("-");
+  const [y = "", m = "", d = ""] = iso.split("-");
   return `${m}/${d}/${y}`;
 }
 
@@ -27,7 +27,8 @@ export function splitRegistrationNumber(reg: string): RegistrationParts | null {
   const clean = reg.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
   const m = /^([A-Z]{2})(\d{1,3})([A-Z]{0,3})(\d{1,4})$/.exec(clean);
   if (!m) return null;
-  return { p1: m[1], p2: m[2], p3: m[3], p4: m[4] };
+  const [, p1 = "", p2 = "", p3 = "", p4 = ""] = m;
+  return { p1, p2, p3, p4 };
 }
 
 /**

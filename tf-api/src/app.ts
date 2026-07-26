@@ -19,9 +19,11 @@ import { healthInsuranceRouter } from "@/routes/v1/health-insurance.routes.ts";
 // Register providers once at startup
 import { registerIciciProvider } from "@/providers/icici/index.ts";
 import { registerFgProvider } from "@/providers/fg/index.ts";
+import { registerItgiProvider } from "@/providers/itgi/index.ts";
 
 registerIciciProvider();
 registerFgProvider();
+registerItgiProvider();
 
 export function createApp(): express.Application {
   const app = express();

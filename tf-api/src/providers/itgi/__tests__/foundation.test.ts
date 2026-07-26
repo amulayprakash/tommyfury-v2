@@ -37,21 +37,20 @@ describe("itgi config", () => {
     expect(ITGI_CAPABILITIES.has("commercial")).toBe(false);
   });
 
-  it("declares the lifecycle operations it implements, but not retrieveQuote", () => {
-    for (const op of [
-      "quote",
-      "proposal",
-      "ckyc",
-      "ovd",
-      "issuance",
-      "renewal",
-      "inspection",
-      "policyStatus",
-      "coi",
-    ] as const) {
+  it("declares only the lifecycle operations it actually implements", () => {
+    for (const op of ["quote", "proposal", "ckyc", "ovd", "issuance", "policyStatus", "coi"] as const) {
       expect(ITGI_OPERATIONS.has(op), op).toBe(true);
     }
+  });
+
+  it("omits operations the vendor exposes no API for", () => {
+    // ITGI has no retrieve-quote-by-id, no renewal API, and no create-inspection
+    // endpoint. Declaring them would make the capability type-guards lie.
+    // (OD renewal is still supported as a policy TYPE; break-in is still
+    // supported as a modifier inside the normal quote/proposal flow.)
     expect(ITGI_OPERATIONS.has("retrieveQuote")).toBe(false);
+    expect(ITGI_OPERATIONS.has("renewal")).toBe(false);
+    expect(ITGI_OPERATIONS.has("inspection")).toBe(false);
   });
 
   it("uses the vendor's exact coverage name strings", () => {
@@ -181,9 +180,10 @@ describe("itgi soap helpers", () => {
             <getVehicleIdvReturn><idv>415695</idv></getVehicleIdvReturn>
           </getVehicleIdvResponse>
         </soapenv:Body>
-      </soapenv:Envelope>`) as Record<string, never>;
-    expect((res as never as Record<string, Record<string, Record<string, string>>>)
-      .getVehicleIdvResponse.getVehicleIdvReturn.idv).toBe("415695");
+      </soapenv:Envelope>`) as {
+      getVehicleIdvResponse: { getVehicleIdvReturn: { idv: string } };
+    };
+    expect(res.getVehicleIdvResponse.getVehicleIdvReturn.idv).toBe("415695");
   });
 
   it("keeps repeated premium blocks as arrays", () => {
@@ -193,7 +193,7 @@ describe("itgi soap helpers", () => {
           <getMotorPremiumReturn><autocoverage>false</autocoverage></getMotorPremiumReturn>
           <getMotorPremiumReturn><autocoverage>true</autocoverage></getMotorPremiumReturn>
         </r></soapenv:Body></soapenv:Envelope>`,
-    ) as Record<string, Record<string, unknown[]>>;
+    ) as { r: { getMotorPremiumReturn: unknown[] } };
     expect(Array.isArray(res.r.getMotorPremiumReturn)).toBe(true);
     expect(res.r.getMotorPremiumReturn).toHaveLength(2);
   });

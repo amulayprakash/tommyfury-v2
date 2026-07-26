@@ -21,9 +21,19 @@ export const ITGI_CAPABILITIES: ReadonlySet<VehicleCategory> = new Set<VehicleCa
 ]);
 
 /**
- * ITGI has no "retrieve quote by id" operation (same as FG), so retrieveQuote is
- * intentionally absent — declaring an operation without an implementation would
- * make the capability type-guards lie.
+ * Declaring an operation without an implementation would make the capability
+ * type-guards lie, so three are intentionally absent:
+ *
+ * - `retrieveQuote` — ITGI has no retrieve-quote-by-id call (same as FG).
+ * - `renewal` — the vendor exposes no renewal API at all. Single-year OD
+ *   *renewal* is still supported, but as a policy TYPE inside the normal
+ *   quote/proposal flow (`selectedPolicy: "standAloneOD"` → ITGI PolicyType=OD),
+ *   not via the FG-shaped RenewalProvider (fetch-by-policy-no → modify → create).
+ * - `inspection` — break-in inspection happens automatically at ITGI's end; there
+ *   is no create-inspection endpoint to call. Break-in itself IS fully supported
+ *   (inception+3, the breakInofMorethan90days flag, inspection-evidence tags on
+ *   the proposal, and the PAYMENT_ACCEPTED_BREAK_IN outcome); progress is
+ *   observed through `policyStatus`.
  */
 export const ITGI_OPERATIONS: ReadonlySet<ProviderOperation> = new Set<ProviderOperation>([
   "quote",
@@ -31,8 +41,6 @@ export const ITGI_OPERATIONS: ReadonlySet<ProviderOperation> = new Set<ProviderO
   "ckyc",
   "ovd",
   "issuance",
-  "renewal",
-  "inspection",
   "policyStatus",
   "coi",
 ]);

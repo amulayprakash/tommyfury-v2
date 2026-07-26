@@ -101,11 +101,14 @@ export function buildCoverageItems(req: MotorQuoteRequest, path: ItgiPolicyPath)
     const name = itgiCoverageName(key);
     if (name) items.push({ coverageId: name, sumInsured: "Y" });
   }
-  if (req.odometerReading) {
+  // Pay As You Drive carries the current odometer reading, which only the
+  // full-quote (proposal) request captures.
+  const odometer = (req as { odometerReading?: number }).odometerReading;
+  if (odometer) {
     items.push({
       coverageId: ITGI_COVERAGE.PAY_AS_YOU_DRIVE,
       sumInsured: "B01",
-      number: req.odometerReading,
+      number: odometer,
     });
   }
 
