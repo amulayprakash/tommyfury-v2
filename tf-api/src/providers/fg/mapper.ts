@@ -87,6 +87,16 @@ function addDaysIso(isoDate: string, days: number): string {
 }
 
 /**
+ * "Today" in IST (UTC+05:30) as ISO YYYY-MM-DD. These are Indian motor policies
+ * rated by an Indian insurer, so the business day is IST — a plain
+ * `new Date().toISOString()` on a UTC-clocked server yields *yesterday* for
+ * every request between 00:00 and 05:30 IST, which back-dates the risk start.
+ */
+export function todayIst(): string {
+  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+/**
  * Risk-start date (ISO) for the new policy. Rollover convention: risk starts the
  * day after the previous policy expires — FG flags any gap OR overlap against
  * PreviousPolExpDt as a "break-in Scenario" at CRT (live-observed 2026-07-14 on
@@ -95,7 +105,7 @@ function addDaysIso(isoDate: string, days: number): string {
  */
 export function policyStartIso(req: MotorQuoteRequest): string {
   if (req.policyStartDate) return req.policyStartDate;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIst();
   const isRollover = req.businessType === "rollover" || req.businessType === "renewal";
   const expiry = req.previousPolicyExpiryDate;
   return isRollover && expiry && expiry >= today ? addDaysIso(expiry, 1) : today;
@@ -427,6 +437,26 @@ function policyHeader(
   };
 }
 
+/**
+ * Rejects journeys FG has no valid product for, before we build a payload.
+ *
+ * New private cars must carry a 3-year (long-term) third-party cover. FG's
+ * contract matrix offers that ONLY inside the bundled new-vehicle product
+ * (F13 = 1yr OD + 3yr TP); the annual private-car contract is "LO 0+1", i.e. a
+ * ONE-year TP. So a brand-new vehicle sold as third-party-only would bind an
+ * invalid 1-year TP — refuse it with an actionable message instead.
+ */
+export function assertSupportedJourney(req: MotorQuoteRequest): void {
+  const isNew = req.businessType === "new" || req.vehicleType === "newVehicle";
+  if (isNew && req.selectedPolicy === "thirdParty") {
+    throw new AppError(
+      422,
+      "Third-party-only cover isn't available for a brand-new vehicle: a new private car needs a 3-year long-term third-party policy, which Future Generali issues only as part of its bundled new-vehicle product. Choose Comprehensive for a new vehicle, or select Third Party for an already-registered (rollover) vehicle.",
+      "VALIDATION",
+    );
+  }
+}
+
 // ─── GetQuote (METHOD = ENQ) ──────────────────────────────────────────────────
 
 export function buildGetQuotePayload(
@@ -435,6 +465,7 @@ export function buildGetQuotePayload(
   meta: FgPayloadMeta,
   requestId: string,
 ): { url: string; payload: Record<string, unknown> } {
+  assertSupportedJourney(req);
   // CPA (compulsory owner-driver PA) needs a nominee, captured at proposal; the
   // quote prices the base cover with CPAReq=N.
   // IDV "0" lets FG compute its default; a user-supplied IDV reprices the OD
@@ -465,6 +496,7 @@ export function buildCreateProposalPayload(
   requestId: string,
 ): { url: string; payload: Record<string, unknown> } {
   const { proposer, address, vehicle } = req;
+  assertSupportedJourney(req);
   if (!req.ckyc || !req.ckyc.trim()) {
     throw new AppError(
       422,

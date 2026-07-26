@@ -8,6 +8,7 @@ import {
   toFgDate,
   toNumericUid,
   fgSalutation,
+  todayIst,
   type FgResolvedCodes,
   type FgPayloadMeta,
 } from "../mapper.ts";
@@ -375,5 +376,43 @@ describe("buildIssueProposalPayload", () => {
     expect(ph.strPolicyQuoteNumber).toBe("0000112799");
     expect(ph.ClientID).toBe("80036976");
     expect((p.payload.Receipt as Record<string, unknown>).Amount).toBe("26652");
+  });
+});
+
+describe("assertSupportedJourney — new-vehicle third-party has no valid FG product", () => {
+  it("rejects a brand-new vehicle sold as third-party-only (would bind an illegal 1-yr TP)", () => {
+    // FG's contract matrix: the annual private-car product is "LO 0+1" (a ONE-year
+    // TP) and the only 3-year TP lives inside the bundled F13 new-vehicle product.
+    // A new private car legally needs a 3-year TP, so TP-only must be refused.
+    expect(() =>
+      buildGetQuotePayload(baseQuote({ businessType: "new", selectedPolicy: "thirdParty" }), codes, meta, "r"),
+    ).toThrowError(/3-year long-term third-party/i);
+  });
+
+  it("still allows third-party on a rollover (annual FPV/LO is correct there)", () => {
+    expect(() =>
+      buildGetQuotePayload(
+        baseQuote({ businessType: "rollover", selectedPolicy: "thirdParty", registrationNumber: "MH01AB1234" }),
+        codes,
+        meta,
+        "r",
+      ),
+    ).not.toThrow();
+  });
+
+  it("still allows comprehensive on new business (bundled F13)", () => {
+    expect(() =>
+      buildGetQuotePayload(baseQuote({ businessType: "new", selectedPolicy: "comprehensive" }), codes, meta, "r"),
+    ).not.toThrow();
+  });
+});
+
+describe("todayIst", () => {
+  it("returns the Indian business date, not the UTC date", () => {
+    // A UTC-clocked server between 00:00 and 05:30 IST is still on the previous
+    // UTC day; policy start dates must follow IST or the risk start is back-dated.
+    expect(todayIst()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const expected = new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    expect(todayIst()).toBe(expected);
   });
 });

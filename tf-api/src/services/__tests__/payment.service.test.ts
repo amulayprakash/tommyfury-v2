@@ -91,4 +91,27 @@ describe("handlePaymentCallback recon gate", () => {
     expect(issue).toHaveBeenCalledOnce();
     expect(out.redirectUrl).toContain("insurance_ps");
   });
+
+  it("with recon enforcement OFF, issues the SERVER premium — never the mismatched recon amount", async () => {
+    // reconcilePayment spreads the parsed record into its failure result too, so a
+    // failed recon still carries a paymentAmount. When the failure IS an amount
+    // mismatch (partial/tampered payment), adopting it would receipt the policy
+    // for the wrong amount. The server-known proposal premium (2530) must win.
+    const softConfig = {
+      payment: { ...config.payment, reconEnforce: false },
+    } as unknown as FgConfig;
+    const issue = vi.fn(async () => ({ providerSlug: "fg", status: "issued", policyNumber: "POL-1" }) as never);
+    const reconcile = vi.fn(async () => ({
+      ok: false,
+      reason: "amount mismatch (expected 2530, got 5)",
+      paymentAmount: 5,
+      transactionId: "Q1",
+    }));
+    const deps = makeDeps({ issue, reconcile, loadConfig: () => softConfig });
+    await handlePaymentCallback("fg", okPg, deps);
+    expect(issue).toHaveBeenCalledOnce();
+    const args = issue.mock.calls[0] as unknown as [string, { receipt: { amount: number } }];
+    expect(args[1].receipt.amount).toBe(2530);
+    expect(args[1].receipt.amount).not.toBe(5);
+  });
 });

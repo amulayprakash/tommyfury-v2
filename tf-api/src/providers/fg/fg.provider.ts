@@ -189,7 +189,9 @@ export class FgProvider
   private async withAuthRetry<T>(
     tokenHandle: FgTokenHandle,
     fn: (token: string) => Promise<T>,
+    opts: { retryTransient?: boolean } = {},
   ): Promise<T> {
+    const { retryTransient = true } = opts;
     const token = await tokenHandle.get();
     try {
       return await fn(token);
@@ -201,8 +203,10 @@ export class FgProvider
         return fn(await tokenHandle.get());
       }
       // FG's UAT BANCS backend is intermittently flaky (transient IIS 5xx /
-      // reinsurance system exceptions). Give one retry before surfacing it.
-      if (err.upstreamStatus >= 500 || err.code === "UPSTREAM_UNAVAILABLE") {
+      // reinsurance system exceptions). Give one retry before surfacing it —
+      // but NEVER for a non-idempotent money-side call (see issuePolicy), where
+      // a blind re-POST risks binding/receipting twice.
+      if (retryTransient && (err.upstreamStatus >= 500 || err.code === "UPSTREAM_UNAVAILABLE")) {
         logger.warn(
           { provider: FG_SLUG, code: err.code, status: err.upstreamStatus },
           "FG transient upstream failure; retrying once",
@@ -294,13 +298,21 @@ export class FgProvider
     // (ClientID + QuotationNo) and issue the real policy. Same JSON transport.
     const { url, payload } = buildIssueProposalPayload(req, this.meta, ctx.requestId);
 
-    const body = await this.withAuthRetry(this.motorToken, (token) =>
-      this.transport.request({
-        method: "POST",
-        url: this.url(url),
-        token,
-        jsonBody: payload,
-      }),
+    // Issuance BINDS the policy and consumes the receipt — it is not idempotent.
+    // A transient-failure retry could bind/receipt twice (FG may have processed
+    // the first POST before the error surfaced), so only the 401 token refresh
+    // retries here; transient upstream faults are surfaced for a deliberate,
+    // operator-visible retry instead.
+    const body = await this.withAuthRetry(
+      this.motorToken,
+      (token) =>
+        this.transport.request({
+          method: "POST",
+          url: this.url(url),
+          token,
+          jsonBody: payload,
+        }),
+      { retryTransient: false },
     );
     assertFgSuccess(extractRoot(body), "policy-issuance");
 

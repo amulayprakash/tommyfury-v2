@@ -4,6 +4,7 @@ import type { InspectionRequest, InspectionResult } from "@/contracts/inspection
 import type { PolicyLifecycleStatus } from "@/contracts/enums.ts";
 import { FG_SLUG } from "./config.ts";
 import type { FgConfig } from "./config.ts";
+import { todayIst } from "./mapper.ts";
 
 /**
  * LiveChek break-in / pre-inspection (third-party REST, static `App-key` header).
@@ -63,7 +64,7 @@ export function inspectionRequired(req: MotorQuoteRequest): boolean {
   // strings compare lexicographically.
   const expiry = req.previousPolicyExpiryDate;
   if (!expiry) return true;
-  const start = req.policyStartDate ?? new Date().toISOString().slice(0, 10);
+  const start = req.policyStartDate ?? todayIst();
   const seamlessStart = addDaysIso(expiry, 1);
   return start > seamlessStart;
 }

@@ -127,9 +127,12 @@ export async function handlePaymentCallback(
     }
   }
 
-  // Issue the recon-authoritative amount when recon passed; otherwise the
-  // server-known proposal premium (whole rupees).
-  const amount = recon.paymentAmount ?? expectedAmount;
+  // Issue the recon-authoritative amount when recon PASSED; otherwise the
+  // server-known proposal premium (whole rupees). `reconcilePayment` spreads the
+  // parsed record into its failure result too, so a failed recon still carries a
+  // paymentAmount — and when that failure IS an amount mismatch (partial or
+  // tampered payment) adopting it would bind the policy for the wrong amount.
+  const amount = recon.ok ? recon.paymentAmount ?? expectedAmount : expectedAmount;
   const issuanceReq = PolicyIssuanceRequestSchema.parse({
     quoteNo,
     clientId: row.clientId,
