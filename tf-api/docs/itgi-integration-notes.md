@@ -232,6 +232,33 @@ Production URLs deliberately excluded (not needed for now).
 
 ---
 
+## 8a. Implementation status (2026-07-24)
+
+The adapter is **built and unit-tested, but never executed against live ITGI** — that needs blockers
+1–3 above. `ITGI_ENABLED` defaults to `false`, so the provider is not registered until it is turned on.
+
+Implemented in `src/providers/itgi/`: config + capabilities, error classification, SOAP/JSON transports,
+formatting helpers, policy-path resolution (comprehensive / act-only / OD-renewal / new-vehicle, with
+break-in as a composable modifier), strict code resolver, IDV + premium mapper, response normalizer
+(incl. dual `autocoverage` block selection), CKYC REST client, proposal → payment → status → certificate,
+the provider class, and `scripts/import-itgi-master.ts`. 107 ITGI unit tests; full suite 432 passing.
+
+**Two corrections to the original design, made during implementation:**
+
+1. **No `renewal` or `inspection` operation is declared.** The kit exposes only six SOAP services
+   (IDV, MotorPremium ×2, NewVehiclePremium, CVIIDV, PartnerProposalRequest) — there is **no renewal API
+   and no create-inspection endpoint**. Declaring those capabilities would make the `supports*()`
+   type-guards lie. Both journeys are still fully supported *inside the normal quote/proposal flow*:
+   single-year OD renewal as a policy **type** (`standAloneOD` → ITGI `PolicyType=OD` + running TP policy
+   details), and break-in as a **modifier** (inception+3, `breakInofMorethan90days`, inspection-evidence
+   tags, `PAYMENT_ACCEPTED_BREAK_IN`). Break-in progress is observed via `policyStatus`.
+2. **No Prisma migration.** Coverage names are a static map in `config.ts`; MMV/insurer codes reuse the
+   existing `Provider*Code` tables (keyed by `providerSlug`, not the `source` column on canonical rows).
+
+**RTO remains strict:** `scripts/import-itgi-master.ts` writes **no** `ProviderRtoCode` rows and prints a
+warning. Until the vendor's RTO master is imported, every ITGI quote raises `ItgiUnmappedCodeError` →
+surfaced as `no_quote`, so ITGI is simply omitted from the comparison rather than erroring.
+
 ## 9. How it maps onto our provider pattern
 
 New `src/providers/itgi/`: `config.ts` (env → partner codes + endpoints + capability constants),
