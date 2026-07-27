@@ -187,9 +187,14 @@ export function loadFgConfig(): FgConfig {
 //   Private Car Standalone OD     → FVO / FVO (OD 1+0)
 //   Goods Carrying (GCV)          → ContractType FCV, RiskType FGV
 //   Passenger Carrying (PCV)      → ContractType FCV, RiskType FPC
-// (The Postman sample's "F33" is non-standard and is not used.) POS/MISP channels
-// map to PPV/P13/PVO and MPV/M13/MVO respectively — not used on the Webagg channel.
+// GCI confirmed (2026-07-26) a SECOND bundled new-vehicle product exists:
+//   Private Car Bundled (New) 3OD+3TP → F33 / F33 (CO 3yr OD + 3yr TP), POS: P33/P33.
+// We currently sell only the 1OD+3TP bundle (F13); the canonical contract has no
+// tenure-choice field, so F33 is unwired — add a product selector before using it.
+// POS/MISP channels map to P13/P33 etc. — not used on the Webagg channel.
 // New-vs-rollover is additionally carried via PreviousInsDtls flags.
+// Standalone TP for a NEW car: GCI's answer lists ONLY the bundled products for
+// new vehicles — confirming assertSupportedJourney()'s refusal of new+TP-only.
 export type CommercialSubType = "goods" | "passenger";
 
 export interface FgContractResolution {
@@ -281,7 +286,11 @@ const COMMERCIAL_ADDONS: AddonKey[] = [
 
 export const FG_MOTOR_CAPABILITIES: MotorCapabilities = {
   fourWheeler: {
-    policyTypes: ["comprehensive", "thirdParty", "standAloneOD"],
+    // "thirdParty" removed 2026-07-26 on GCI's written confirmation: standalone
+    // third-party is BLOCKED for this channel per UW guidelines (every TP-only
+    // request referral-declines as "Declined Vehicle" by design, agent 60001464).
+    // Re-add here if GCI enables TP-only for the Web Aggregator channel.
+    policyTypes: ["comprehensive", "standAloneOD"],
     addons: PRIVATE_CAR_ADDONS,
   },
   commercial: {
