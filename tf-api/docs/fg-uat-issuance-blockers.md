@@ -1,5 +1,22 @@
 # FG UAT — Motor policy-issuance blockers (Web Aggregator)
 
+> ## ✅ RESOLVED (2026-07-29) — Defect 1 root-caused to OUR test data; GCI was right
+>
+> The "User-Defined Exception from Reinsurance" on FPV/FVO was **not** a missing
+> FG treaty configuration. Our rollover tests reused a real RC whose previous
+> policy expires 2027-06-11, so the proposal asked for a policy starting ~11
+> months ahead — beyond FG's **45-day advance-inception cap** and outside the
+> reinsurance treaty period. Proven live (same vehicle, same minute): start
+> **+7 days → ISSUED** `132/02/11/0827/MTP/2410003304`; start +10 months →
+> reinsurance exception. We now enforce the 45-day cap with a clear message
+> (commit 5ec1267). Full matrix with realistic dates issues end-to-end:
+> F13 new (`…3305`), FPV rollover ×4 incl. NCB 20/50 and add-ons
+> (`…3306`–`…3309`), FVO standalone-OD (`…3310`, product MOD).
+> **We withdraw Defect 1 — apologies for the noise, and thanks to the GCI team.**
+> Remaining relevant asks: the current UAT **decline list** (it changed around
+> 26–28 Jul: Bolt, Baleno, Ciaz now decline), TP channel intent, F33 eligibility,
+> UAT guard behaviour, and production credentials.
+
 > **STATUS UPDATE (2026-07-26) — GCI responses received.**
 >
 > | Item | GCI's answer | Our status |
@@ -11,6 +28,16 @@
 > | Q3 — UAT skips blacklist/duplicate/>15yr checks | **Not answered.** | ❓ Still open — re-ask. |
 >
 > **Remaining asks for GCI** (see "Open follow-ups" at the bottom): reinsurance ETA, NCB semantics, UAT-vs-prod guard behaviour, TP channel intent, and whether Webagg may sell F33.
+
+> **SECOND UPDATE (2026-07-28) — GCI's follow-up reply, and our re-verification.**
+>
+> | GCI's claim | Our finding |
+> |---|---|
+> | "The proposal creation issue has already been resolved… no pending reinsurance-related blocker from our side." | ❌ **Not what UAT shows.** Re-tested the same day: rollover Comprehensive (City, Verna, i20, Fortuner) and Standalone-OD (Ciaz) ALL still fail CreateProposal with the identical `User-Defined Exception from Reinsurance`, while a new-business F13 control ISSUED in the same minutes (`132/14/11/0729/MTP/2410003303`). Please re-check the fix actually reached UAT, or run one FPV CreateProposal yourselves and share the result. |
+> | NCB: RollOverList takes the PREVIOUS year's NCB; `AdditionalBenefit.NCB` takes the NEW NCB. | ✅ **Implemented** (commit ca53078): `NCBInExpiringPolicy` = expiring NCB, `AdditionalBenefit.NCB` = next IRDAI slab (0→20→25→35→45→50), 0 on claim or new business. Live-verified pricing gradient. Closed. |
+> | F33 (3OD+3TP) is available; details in the earlier table. | ✅ Noted — will be wired once a tenure selector exists in the product UI. Closed for now. |
+>
+> Also observed 2026-07-28: FG's UAT decline list changed again — Tata Bolt (previously our reliable issuer) now returns "Declined Vehicle" at quote; Baleno/Ciaz new-business now "Vehicle Is Decline" at proposal. Please share the current UAT decline list so certification vehicles can be chosen deterministically.
 
 **To:** FG / TCS Motor API support
 **From:** Tommy & Furry (Web Aggregator integration)
