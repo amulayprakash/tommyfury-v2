@@ -112,9 +112,10 @@ describe("FG integration (fixtures)", () => {
 
   const proposalBody = {
     ...quoteBody,
-    // A clean rollover: previous policy present and unexpired (no inspection).
+    // A clean rollover: previous policy present, unexpired, and expiring inside
+    // FG's 45-day advance-inception window (a far-future expiry is now refused).
     previousPolicyNumber: "PREV123456",
-    previousPolicyExpiryDate: "2099-01-01",
+    previousPolicyExpiryDate: new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10),
     quoteId: "0000771450",
     proposer: {
       firstName: "Chandrakant",

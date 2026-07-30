@@ -191,14 +191,17 @@ describe("buildCreateProposalPayload", () => {
   });
 
   it("starts a clean rollover the day after the previous policy expires", () => {
+    // Expiry must sit inside FG's 45-day advance-inception window (the guard
+    // rejects far-future starts — see the advance-inception describe block).
+    const expiry = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10);
     const p = buildCreateProposalPayload(
-      fullQuote({ previousPolicyExpiryDate: "2099-08-10" }),
+      fullQuote({ previousPolicyExpiryDate: expiry }),
       codes,
       meta,
       "r",
     );
-    expect(header(p).PolicyStartDate).toBe("11/08/2099");
-    expect(header(p).PolicyEndDate).toBe("10/08/2100");
+    const startIso = new Date(Date.parse(expiry) + 86400000).toISOString().slice(0, 10);
+    expect(header(p).PolicyStartDate).toBe(toFgDate(startIso));
   });
 
   it("carries break-in inspection evidence into RollOverList", () => {
@@ -283,14 +286,17 @@ describe("buildCreateProposalPayload", () => {
     expect(c.VIPCategory).toBe("");
   });
 
+  // Dates must sit inside FG's 45-day advance-inception window, so build them
+  // relative to today: OD starts in 10 days and runs one year.
+  const plusDays = (d: number) => new Date(Date.now() + d * 86400000).toISOString().slice(0, 10);
+
   it("rejects Standalone OD when the TP policy expires before the OD year ends", () => {
-    // OD start 2027-06-12 → OD ends 2028-06-11; TP expires 2027-06-11 (too soon).
     expect(() =>
       buildCreateProposalPayload(
         fullQuote({
           selectedPolicy: "standAloneOD",
-          policyStartDate: "2027-06-12",
-          previousTpExpiryDate: "2027-06-11",
+          policyStartDate: plusDays(10),
+          previousTpExpiryDate: plusDays(60), // well before OD start + 1yr
         }),
         codes,
         meta,
@@ -304,8 +310,8 @@ describe("buildCreateProposalPayload", () => {
       buildCreateProposalPayload(
         fullQuote({
           selectedPolicy: "standAloneOD",
-          policyStartDate: "2026-08-16",
-          previousTpExpiryDate: "2028-06-11",
+          policyStartDate: plusDays(10),
+          previousTpExpiryDate: plusDays(800), // outlasts OD start + 1yr
         }),
         codes,
         meta,
@@ -452,5 +458,38 @@ describe("NCB mapping (FG clarification 2026-07-28)", () => {
   it("sends NCB 0 for new business (no entitlement in year one)", () => {
     const p = buildGetQuotePayload(baseQuote({ businessType: "new" }), codes, meta, "r");
     expect(benefit(p).NCB).toBe("0");
+  });
+});
+
+describe("advance-inception cap (root-caused 2026-07-29)", () => {
+  it("rejects a rollover whose start (prevExpiry+1) is beyond 45 days with a clear message", () => {
+    // Far-future inception falls outside FG's reinsurance treaty period and dies
+    // at CRT with "User-Defined Exception from Reinsurance" — refuse it early.
+    expect(() =>
+      buildGetQuotePayload(
+        baseQuote({ businessType: "rollover", previousPolicyExpiryDate: "2027-06-11", registrationNumber: "MH01AB1234" }),
+        codes,
+        meta,
+        "r",
+      ),
+    ).toThrowError(/at most 45 days in advance/i);
+  });
+
+  it("allows a rollover starting within the 45-day window", () => {
+    const soon = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10);
+    expect(() =>
+      buildGetQuotePayload(
+        baseQuote({ businessType: "rollover", previousPolicyExpiryDate: soon, registrationNumber: "MH01AB1234" }),
+        codes,
+        meta,
+        "r",
+      ),
+    ).not.toThrow();
+  });
+
+  it("allows new business (starts today)", () => {
+    expect(() =>
+      buildGetQuotePayload(baseQuote({ businessType: "new" }), codes, meta, "r"),
+    ).not.toThrow();
   });
 });

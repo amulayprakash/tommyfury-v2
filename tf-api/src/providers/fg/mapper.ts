@@ -465,12 +465,33 @@ function policyHeader(
  * ONE-year TP. So a brand-new vehicle sold as third-party-only would bind an
  * invalid 1-year TP — refuse it with an actionable message instead.
  */
+/** FG's advance-inception cap: a policy may start at most this many days ahead. */
+export const FG_MAX_ADVANCE_INCEPTION_DAYS = 45;
+
 export function assertSupportedJourney(req: MotorQuoteRequest): void {
   const isNew = req.businessType === "new" || req.vehicleType === "newVehicle";
   if (isNew && req.selectedPolicy === "thirdParty") {
     throw new AppError(
       422,
       "Third-party-only cover isn't available for a brand-new vehicle: a new private car needs a 3-year long-term third-party policy, which Future Generali issues only as part of its bundled new-vehicle product. Choose Comprehensive for a new vehicle, or select Third Party for an already-registered (rollover) vehicle.",
+      "VALIDATION",
+    );
+  }
+  // FG caps advance inception at 45 days (certification SC "Advance Inception").
+  // A start beyond that — e.g. a rollover whose previous policy expires months
+  // from now (start = expiry + 1) — falls outside FG's reinsurance treaty period
+  // and dies at CreateProposal with the cryptic "User-Defined Exception from
+  // Reinsurance" (root-caused live 2026-07-29: start +7d issued, start +10mo
+  // failed, same vehicle/minute). Refuse it here with an actionable message.
+  const start = policyStartIso(req);
+  const latest = addDaysIso(todayIst(), FG_MAX_ADVANCE_INCEPTION_DAYS);
+  if (start > latest) {
+    throw new AppError(
+      422,
+      `Future Generali can start a policy at most ${FG_MAX_ADVANCE_INCEPTION_DAYS} days in advance, but this policy would start on ${start}` +
+        (req.previousPolicyExpiryDate
+          ? ` (the day after your current policy expires on ${req.previousPolicyExpiryDate}). Please come back within ${FG_MAX_ADVANCE_INCEPTION_DAYS} days of your policy's expiry to renew.`
+          : `. Choose a start date within ${FG_MAX_ADVANCE_INCEPTION_DAYS} days.`),
       "VALIDATION",
     );
   }
