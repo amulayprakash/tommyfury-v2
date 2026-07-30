@@ -217,7 +217,9 @@ export function buildQuoteRequest(state: QuoteInputs): CompareQuotesRequest | nu
     variantId: v.variantId,
     variantName: v.variantName,
     fuelType: v.fuelType,
-    engineCC: v.engineCC,
+    // Last-line guard: engineCC 0 (EVs) fails contract validation server-side
+    // and would kill the whole compare — send it only when positive.
+    engineCC: v.engineCC || undefined,
     rtoCode: v.rtoCode,
     registrationDate: v.registrationDate,
     registrationNumber: v.registrationNumber,

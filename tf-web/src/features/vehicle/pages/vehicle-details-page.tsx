@@ -120,7 +120,9 @@ export function VehicleDetailsPage() {
       variantName: chosen?.variantName ?? undefined,
       // Use the chosen master variant's fuel so it matches the resolved MMV row.
       fuelType: (chosen?.fuelType as ResolvedVehicle["fuelType"]) ?? rc.fuelType,
-      engineCC: chosen?.engineCC ?? rc.cubicCapacity ?? undefined,
+      // `||` (not `??`): an EV master row or RC can carry engineCC 0, which the
+      // contract rejects — treat it as absent.
+      engineCC: chosen?.engineCC || rc.cubicCapacity || undefined,
       seatingCapacity: seating ? Number(seating) : (rc.seatCapacity ?? undefined),
       rtoCode,
       registrationNumber: rc.rcNumber,

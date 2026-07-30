@@ -141,9 +141,11 @@ function normalise(raw: RcRaw, fallbackRcNumber: string): RcDetails {
     vehicleClass: raw.vehicle_class || undefined,
     fuelType: mapFuel(raw.fuel_type),
     color: raw.color || undefined,
-    // Round to a whole cc — the quote contract requires an integer engineCC, and
-    // some RCs report a fractional capacity (e.g. "97.2" for an HF Deluxe).
-    cubicCapacity: Number.isFinite(cc) ? Math.round(cc as number) : undefined,
+    // Round to a whole cc — the quote contract requires a POSITIVE integer
+    // engineCC, and some RCs report a fractional capacity (e.g. "97.2" for an
+    // HF Deluxe) or 0 for electric vehicles. A 0 must become "absent", not be
+    // sent — engineCC: 0 fails validation and kills the whole compare.
+    cubicCapacity: Number.isFinite(cc) && (cc as number) > 0 ? Math.round(cc as number) : undefined,
     seatCapacity: raw.seat_capacity ? Number.parseInt(raw.seat_capacity, 10) || undefined : undefined,
     manufacturingDate: toYearMonth(raw.manufacturing_date),
     registeredAt: raw.registered_at || undefined,
