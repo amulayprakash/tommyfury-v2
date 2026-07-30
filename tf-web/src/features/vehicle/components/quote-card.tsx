@@ -24,8 +24,12 @@ const FRIENDLY_ERROR: Record<string, string> = {
   UPSTREAM_UNAVAILABLE: "Insurer service is temporarily unavailable — please retry.",
 };
 
-function friendlyError(code?: string): string {
-  return (code && FRIENDLY_ERROR[code]) || "Couldn't fetch a quote. Please try again.";
+function friendlyError(error?: CompareResult["error"]): string {
+  // Validation failures carry an actionable, human-written message from the
+  // backend (e.g. FG's 45-day advance-inception window) — show it verbatim
+  // instead of a generic fallback.
+  if (error?.code === "VALIDATION" && error.message) return error.message;
+  return (error?.code && FRIENDLY_ERROR[error.code]) || "Couldn't fetch a quote. Please try again.";
 }
 
 /** A single vendor's quote in the compare list. */
@@ -46,7 +50,7 @@ export function QuoteCard({ result, selected, onSelect }: QuoteCardProps) {
             <p className="text-xs text-muted-foreground">No quote for this selection</p>
           ) : (
             <p className="flex items-center gap-1 text-xs text-destructive">
-              <AlertCircle className="size-3 shrink-0" /> {friendlyError(result.error?.code)}
+              <AlertCircle className="size-3 shrink-0" /> {friendlyError(result.error)}
             </p>
           )}
         </div>
