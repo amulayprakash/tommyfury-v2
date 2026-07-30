@@ -15,6 +15,7 @@ import { lifecycleRouter } from "@/routes/v1/lifecycle.routes.ts";
 import { mastersRouter } from "@/routes/v1/masters.routes.ts";
 import { providersRouter } from "@/routes/v1/providers.routes.ts";
 import { healthInsuranceRouter } from "@/routes/v1/health-insurance.routes.ts";
+import { createNivabupaRouter, createNivabupaProbeRouter } from "@/nivabupa/index.js";
 
 // Register providers once at startup
 import { registerIciciProvider } from "@/providers/icici/index.ts";
@@ -30,6 +31,26 @@ export function createApp(): express.Application {
 
   // Security headers
   app.use(helmet());
+
+  // ── NivaBupa (Reassure 3.0) partner API ────────────────────────────────────
+  // Mounted here, ahead of tf-api's CORS / rate-limit / body-parser stack, so
+  // the eight NivaBupa pass-throughs keep the exact middleware chain they had as
+  // a standalone service. The module carries its own CORS policy (its journey
+  // endpoints use PATCH/PUT, which tf-api's CORS does not allow), its own body
+  // parsers, and no rate limit (NivaBupa's gateway POSTs the payment callback
+  // server-to-server — a 429 there means the buyer paid and got no confirmation).
+  //
+  // Every route and middleware inside is scoped to the `/nivabupa` prefix, so a
+  // request to /api/v1/* passes straight through this router untouched.
+  const nivabupaRouter = createNivabupaRouter();
+  app.use(nivabupaRouter);
+  // Compatibility alias: the ONDC backend served every route under /health too,
+  // so a deployed frontend build whose base URL still ends in /health keeps
+  // working without a rebuild.
+  app.use("/health", nivabupaRouter);
+  // GET /healthz, GET /readyz — NivaBupa's own probes. tf-api's equivalents stay
+  // at /api/v1/healthz and /api/v1/readyz.
+  app.use(createNivabupaProbeRouter());
 
   // CORS — in development reflect any origin (dev servers run on localhost,
   // 127.0.0.1, or LAN IPs interchangeably); production enforces the allow-list.

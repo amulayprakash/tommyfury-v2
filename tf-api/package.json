@@ -30,7 +30,13 @@
     "db:import:icici": "tsx --env-file=.env scripts/import-icici-master.ts",
     "db:import:itgi": "tsx --env-file=.env scripts/import-itgi-master.ts",
     "db:verify:fg": "tsx --env-file=.env scripts/verify-fg-master-parity.ts",
-    "openapi:gen": "tsx scripts/gen-openapi.ts"
+    "openapi:gen": "tsx scripts/gen-openapi.ts",
+    "nivabupa:migrate": "node --env-file=.env scripts/nivabupa-migrate.js",
+    "nivabupa:migrate:status": "node --env-file=.env scripts/nivabupa-migrate.js --status",
+    "nivabupa:migrate:verify": "node --env-file=.env scripts/nivabupa-migrate.js --verify",
+    "nivabupa:smoke:premium": "node --env-file=.env scripts/nivabupa-premium-smoke.js",
+    "nivabupa:smoke:journey": "node --env-file=.env scripts/nivabupa-journey-smoke.js",
+    "nivabupa:smoke:payment": "node --env-file=.env scripts/nivabupa-payment-correlation-smoke.js"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -38,12 +44,14 @@
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^8.5.0",
     "@prisma/client": "^6.19.3",
+    "axios": "^1.6.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
     "fast-xml-parser": "^5.9.3",
     "helmet": "^8.2.0",
     "multer": "^2.1.1",
+    "mysql2": "^3.23.2",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
     "zod": "^4.4.3"
