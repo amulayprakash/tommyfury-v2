@@ -204,6 +204,20 @@ const EMPTY_CLIENT = {
   VIPCategory: "",
 };
 
+/**
+ * The NCB the customer has EARNED for the new policy year, from the expiring
+ * policy's NCB. FG clarified (mail 2026-07-28): `AdditionalBenefit.NCB` takes
+ * the NEW NCB %, while `RollOverList.NCBInExpiringPolicy` takes last year's —
+ * our canonical `ncbPercent` is the previous policy's NCB (same as ICICI's
+ * PreviousPolicyNcbPercentage), so FG's applicable value is the next slab of
+ * the IRDAI ladder (0→20→25→35→45→50), or 0 when the previous year had a claim.
+ */
+export function nextNcbSlab(previousNcb: number, claimInPreviousPolicy: boolean): number {
+  if (claimInPreviousPolicy) return 0;
+  const LADDER: Record<number, number> = { 0: 20, 20: 25, 25: 35, 35: 45, 45: 50, 50: 50 };
+  return LADDER[previousNcb] ?? 0;
+}
+
 // FG's BANCS engine reads each block into a typed .NET DataTable, so EVERY column
 // must be present (even empty) in the sample's order — a subset throws
 // "Column 'X' does not belong to table". Full set per the XML gateway sample.
@@ -224,7 +238,12 @@ function buildAdditionalBenefit(req: MotorQuoteRequest, cpaReq: "Y" | "N"): Reco
     LegalLiabilityForNonFarePayingPassengers: "",
     UseForHandicap: "",
     AntiThiefDevice: "",
-    NCB: String(req.ncbPercent ?? 0),
+    // New-policy NCB (next slab of the expiring NCB) — rollover/renewal only; a
+    // brand-new vehicle has no NCB entitlement in year one.
+    NCB:
+      req.businessType === "rollover" || req.businessType === "renewal"
+        ? String(nextNcbSlab(req.ncbPercent ?? 0, req.claimInPreviousPolicy ?? false))
+        : "0",
     RestrictedTPPD: "",
     PrivateCommercialUsage: "",
     // Left empty per the kit CRT sample (FG derives the CPA tenure from the

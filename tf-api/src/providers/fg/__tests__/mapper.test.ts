@@ -9,6 +9,7 @@ import {
   toNumericUid,
   fgSalutation,
   todayIst,
+  nextNcbSlab,
   type FgResolvedCodes,
   type FgPayloadMeta,
 } from "../mapper.ts";
@@ -414,5 +415,42 @@ describe("todayIst", () => {
     expect(todayIst()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     const expected = new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
     expect(todayIst()).toBe(expected);
+  });
+});
+
+describe("NCB mapping (FG clarification 2026-07-28)", () => {
+  const benefit = (p: { payload: Record<string, unknown> }) =>
+    (p.payload.Risk as Record<string, unknown>).AdditionalBenefit as Record<string, unknown>;
+  const rollList = (p: { payload: Record<string, unknown> }) =>
+    ((p.payload.Risk as Record<string, unknown>).PreviousInsDtls as Record<string, unknown>)
+      .RollOverList as Record<string, unknown>;
+
+  it("sends last year's NCB in RollOverList and the NEXT slab in AdditionalBenefit.NCB", () => {
+    const p = buildGetQuotePayload(baseQuote({ ncbPercent: 20 }), codes, meta, "r");
+    expect(rollList(p).NCBInExpiringPolicy).toBe("20"); // expiring policy's NCB
+    expect(benefit(p).NCB).toBe("25"); // earned slab for the new year
+  });
+
+  it("walks the IRDAI ladder and caps at 50", () => {
+    expect(nextNcbSlab(0, false)).toBe(20);
+    expect(nextNcbSlab(25, false)).toBe(35);
+    expect(nextNcbSlab(45, false)).toBe(50);
+    expect(nextNcbSlab(50, false)).toBe(50);
+  });
+
+  it("zeroes the new NCB when the previous year had a claim", () => {
+    const p = buildGetQuotePayload(
+      baseQuote({ ncbPercent: 35, claimInPreviousPolicy: true }),
+      codes,
+      meta,
+      "r",
+    );
+    expect(benefit(p).NCB).toBe("0");
+    expect(rollList(p).NCBInExpiringPolicy).toBe("35"); // history still reported
+  });
+
+  it("sends NCB 0 for new business (no entitlement in year one)", () => {
+    const p = buildGetQuotePayload(baseQuote({ businessType: "new" }), codes, meta, "r");
+    expect(benefit(p).NCB).toBe("0");
   });
 });
