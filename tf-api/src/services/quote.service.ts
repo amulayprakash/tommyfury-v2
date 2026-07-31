@@ -6,7 +6,11 @@ import {
 } from "@/providers/provider-registry.ts";
 import { supportsQuoteRetrieval } from "@/providers/insurance-provider.ts";
 import { AppError } from "@/errors/app-error.ts";
-import { recordQuote, recordProposal } from "@/repositories/quote.repository.ts";
+import {
+  recordQuote,
+  recordProposal,
+  findActivePolicyByRegistration,
+} from "@/repositories/quote.repository.ts";
 import type { MotorQuoteRequest, MotorFullQuoteRequest } from "@/contracts/quote-request.ts";
 import type { CanonicalQuoteResult } from "@/contracts/quote-result.ts";
 import type { VehicleCategory } from "@/contracts/enums.ts";
@@ -32,6 +36,21 @@ export async function fetchFullQuote(
   const provider = getProvider(providerSlug);
   requireOperation(provider, "proposal");
   requireCapability(provider, req.vehicleType as VehicleCategory);
+
+  // Duplicate-registration block (insurer certification: partners must refuse a
+  // registration that already carries an ACTIVE bound policy BEFORE payment —
+  // vendor UAT only enforces this at issuance/production stage).
+  const reg = (req.registrationNumber ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (reg) {
+    const active = await findActivePolicyByRegistration(reg);
+    if (active) {
+      throw new AppError(
+        422,
+        `Same Registration Number exists in Active. (${reg} already holds policy ${active.policyNumber})`,
+        "VALIDATION",
+      );
+    }
+  }
 
   const requestId = req.quoteId ?? randomUUID();
   const result = await provider.getFullQuote(req, { requestId });

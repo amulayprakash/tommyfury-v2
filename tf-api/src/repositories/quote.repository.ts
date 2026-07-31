@@ -94,6 +94,21 @@ export async function recordProposal(
   }
 }
 
+/**
+ * Finds an ACTIVE bound policy for a registration number (any provider) — the
+ * basis of the duplicate-registration block FG's "Partner Frontend validation"
+ * sheet requires partners to enforce before payment ("Same Registration Number
+ * exists in Active"). A row counts only once a real policyNumber is bound.
+ */
+export async function findActivePolicyByRegistration(registrationNo: string) {
+  if (persistenceDisabled || !registrationNo) return null;
+  return prisma.quote.findFirst({
+    where: { registrationNo, policyNumber: { not: null } },
+    orderBy: { createdAt: "desc" },
+    select: { policyNumber: true, providerSlug: true, createdAt: true },
+  });
+}
+
 /** Reads the persisted proposal row keyed by the FG QuotationNo (for issuance on callback). */
 export async function findQuoteByTransactionId(providerSlug: string, transactionId: string) {
   if (persistenceDisabled) return null;

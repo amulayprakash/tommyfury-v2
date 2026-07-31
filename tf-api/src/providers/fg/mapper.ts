@@ -468,7 +468,32 @@ function policyHeader(
 /** FG's advance-inception cap: a policy may start at most this many days ahead. */
 export const FG_MAX_ADVANCE_INCEPTION_DAYS = 45;
 
+/**
+ * Registrations FG has published as blocked (certification sheet TC_28 +
+ * "Partner Frontend validation": the partner must refuse these BEFORE payment —
+ * FG's own UAT only enforces the list at issuance/production stage).
+ */
+export const FG_BLACKLISTED_REGISTRATIONS: ReadonlySet<string> = new Set([
+  "MH02EP6349",
+  "MH02EE7034",
+  "MH14DX6896",
+  "GJ05RB3983",
+  "MH02EP5784",
+  "MH05CV3388",
+  "MH27BZ8880",
+]);
+
 export function assertSupportedJourney(req: MotorQuoteRequest): void {
+  // FG-published blacklist — refuse before any vendor call (and before payment),
+  // with the exact popup wording FG's certification sheet expects.
+  const reg = (req.registrationNumber ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (reg && FG_BLACKLISTED_REGISTRATIONS.has(reg)) {
+    throw new AppError(
+      422,
+      `Registration No: ${reg} is blocked in System.`,
+      "VALIDATION",
+    );
+  }
   const isNew = req.businessType === "new" || req.vehicleType === "newVehicle";
   if (isNew && req.selectedPolicy === "thirdParty") {
     throw new AppError(

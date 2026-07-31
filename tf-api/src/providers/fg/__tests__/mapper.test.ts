@@ -493,3 +493,38 @@ describe("advance-inception cap (root-caused 2026-07-29)", () => {
     ).not.toThrow();
   });
 });
+
+describe("FG blacklist guard (Partner Frontend validation)", () => {
+  it("refuses an FG-published blacklisted registration with FG's popup wording", () => {
+    expect(() =>
+      buildGetQuotePayload(
+        baseQuote({ businessType: "rollover", registrationNumber: "MH02EP6349", previousPolicyExpiryDate: new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10) }),
+        codes,
+        meta,
+        "r",
+      ),
+    ).toThrowError(/Registration No: MH02EP6349 is blocked in System/);
+  });
+
+  it("normalises formatting before checking (mh-02-ep-6349 still blocked)", () => {
+    expect(() =>
+      buildGetQuotePayload(
+        baseQuote({ businessType: "rollover", registrationNumber: "mh-02-ep-6349", previousPolicyExpiryDate: new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10) }),
+        codes,
+        meta,
+        "r",
+      ),
+    ).toThrowError(/blocked in System/);
+  });
+
+  it("does not block ordinary registrations", () => {
+    expect(() =>
+      buildGetQuotePayload(
+        baseQuote({ businessType: "rollover", registrationNumber: "MH01AB1234", previousPolicyExpiryDate: new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10) }),
+        codes,
+        meta,
+        "r",
+      ),
+    ).not.toThrow();
+  });
+});
