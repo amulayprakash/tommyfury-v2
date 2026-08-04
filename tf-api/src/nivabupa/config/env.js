@@ -94,6 +94,17 @@ const config = {
   },
 
   nivabupa: {
+    // Dumps the full upstream request/response for every /api/generic/* call to
+    // stdout. Off unless explicitly set: these bodies carry PII (PAN, DOB,
+    // medical answers) and pm2 keeps stdout on disk indefinitely, so this is a
+    // deliberate, temporary diagnostic rather than a default.
+    //
+    // Failures are logged in full regardless of this flag — see
+    // services/genericApi.service.js. api_transactions already persists both
+    // outcomes; this exists so a live call can be watched in `pm2 logs` without
+    // a database round-trip.
+    debug: process.env.NIVABUPA_DEBUG === '1',
+
     // OAuth client_credentials pair for the /api/generic/* family
     // (token / premium / uwDecision / datapush).
     clientId: process.env.NIVABUPA_CLIENT_ID || 'cdceaca20073415586ed9e28c7337ae1',
