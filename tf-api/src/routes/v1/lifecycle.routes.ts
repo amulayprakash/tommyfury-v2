@@ -22,10 +22,13 @@ import {
 
 const router = Router();
 
+/** Per-document upload ceiling; the error handler quotes this back to the customer. */
+export const OVD_MAX_FILE_BYTES = 5 * 1024 * 1024;
+
 // In-memory uploads: 2 files, 5 MB each. Bytes never logged (see pino redact).
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024, files: 2 },
+  limits: { fileSize: OVD_MAX_FILE_BYTES, files: 2 },
 });
 
 // KYC

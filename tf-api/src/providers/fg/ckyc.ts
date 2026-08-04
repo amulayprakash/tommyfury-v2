@@ -32,14 +32,25 @@ interface VerifyCkycResponse {
   errorMessage?: string | null;
 }
 
+/**
+ * FG wants the DOB as dd-mm-yyyy, not the canonical ISO yyyy-mm-dd. Live-verified
+ * on UAT 2026-08-04: the AADHAAR path rejects ISO outright with ckyc_remarks
+ * "DOB format should be dd-mm-yyyy", while the PAN path silently accepts either —
+ * which is why the ISO form went unnoticed. FG's own doc sample is dd-mm-yyyy.
+ */
+function toFgDob(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : iso;
+}
+
 /** Maps the canonical CkycRequest to FG's VerifyCKYC body. */
-function toVerifyBody(req: CkycRequest, systemName: string): Record<string, unknown> {
+export function toVerifyBody(req: CkycRequest, systemName: string): Record<string, unknown> {
   const idType = req.panNumber ? "PAN" : req.aadhaarNumber ? "AADHAAR" : "CKYC";
   const idNum = req.panNumber ?? req.aadhaarNumber ?? req.ckycNumber ?? "";
   return {
     id_type: idType,
     id_num: idNum,
-    dob: req.dob, // YYYY-MM-DD (v3 format)
+    dob: toFgDob(req.dob),
     mobile: req.mobile ?? "",
     full_name: req.fullName ?? req.nameAsPerAadhaar ?? "",
     gender: req.gender ?? "",
@@ -220,18 +231,40 @@ export interface FgUploadDocRequest {
   docBase64: string;
 }
 
+/**
+ * Two shapes in the wild. Live UAT (GCKYC/3.0.0, verified 2026-08-04) answers with
+ * the same envelope as VerifyCKYC — `{apiStatus, kycStatus, response:{…}}`. The
+ * vendor doc (FGI-CKYC-API-DOC.docx §4) instead documents a FLAT body with
+ * `success`/`verify_data`/`extracted_data`, which is what a prod GCKYC/2.1.0 may
+ * still return. Both are read below so neither deployment breaks.
+ */
+interface UploadDocExtracted {
+  name?: string | null;
+  dob?: string | null;
+  aadhar_id?: string | null;
+  gender?: string | null;
+  address?: string | null;
+  aadhar_masked_no?: string | null;
+  father_spouse_name?: string | null;
+}
+
 interface UploadDocResponse {
-  extracted_data?:
+  // Envelope shape (live UAT).
+  apiStatus?: string;
+  kycStatus?: number;
+  errorMessage?: string | null;
+  response?:
     | ({
-        name?: string | null;
-        dob?: string | null;
-        aadhar_id?: string | null;
-        gender?: string | null;
-        address?: string | null;
-        aadhar_masked_no?: string | null;
-        father_spouse_name?: string | null;
+        image_quality?: string | null;
+        doc_type?: string;
+        req_id?: string;
+        proposal_id?: string;
+        ckyc_remarks?: string | null;
+        extracted_data?: (UploadDocExtracted & Record<string, unknown>) | null;
       } & Record<string, unknown>)
     | null;
+  // Flat shape (vendor doc).
+  extracted_data?: (UploadDocExtracted & Record<string, unknown>) | null;
   doc_type?: string;
   image_quality?: string | null;
   req_id?: string;
@@ -271,17 +304,34 @@ export async function fgUploadDocBytes(
       req_id: req.reqId,
       proposal_id: req.proposalId,
       doc_type: req.docType,
+      // Live UAT names the payload `doc_bytes` and additionally requires
+      // `system_name` — it 400s on the doc's `doc_base64` ("The doc_bytes field
+      // is required."). Verified 2026-08-04; `doc_base64` is kept alongside so a
+      // deployment that follows the doc still receives the bytes.
+      doc_bytes: req.docBase64,
       doc_base64: req.docBase64,
+      system_name: config.vendorCode,
     },
   );
 
-  const isVerified = json.success === true && json.verify_data?.status === true;
+  const r = json.response ?? {};
+  // Envelope shape reports the outcome via apiStatus + kycStatus (1 = accepted);
+  // the flat doc shape uses success + verify_data.status.
+  const isVerified =
+    json.apiStatus !== undefined
+      ? json.apiStatus.toLowerCase() === "success" && json.kycStatus === 1
+      : json.success === true && json.verify_data?.status === true;
   return {
     isVerified,
-    extractedName: json.extracted_data?.name ?? undefined,
-    imageQuality: json.image_quality ?? undefined,
-    proposalId: json.proposal_id ?? req.proposalId,
-    message: json.error_message || json.verify_data?.message || undefined,
+    extractedName: r.extracted_data?.name ?? json.extracted_data?.name ?? undefined,
+    imageQuality: r.image_quality ?? json.image_quality ?? undefined,
+    proposalId: r.proposal_id ?? json.proposal_id ?? req.proposalId,
+    message:
+      json.errorMessage ||
+      r.ckyc_remarks ||
+      json.error_message ||
+      json.verify_data?.message ||
+      undefined,
     raw: json,
   };
 }

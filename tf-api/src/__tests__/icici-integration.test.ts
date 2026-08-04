@@ -134,6 +134,39 @@ describe("ICICI integration (fixtures)", () => {
     expect(res.body.response.kycId).toBe("kyc_5k4grUGluqgq7VB29pLCh");
   });
 
+  // ICICI's KYC_Generic.pdf lists PAN under Proof of Identity only — the accepted
+  // POA set is [AADHAAR, VOTER, PASSPORT, DL]. Reject it here rather than burning a
+  // round-trip and getting their opaque "Kyc Failed.. Re-upload Documents" back.
+  it("rejects PAN as proof of address before calling ICICI", async () => {
+    const res = await request(app)
+      .post("/api/v1/icici/kyc/ovd")
+      .field("transactionId", "epn_x")
+      .field("proofOfIdentityType", "AADHAAR")
+      .field("proofOfAddressType", "PAN")
+      .field("policyType", "motor")
+      .attach("proofOfIdentity", Buffer.from("id-bytes"), "id.jpg")
+      .attach("proofOfAddress", Buffer.from("addr-bytes"), "addr.jpg");
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe("INVALID_DOC_TYPE");
+    expect(res.body.message).toMatch(/address proof/i);
+  });
+
+  // multer rejects an oversized file with a MulterError, which is not an AppError —
+  // without explicit handling the customer gets a bare 500 "Internal server error".
+  it("returns a clear 413 when an uploaded document exceeds the size limit", async () => {
+    const res = await request(app)
+      .post("/api/v1/icici/kyc/ovd")
+      .field("transactionId", "epn_x")
+      .field("proofOfIdentityType", "AADHAAR")
+      .field("proofOfAddressType", "AADHAAR")
+      .field("policyType", "motor")
+      .attach("proofOfIdentity", Buffer.alloc(6 * 1024 * 1024, 1), "big.jpg")
+      .attach("proofOfAddress", Buffer.from("addr-bytes"), "addr.jpg");
+    expect(res.status).toBe(413);
+    expect(res.body.error.code).toBe("FILE_TOO_LARGE");
+    expect(res.body.message).toMatch(/5 MB/);
+  });
+
   it("returns policy status", async () => {
     const res = await request(app)
       .post("/api/v1/icici/policy/status")

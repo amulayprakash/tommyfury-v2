@@ -13,6 +13,8 @@ import {
   type FgResolvedCodes,
   type FgPayloadMeta,
 } from "../mapper.ts";
+import { toVerifyBody } from "../ckyc.ts";
+import { CkycRequestSchema } from "@/contracts/kyc.ts";
 
 const codes: FgResolvedCodes = { make: "HONDA", modelCode: "HO0002", rtoCode: "MH01", zone: "A" };
 const meta: FgPayloadMeta = { vendorCode: "Webagg", agentCode: "60001464", branchCode: "10" };
@@ -526,5 +528,34 @@ describe("FG blacklist guard (Partner Frontend validation)", () => {
         "r",
       ),
     ).not.toThrow();
+  });
+});
+
+describe("FG CKYC VerifyCKYC body", () => {
+  const base = { transactionId: "TXN1", mobile: "9924115247", policyType: "motor" as const };
+
+  it("sends the DOB as dd-mm-yyyy, not the canonical ISO form", () => {
+    const body = toVerifyBody(
+      CkycRequestSchema.parse({ ...base, dob: "1991-08-23", panNumber: "BINPJ5477L", fullName: "JADAV J N" }),
+      "Webagg",
+    );
+    expect(body.dob).toBe("23-08-1991");
+  });
+
+  it("uses AADHAAR as the id_type when only an Aadhaar is supplied", () => {
+    const body = toVerifyBody(
+      CkycRequestSchema.parse({
+        ...base,
+        dob: "1979-08-05",
+        aadhaarNumber: "570617099478",
+        nameAsPerAadhaar: "SHARAD M PATEL",
+        gender: "M",
+      }),
+      "Webagg",
+    );
+    expect(body.id_type).toBe("AADHAAR");
+    expect(body.id_num).toBe("570617099478");
+    // FG's AADHAAR path hard-rejects yyyy-mm-dd ("DOB format should be dd-mm-yyyy").
+    expect(body.dob).toBe("05-08-1979");
   });
 });

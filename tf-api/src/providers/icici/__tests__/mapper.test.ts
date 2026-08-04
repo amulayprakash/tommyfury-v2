@@ -229,6 +229,23 @@ describe("buildCkycPayload", () => {
   });
 });
 
+// Live A/B on ICICI UAT (2026-08-01, Hero Splendor @ MP09): HasExistingPACover:true
+// suppressed the compulsory owner-driver PA (gross ₹1056, no paOwner in addonPremiums);
+// false charged it (gross ₹1646, paOwner ₹500). Our canonical `paOwner` means "include
+// PA cover", so it must be sent INVERTED — sending it through as-is silently quotes
+// every customer a premium short of the mandatory PA cover.
+describe("owner-driver PA cover", () => {
+  it("asks ICICI to charge PA when the customer wants the cover", () => {
+    const { payload } = buildSaveQuotePayload(baseQuote({ paOwner: true }), codes, "req-1");
+    expect(payload.HasExistingPACover).toBe(false);
+  });
+
+  it("declares an existing PA policy only when the cover is declined", () => {
+    const { payload } = buildSaveQuotePayload(baseQuote({ paOwner: false }), codes, "req-1");
+    expect(payload.HasExistingPACover).toBe(true);
+  });
+});
+
 describe("buildOvdFormData", () => {
   it("appends ICICI-spelled file fields and metadata", () => {
     const form = buildOvdFormData(

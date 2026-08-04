@@ -52,7 +52,8 @@ describe("FG VerifyCKYC", () => {
     expect(sent).toMatchObject({
       id_type: "PAN",
       id_num: "ABCDE1234F",
-      dob: "1990-01-01",
+      // FG wants dd-mm-yyyy, not the canonical ISO yyyy-mm-dd on the request.
+      dob: "01-01-1990",
       mobile: "9876543210",
       full_name: "John Doe",
       customer_type: "I",
@@ -209,7 +210,7 @@ describe("FG token 401 retry", () => {
 });
 
 describe("FG UploadDocBytes", () => {
-  it("posts {req_id, proposal_id, doc_type, doc_base64} to /Verify/UploadDocBytes", async () => {
+  it("posts the doc bytes + system_name to /Verify/UploadDocBytes", async () => {
     const fetchMock = mockFetch({
       extracted_data: { name: "BIRESHWAR", dob: "17-01-2001", address: "C-38 …" },
       doc_type: "aadhar",
@@ -237,7 +238,11 @@ describe("FG UploadDocBytes", () => {
       req_id: "REQ_1",
       proposal_id: "PR_OX61LYNZVO",
       doc_type: "pdf",
+      // Live UAT 400s without doc_bytes + system_name; doc_base64 is kept for
+      // deployments that follow FGI-CKYC-API-DOC.docx §4.
+      doc_bytes: "JVBERi0=",
       doc_base64: "JVBERi0=",
+      system_name: "Webagg",
     });
     expect(r.isVerified).toBe(true);
     expect(r.extractedName).toBe("BIRESHWAR");
@@ -267,6 +272,55 @@ describe("FG UploadDocBytes", () => {
     expect(r.isVerified).toBe(false);
     expect(r.message).toBe("Invalid Aadhaar Number");
     expect(r.proposalId).toBe("PR_2");
+  });
+
+  // Live UAT (2026-08-04) answers with the VerifyCKYC-style envelope, not the
+  // flat body the vendor doc shows. Reading only the flat shape made isVerified
+  // permanently false for a document FG had actually accepted.
+  it("reads the live envelope shape (apiStatus + kycStatus 1) as verified", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch({
+        uid: "6ad5b195fc9f4c26a41583f3e04be6d4",
+        apiStatus: "Success",
+        kycStatus: 1,
+        response: {
+          image_quality: "average",
+          doc_type: "pancard",
+          req_id: "REQ_3",
+          proposal_id: "PR_3",
+          ckyc_remarks: null,
+        },
+        errorMessage: null,
+      }),
+    );
+    const r = await fgUploadDocBytes(
+      config,
+      { reqId: "REQ_3", proposalId: "PR_3", docType: "pan", docBase64: "AAAA" },
+      "tok",
+    );
+    expect(r.isVerified).toBe(true);
+    expect(r.imageQuality).toBe("average");
+    expect(r.proposalId).toBe("PR_3");
+  });
+
+  it("treats a non-accepting envelope (kycStatus 0) as not verified", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch({
+        apiStatus: "Success",
+        kycStatus: 0,
+        response: { proposal_id: "PR_4", ckyc_remarks: "Image quality too poor" },
+        errorMessage: null,
+      }),
+    );
+    const r = await fgUploadDocBytes(
+      config,
+      { reqId: "REQ_4", proposalId: "PR_4", docType: "pan", docBase64: "AAAA" },
+      "tok",
+    );
+    expect(r.isVerified).toBe(false);
+    expect(r.message).toBe("Image quality too poor");
   });
 
   it("fgCkycDocType maps pdf mime to 'pdf' and Aadhaar image to 'aadhar'", () => {

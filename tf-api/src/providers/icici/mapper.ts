@@ -1,7 +1,7 @@
 import type { VehicleCategory } from "@/contracts/enums.ts";
 import type { MotorQuoteRequest, MotorFullQuoteRequest } from "@/contracts/quote-request.ts";
 import type { CkycRequest, OvdRequest, OvdFile } from "@/contracts/kyc.ts";
-import { ProviderCapabilityError } from "@/errors/app-error.ts";
+import { AppError, ProviderCapabilityError } from "@/errors/app-error.ts";
 import {
   ICICI_SLUG,
   ADDON_CODES_2W,
@@ -153,7 +153,12 @@ export function buildSaveQuotePayload(
     Pincode: req.pincode ?? "",
     RequestId: requestId,
     IsLive: true,
-    HasExistingPACover: req.paOwner,
+    // INVERTED deliberately: our `paOwner` means "include the owner-driver PA cover",
+    // ICICI's flag means "the customer ALREADY holds a PA policy, so don't charge it".
+    // Passing it through as-is suppresses the compulsory PA premium — live-verified on
+    // UAT: paOwner=true quoted ₹1056 with no PA line, paOwner=false quoted ₹1646 with
+    // PA ₹500. Since `paOwner` defaults to true, that understated every ICICI quote.
+    HasExistingPACover: !req.paOwner,
     AddOns: buildAddons(req, line),
     PreviousPolicyClaimed: req.claimInPreviousPolicy,
     PreviousPolicyNcbPercentage: req.ncbPercent,
@@ -306,7 +311,22 @@ export function buildCkycPayload(req: CkycRequest): Record<string, unknown> {
 
 // ─── OVD (multipart) ──────────────────────────────────────────────────────────
 
+/**
+ * ICICI accepts PAN as Proof of Identity but NOT as Proof of Address — their
+ * KYC_Generic.pdf lists POA as [AADHAAR, VOTER, PASSPORT, DL]. Sending it anyway
+ * costs a round-trip and comes back as the opaque "Kyc Failed.. Re-upload
+ * Documents", which reads to the customer like their scan was unreadable.
+ */
+const ICICI_POA_TYPES = new Set(["AADHAAR", "VOTER", "PASSPORT", "DL"]);
+
 export function buildOvdFormData(req: OvdRequest, files: OvdFile[]): FormData {
+  if (!ICICI_POA_TYPES.has(req.proofOfAddressType)) {
+    throw new AppError(
+      422,
+      `ICICI does not accept ${req.proofOfAddressType} as an address proof — use Aadhaar, Voter ID, Passport or Driving Licence.`,
+      "INVALID_DOC_TYPE",
+    );
+  }
   const form = new FormData();
   form.append("quoteTransactionId", req.transactionId);
   form.append("ProofOfIdentityType", req.proofOfIdentityType);
