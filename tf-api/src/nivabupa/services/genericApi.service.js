@@ -14,17 +14,32 @@ const fingerprint = (token) =>
 // between calls the result still alternated 200/429, and every 429 came back
 // after ~7.37s of Kong-reported upstream latency while every success returned in
 // 2.7–5.5s. That constant is an internal timeout on their side surfacing under a
-// misleading status code — no Retry-After or RateLimit-* header is sent.
+// misleading status code — no Retry-After or RateLimit-* header is sent, and the
+// body is their own premium envelope (STATUS "False", empty ErrorList), which a
+// real gateway throttle would never carry.
 //
-// So the same request retried moments later normally succeeds. Two short retries
-// turn a ~40% observed failure rate into a rare one, and the worst case
-// (7.4 + 0.3 + 7.4 + 0.8 + 7.4 ≈ 23.3s) still lands inside the frontend's 30s
-// axios timeout. Only 429 is retried: 4xx validation failures are deterministic
-// and retrying them would just multiply load.
+// So the same request retried moments later normally succeeds. Only 429 is
+// retried: 4xx validation failures are deterministic and retrying them would
+// just multiply load.
 const RETRY_STATUSES = new Set([429]);
-const RETRY_DELAYS_MS = [300, 800];
+
+// Longer and jittered, replacing a first pass at 300/800ms. Since the failure is
+// an upstream stall rather than a token bucket, a retry that lands 300ms later
+// re-enters an engine that is still stuck; the delay has to give it room to
+// drain, and the jitter keeps the four concurrent tier calls a search fires from
+// retrying in lockstep. Worst case 7.4 + ~1.3 + 7.4 + ~3.9 + 7.4 ≈ 27s: inside
+// this service's own 20s per-attempt timeout and the frontend's 60s one.
+const RETRY_BASE_DELAYS_MS = [1000, 3000];
+const jitter = (ms) => Math.round(ms * (0.7 + Math.random() * 0.6));
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// The envelope key differs per endpoint (premiumResponse / RESPONSE / bare), so
+// look in whichever one is present rather than assuming premium's.
+const upstreamMessageCode = (data) => {
+  const envelope = data?.premiumResponse || data?.RESPONSE || data;
+  return envelope?.STATUS_MESSAGE?.[0]?.MESSAGE_CODE || null;
+};
 
 // Premium/UW/Data Push all share the same auth (Bearer token + clientId
 // header) and forwarding shape — only the target URL and body differ.
@@ -41,6 +56,7 @@ async function forwardToNivaBupa(url, body) {
   if (config.nivabupa.debug) {
     console.log('\n────────── NivaBupa request ──────────');
     console.log('URL           :', url);
+    console.log('Method        :', 'POST');
     console.log('Headers       :', { ...headers, Authorization: `Bearer ${fingerprint(token)}` });
     console.log('Content-Length:', Buffer.byteLength(JSON.stringify(body ?? '')));
     console.log('Payload       :', JSON.stringify(forAudit(body), null, 2));
@@ -62,13 +78,15 @@ async function forwardToNivaBupa(url, body) {
       return response.data;
     } catch (error) {
       const status = error.response?.status;
-      const canRetry = RETRY_STATUSES.has(status) && attempt < RETRY_DELAYS_MS.length;
+      const upstreamMs = error.response?.headers?.['x-kong-upstream-latency'];
+      const canRetry = RETRY_STATUSES.has(status) && attempt < RETRY_BASE_DELAYS_MS.length;
 
       if (canRetry) {
-        const delay = RETRY_DELAYS_MS[attempt];
+        const delay = jitter(RETRY_BASE_DELAYS_MS[attempt]);
         console.warn(
-          `⚠️  NivaBupa ${status} on ${url} (upstream ${error.response?.headers?.['x-kong-upstream-latency'] ?? '?'}ms) ` +
-            `— retrying in ${delay}ms [attempt ${attempt + 2}/${RETRY_DELAYS_MS.length + 1}]`
+          `⚠️  NivaBupa ${status} on ${url} (upstream ${upstreamMs ?? '?'}ms, ` +
+            `code ${upstreamMessageCode(error.response?.data) ?? 'none'}) ` +
+            `— retrying in ${delay}ms [attempt ${attempt + 2}/${RETRY_BASE_DELAYS_MS.length + 1}]`
         );
         await sleep(delay);
         continue;
@@ -88,6 +106,34 @@ async function forwardToNivaBupa(url, body) {
       console.error('resp headers :', error.response?.headers);
       console.error('resp data    :', JSON.stringify(forAudit(error.response?.data ?? null), null, 2));
       console.error('──────────────────────────────────────');
+
+      // A 429 that survived every retry must not be reported as a rate limit,
+      // because it is not one (see the RETRY_STATUSES note above). axios's own
+      // message — "Request failed with status code 429" — is all the controllers
+      // have to put in the caller's `message` field, and it has repeatedly sent
+      // people hunting for throttling, a bad token or a malformed payload when
+      // the cause is an intermittent stall inside NivaBupa's pricing engine.
+      // Replace the message with what actually happened and keep `.response`
+      // intact so the controllers still persist and forward NivaBupa's own body
+      // unchanged.
+      if (RETRY_STATUSES.has(status)) {
+        const code = upstreamMessageCode(error.response?.data);
+        const wrapped = new Error(
+          `Niva Bupa could not price this request: their gateway answered ${status} on all ` +
+            `${attempt + 1} attempts${code ? ` (${code})` : ''}` +
+            `${upstreamMs ? `, ~${upstreamMs}ms upstream` : ''}. ` +
+            'This is an intermittent internal timeout on their side — not a rate limit, ' +
+            'not a rejected payload. The same request usually succeeds on a fresh try.'
+        );
+        wrapped.response = error.response;
+        wrapped.code = error.code;
+        wrapped.cause = error;
+        wrapped.upstreamStatus = status;
+        wrapped.attempts = attempt + 1;
+        wrapped.retryable = true;
+        throw wrapped;
+      }
+
       throw error;
     }
   }
