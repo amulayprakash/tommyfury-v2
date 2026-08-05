@@ -1,3 +1,5 @@
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import config from '../config/env.js';
 import { encryptPaymentParams, decryptPaymentReturn } from '../services/soap.service.js';
 import { PAYMENT_DEFAULTS } from '../constants/payment.constants.js';
@@ -117,6 +119,56 @@ export const initiatePayment = async (req, res) => {
 // whole journey on landing instead of rebuilding it from four query params. The
 // original query params are still sent, unchanged, so an existing return page
 // keeps working.
+// TEMPORARY (2026-08-05) — see captureCiphertext below. Pulls returnMessage out
+// of the raw request bytes rather than the parsed body. decodeURIComponent
+// resolves percent-escapes but leaves a literal '+' alone, which is exactly the
+// difference being hunted: form-encoding says '+' means space, so a base64
+// ciphertext posted with an unescaped '+' reaches req.body with spaces in those
+// positions and can never decrypt. req.rawBody is captured by the verify hook
+// in routes/index.js.
+function extractRawReturnMessage(req) {
+  if (!req.rawBody || !req.rawBody.length) return null;
+  const raw = req.rawBody.toString('utf8');
+  const match = raw.match(/(?:^|&)(?:returnMessage|encResp|cipherText)=([^&]*)/);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1]; // malformed percent-escape — keep the original bytes
+  }
+}
+
+// TEMPORARY (2026-08-05) — writes the callback ciphertext to disk so it can be
+// replayed against decResp without anyone copy-pasting a base64 blob out of a
+// terminal, which is itself a way to corrupt it. Re-capturing costs a real
+// payment each time, so the capture has to be right first go.
+//
+// returnmessage.txt is what the replay script's --file flag expects; the
+// timestamped copy keeps a second attempt from overwriting the first. Only the
+// encrypted blob is written — it decrypts to payment status fields, not
+// plaintext PII — but delete these files once the cause is confirmed.
+function captureCiphertext({ parsedValue, rawValue }) {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const write = (file, value) => {
+    try {
+      writeFileSync(join(process.cwd(), file), value, 'utf8');
+      console.log(`   📝 wrote ${file} (${value.length} chars)`);
+    } catch (error) {
+      console.error(`   ⚠️ could not write ${file}: ${error.message}`);
+    }
+  };
+  // No trailing newline — a stray one inside a base64 value changes what gets sent.
+  if (parsedValue) {
+    write('returnmessage.txt', String(parsedValue));
+    write(`returnmessage-${stamp}.txt`, String(parsedValue));
+  }
+  // Written only when it differs, so its existence alone is the signal that the
+  // parsed value was mangled in transit.
+  if (rawValue && rawValue !== String(parsedValue)) {
+    write('returnmessage.raw.txt', rawValue);
+  }
+}
+
 export const handlePaymentReturn = async (req, res) => {
   const startedAt = Date.now();
   const frontendUrl = config.frontendUrl;
@@ -131,14 +183,39 @@ export const handlePaymentReturn = async (req, res) => {
   console.log('Query Parameters:', req.query);
   console.log('Request Body:', req.body);
   console.log('Raw Callback Payload:', req.body && Object.keys(req.body).length ? req.body : req.query);
-  const encryptedResponse = req.body?.returnMessage || req.query?.returnMessage
-    || req.body?.encResp || req.query?.encResp
-    || req.body?.cipherText || req.query?.cipherText;
-  console.log('Encrypted returnMessage / cipherText:', encryptedResponse);
+  // Which container it arrived in matters: a body value went through
+  // express.urlencoded's decoder and a query value through Express's query
+  // parser, and the two treat '+' differently.
+  const bodyField = ['returnMessage', 'encResp', 'cipherText'].find((f) => req.body?.[f]);
+  const queryField = ['returnMessage', 'encResp', 'cipherText'].find((f) => req.query?.[f]);
+  const parsedValue = bodyField ? req.body[bodyField] : queryField ? req.query[queryField] : null;
+  console.log('returnMessage source:', bodyField ? `body.${bodyField}` : queryField ? `query.${queryField}` : '(not found)');
+  console.log('Encrypted returnMessage / cipherText:', parsedValue);
+
+  const rawValue = extractRawReturnMessage(req);
+
+  if (parsedValue) {
+    const v = String(parsedValue);
+    console.log('returnMessage length:', v.length, '| first 12:', v.slice(0, 12), '| last 12:', v.slice(-12));
+    console.log('returnMessage base64-shaped:', /^[A-Za-z0-9+/=\r\n]+$/.test(v), '| length % 4 =', v.length % 4);
+    if (v.includes(' ')) {
+      console.warn('   ⚠️ contains spaces — a "+" was lost in URL decoding, which corrupts the ciphertext.');
+    }
+  } else {
+    console.warn('   ⚠️ no returnMessage/encResp/cipherText found in body or query.');
+  }
+
+  if (rawValue && parsedValue && rawValue !== String(parsedValue)) {
+    console.warn('   ⚠️ RAW BODY DIFFERS FROM PARSED VALUE — the parsed one is corrupted.');
+    console.warn('      parsed length:', String(parsedValue).length, '| raw length:', rawValue.length);
+    console.warn('      The decrypt below retries with the raw value if the parsed one fails.');
+  }
+
   console.log('Content-Type:', req.headers['content-type']);
+  captureCiphertext({ parsedValue, rawValue }); // TEMPORARY — remove with the two helpers above
   console.log('===============================================');
 
-  const { returnMessage } = req.body;
+  const returnMessage = parsedValue;
   const rawCallback = req.body && Object.keys(req.body).length ? req.body : req.query;
 
   try {
@@ -150,7 +227,22 @@ export const handlePaymentReturn = async (req, res) => {
     // status, full SOAP response, parsed decRespResult) are all logged inside
     // callSoap() in services/soap.service.js — shared by every SOAP call so the
     // detail is identical whether this succeeds or throws a SOAP Fault.
-    const decrypted = await decryptPaymentReturn(returnMessage);
+    // The retry is the corruption test, run against the live service instead of
+    // argued about: if the parsed value fails and the raw one succeeds, '+' was
+    // eaten by form decoding and that is the whole bug — proven by the same key
+    // decrypting the same payment a moment later. If both fail, corruption is
+    // excluded and the key (or the IP) is what remains. Costs one extra SOAP
+    // call only on a path that was already failing.
+    let decrypted;
+    try {
+      decrypted = await decryptPaymentReturn(returnMessage);
+    } catch (firstError) {
+      if (!rawValue || rawValue === String(returnMessage)) throw firstError;
+      console.warn('\n⚠️ decResp failed on the parsed returnMessage — retrying with the raw request bytes.');
+      decrypted = await decryptPaymentReturn(rawValue);
+      console.warn('✅ The raw value decrypted. The parsed body was corrupted by URL decoding;');
+      console.warn('   the key is correct. Fix: read returnMessage from req.rawBody, not req.body.');
+    }
     const parsed = parseReturnMessage(decrypted);
 
     console.log('\n----- Decrypted Payment Details -----');
@@ -207,9 +299,20 @@ export const handlePaymentReturn = async (req, res) => {
     return res.redirect(302, `${frontendUrl}/nivabupa-return?${query.toString()}`);
   } catch (error) {
     console.error('\n❌ NivaBupa payment return processing failed');
+    // soapCause names which failure mode this was (WAF 406 / SOAP Fault / key
+    // mismatch / timeout / TLS) — see classifyHttpFailure and
+    // classifyTransportFailure in services/soap.service.js. Without it the log
+    // showed a status code and left the diagnosis to whoever read it.
+    console.error('   Cause:', error.soapCause || '(not a SOAP failure — see message below)');
     console.error('   Error message:', error.message);
+    console.error('   HTTP status:', error.soapStatus ?? '(no response)');
+    console.error('   Response headers:', error.soapResponseHeaders || null);
     console.error('   Error response data:', error.soapResponseData || error.response?.data || null);
     console.error('   Stack:', error.stack);
+    if (error.cause) {
+      console.error('   Underlying error:', error.cause.message);
+      console.error('   Underlying stack:', error.cause.stack);
+    }
 
     // A callback that arrived but could not be decrypted or parsed is the worst
     // case in this flow: money may have moved with no record linking it to a
