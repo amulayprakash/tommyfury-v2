@@ -74,12 +74,20 @@ export interface RtoKey {
   number: number;
 }
 
-/** "MH-1-MUMBAI" → { stateCode: "MH", number: 1 }. */
+/**
+ * "MH-1-MUMBAI" → { stateCode: "MH", number: 1 }.
+ *
+ * Whitespace around the separators is tolerated: the real sheet contains
+ * "HR-85 - AMBALA CANTT" and "WB-88 - Bishnupur", which are ordinary RTOs typed
+ * inconsistently. Rejecting them would drop two serviceable RTOs from HDFC's
+ * coverage for a data-entry quirk. The leading anchor still keeps a dash inside
+ * the city name ("GJ-38-BAVLA-EAST") from being consumed.
+ */
 export function parseRtoKey(registrationStateCity: string): RtoKey | null {
   const m = String(registrationStateCity ?? "")
     .trim()
     .toUpperCase()
-    .match(/^([A-Z]{2})-0*(\d{1,3})-/);
+    .match(/^([A-Z]{2})\s*-\s*0*(\d{1,3})\s*-/);
   if (!m) return null;
   return { stateCode: m[1]!, number: Number(m[2]) };
 }

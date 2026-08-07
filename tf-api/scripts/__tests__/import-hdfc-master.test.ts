@@ -50,6 +50,13 @@ describe("parseRtoKey", () => {
     expect(parseRtoKey("MH-01-MUMBAI")).toEqual({ stateCode: "MH", number: 1 });
   });
 
+  it("tolerates stray whitespace around the separators", () => {
+    // Both appear verbatim in the vendor sheet. They are ordinary RTOs typed
+    // inconsistently, and rejecting them dropped two serviceable RTOs.
+    expect(parseRtoKey("HR-85 - AMBALA CANTT")).toEqual({ stateCode: "HR", number: 85 });
+    expect(parseRtoKey("WB-88 - Bishnupur")).toEqual({ stateCode: "WB", number: 88 });
+  });
+
   it("returns null for an unparseable value", () => {
     expect(parseRtoKey("")).toBeNull();
     expect(parseRtoKey("MUMBAI")).toBeNull();
