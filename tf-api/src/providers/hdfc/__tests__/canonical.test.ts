@@ -291,3 +291,25 @@ describe("electric-vehicle cover rules (learned from HDFC UAT)", () => {
     expect(withBattery.ev.batteryChargerCover).toBe(1);
   });
 });
+
+describe("compulsory personal accident (CPA) cover", () => {
+  // Effectivedrivinglicense is HDFC's CPA EXEMPTION flag, not a licence
+  // statement — their warning reads "Owner has no valid driving license or
+  // Having CPA in another policy". Hardcoding it true suppressed CPA on every
+  // quote: verified live, CPA ₹0 with true vs ₹325 with false.
+  it("does not claim the exemption when the customer wants owner-driver PA", () => {
+    expect(toHdfcRequest(baseRequest({ paOwner: true }), codes, "T").addons.effectiveDrivingLicense)
+      .toBe(false);
+  });
+
+  it("claims the exemption only when the customer declines owner-driver PA", () => {
+    expect(toHdfcRequest(baseRequest({ paOwner: false }), codes, "T").addons.effectiveDrivingLicense)
+      .toBe(true);
+  });
+
+  it("still sets CPA_Tenure from paOwner, so the two stay consistent", () => {
+    const on = toHdfcRequest(baseRequest({ paOwner: true }), codes, "T");
+    expect(on.addons.cpaTenure).toBe(1);
+    expect(on.addons.effectiveDrivingLicense).toBe(false);
+  });
+});

@@ -170,7 +170,21 @@ export function toHdfcRequest(
       nomineeName: full.nomineeName,
       nomineeAge: full.nomineeAge,
       nomineeRelationship: full.nomineeRelation,
-      effectiveDrivingLicense: true,
+      /**
+       * This flag is the CPA *exemption*, not a statement that the owner drives.
+       * HDFC's own warning spells out what it means: "Owner has no valid driving
+       * license or Having CPA in another policy". Set it and HDFC charges no
+       * compulsory PA cover.
+       *
+       * It was hardcoded `true`, which suppressed CPA on every single quote —
+       * verified live on UAT: identical request, CPA ₹0 / gross ₹3,396 with
+       * true, CPA ₹325 / gross ₹3,780 with false. So we were under-quoting and
+       * would have issued policies missing a cover that is compulsory in India.
+       *
+       * It is therefore the inverse of the customer's paOwner choice: asking for
+       * owner-driver PA means the exemption does not apply.
+       */
+      effectiveDrivingLicense: !req.paOwner,
     },
     ev: isElectric
       ? {

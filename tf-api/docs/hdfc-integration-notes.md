@@ -5,10 +5,15 @@ Provider: `src/providers/hdfc/`. Design spec:
 Frozen predecessor: `docs/reference/hdfc-ergo-standalone/`.
 
 HDFC is fully wired — quote, proposal, Pehchaan CKYC, issuance, renewal and
-COI — behind `HDFC_ENABLED` (default `false`). 188 unit tests, all fixture-driven
-against JSON extracted from HDFC's own Postman collection; nothing has yet run
-against live UAT because no credentials exist (`HDFC_CREDENTIAL`, `HDFC_SOURCE`,
-`HDFC_CHANNEL_ID` are all unset — see `scripts/hdfc-uat-probe.ts` and §9 below).
+COI — behind `HDFC_ENABLED` (default `false`). 201 unit tests, fixture-driven
+against JSON extracted from HDFC's own Postman collection and, for the response
+side, against real captures from live UAT.
+
+**Credentials arrived 2026-08-07 and the integration is live on UAT.**
+`npm run hdfc:probe` returns a real quote; `npm run hdfc:scenarios` runs HDFC's
+own 205-condition certification pack against the live vendor and writes
+`docs/hdfc-uat-scenario-results.md`. Pehchaan e-KYC is wired but has not yet
+been exercised live.
 
 ## 1. Shape
 
