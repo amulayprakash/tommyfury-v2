@@ -1,0 +1,15 @@
+{
+  "TransactionID": "TESTHDFCRENEW00001",
+  "Proposal_no": "202407110000908",
+  "Cis_Flag": "Y",
+  "Payment_Details": {
+    "GC_PaymentID": "",
+    "BANK_NAME": "BIZDIRECT",
+    "BANK_BRANCH_NAME": "Andheri",
+    "PAYMENT_MODE_CD": "EP",
+    "PAYER_TYPE": "CUSTOMER",
+    "PAYMENT_AMOUNT": "43150.00",
+    "INSTRUMENT_NUMBER": "TESTHDFCRENEW00001",
+    "PAYMENT_DATE": "11/07/2024"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "TransactionID": "PCCOM1689152050270",
+  "IDV_DETAILS": {
+    "ModelCode": "17532",
+    "RTOCode": "10406",
+    "Vehicle_Registration_Date": "11/07/2023",
+    "Registration_No": "New",
+    "Policy_Start_Date": "12/07/2023",
+    "PreviousPolicy_PreviousPolicyType": "COMPREHENSIVE",
+    "PreviousPolicy_EndDate": "01/05/2023",
+    "PreviousPolicy_TPENDDATE": null,
+    "PreviousPolicy_TPSTARTDATE": null
+  }
+}
