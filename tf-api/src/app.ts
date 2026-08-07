@@ -21,10 +21,12 @@ import { createNivabupaRouter, createNivabupaProbeRouter } from "@/nivabupa/inde
 import { registerIciciProvider } from "@/providers/icici/index.ts";
 import { registerFgProvider } from "@/providers/fg/index.ts";
 import { registerItgiProvider } from "@/providers/itgi/index.ts";
+import { registerHdfcProvider } from "@/providers/hdfc/index.ts";
 
 registerIciciProvider();
 registerFgProvider();
 registerItgiProvider();
+registerHdfcProvider();
 
 export function createApp(): express.Application {
   const app = express();
