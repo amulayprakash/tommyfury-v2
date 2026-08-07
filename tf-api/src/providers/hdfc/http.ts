@@ -1,0 +1,130 @@
+import { ProviderError } from "@/errors/app-error.ts";
+import { HDFC_SLUG } from "./config.ts";
+
+/** Injectable so fixture-driven tests never touch the network. */
+export interface HdfcTransport {
+  request(args: {
+    method: "GET" | "POST";
+    url: string;
+    headers: Record<string, string>;
+    jsonBody?: unknown;
+    /**
+     * Safe to retry on 5xx / network failure. Only the read-only steps
+     * (authenticate, IDV, premium) opt in — a retried createProposal or
+     * submitPaymentDetails could bind a duplicate policy.
+     */
+    idempotent?: boolean;
+  }): Promise<unknown>;
+}
+
+const MAX_ATTEMPTS = 3;
+const RETRY_BASE_MS = 300;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Default transport. Note it does NOT throw on a non-2xx status alone: HDFC UAT
+ * returns diagnostic bodies with 4xx/5xx codes, and discarding them would leave
+ * us with no way to explain a failure.
+ */
+export class FetchTransport implements HdfcTransport {
+  async request(args: {
+    method: "GET" | "POST";
+    url: string;
+    headers: Record<string, string>;
+    jsonBody?: unknown;
+    idempotent?: boolean;
+  }): Promise<unknown> {
+    const headers = { ...args.headers };
+    let body: string | undefined;
+    if (args.jsonBody !== undefined) {
+      headers["Content-Type"] = "application/json";
+      body = JSON.stringify(args.jsonBody);
+    }
+
+    const maxAttempts = args.idempotent ? MAX_ATTEMPTS : 1;
+    for (let attempt = 1; ; attempt++) {
+      let response: Response;
+      try {
+        response = await fetch(args.url, { method: args.method, headers, body });
+      } catch (err) {
+        if (attempt < maxAttempts) {
+          await sleep(RETRY_BASE_MS * attempt);
+          continue;
+        }
+        throw new ProviderError(HDFC_SLUG, 0, `HDFC request failed: ${(err as Error).message}`);
+      }
+
+      const text = await response.text().catch(() => "");
+      const parsed = text ? safeJson(text) : undefined;
+
+      if (!response.ok) {
+        if (response.status >= 500 && attempt < maxAttempts) {
+          await sleep(RETRY_BASE_MS * attempt);
+          continue;
+        }
+        // A parsed body usually carries HDFC's real reason — hand it to the
+        // caller so assertHdfcSuccess can surface it verbatim.
+        if (parsed && typeof parsed === "object") return parsed;
+        throw new ProviderError(
+          HDFC_SLUG,
+          response.status,
+          `HDFC request failed [${response.status}]`,
+          text,
+        );
+      }
+      return parsed;
+    }
+  }
+}
+
+function safeJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+export interface NormalizedHdfcResponse {
+  statusCode: string | number | null;
+  error: string | null;
+  warning: string | null;
+  data: unknown;
+}
+
+/** HDFC is inconsistent about casing; collapse it into one shape. */
+export function normalizeHdfcResponse(raw: unknown): NormalizedHdfcResponse {
+  if (raw == null || typeof raw !== "object") {
+    return { statusCode: null, error: null, warning: null, data: raw };
+  }
+  const r = raw as Record<string, unknown>;
+  return {
+    statusCode: (r.StatusCode ?? r.statusCode ?? r.Status ?? r.status ?? null) as string | number | null,
+    error: (r.Error ?? r.error ?? null) as string | null,
+    warning: (r.Warning ?? r.warning ?? null) as string | null,
+    data: raw,
+  };
+}
+
+/** HDFC uses "1" / 200 / "200" / "SUCCESS" across endpoints. */
+export function isHdfcSuccess(statusCode: unknown): boolean {
+  if (statusCode == null) return false;
+  const s = String(statusCode).trim().toUpperCase();
+  return s === "1" || s === "200" || s === "TRUE" || s === "SUCCESS";
+}
+
+/**
+ * Raises when HDFC reports a business failure. HDFC's `Error` text (typically
+ * "BUSINESS EXCEPTION: …") is the ONLY diagnostic it provides, so it is carried
+ * verbatim into the message rather than being replaced with a generic string.
+ *
+ * A body with neither a status code nor an error is accepted: some document
+ * endpoints return a bare payload.
+ */
+export function assertHdfcSuccess(body: unknown, step: string): void {
+  const norm = normalizeHdfcResponse(body);
+  if (isHdfcSuccess(norm.statusCode)) return;
+  if (norm.statusCode == null && !norm.error) return;
+  const reason = norm.error ?? `status ${String(norm.statusCode)}`;
+  throw new ProviderError(HDFC_SLUG, 502, `HDFC ${step} failed: ${reason}`, body);
+}
