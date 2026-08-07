@@ -39,8 +39,14 @@ export function applyRolloverDateSanity(
   const prevEnd = new Date(previousExpiry);
   if (Number.isNaN(start.getTime()) || Number.isNaN(prevEnd.getTime())) return startDate;
   if (start > prevEnd) return startDate;
-  const shifted = new Date(prevEnd);
-  shifted.setDate(shifted.getDate() + 1);
+  // Advance in UTC. Date-only strings parse as UTC midnight, so mixing in the
+  // local-time setDate/getDate pair would keep the wall clock across a DST
+  // boundary and shift the resulting UTC calendar day by one — yielding a start
+  // date on or before the previous expiry, which is the exact rejection this
+  // function exists to prevent.
+  const shifted = new Date(
+    Date.UTC(prevEnd.getUTCFullYear(), prevEnd.getUTCMonth(), prevEnd.getUTCDate() + 1),
+  );
   return shifted.toISOString().slice(0, 10);
 }
 
@@ -114,6 +120,10 @@ export function toHdfcRequest(
       endDate: req.previousPolicyExpiryDate,
       tpStartDate: req.previousTpStartDate,
       tpEndDate: req.previousTpExpiryDate,
+      // The previous standalone-OD policy's paired TP policy number. Its two
+      // sibling dates were already wired; omitting the number left HDFC unable
+      // to identify the TP policy it was being asked to validate against.
+      tpPolicyNo: req.previousTpPolicyNumber,
       ncbPercentage: req.ncbPercent,
       claim: req.claimInPreviousPolicy,
       type: req.previousPolicyType,

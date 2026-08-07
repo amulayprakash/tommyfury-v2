@@ -160,3 +160,47 @@ describe("toHdfcRequest", () => {
     expect(toHdfcRequest(baseRequest(), codes, "TXN-42").transactionId).toBe("TXN-42");
   });
 });
+
+describe("previous third-party policy", () => {
+  it("carries all three previous-TP fields, not just the dates", () => {
+    // The TP policy number was originally dropped while its sibling dates were
+    // wired, leaving HDFC unable to identify the policy it must validate.
+    const out = toHdfcRequest(
+      baseRequest({
+        selectedPolicy: "standAloneOD",
+        previousTpPolicyNumber: "TP-8891",
+        previousTpStartDate: "2025-09-01",
+        previousTpExpiryDate: "2028-08-31",
+      }),
+      codes,
+      "T",
+    );
+    expect(out.previousPolicy.tpPolicyNo).toBe("TP-8891");
+    expect(out.previousPolicy.tpStartDate).toBe("2025-09-01");
+    expect(out.previousPolicy.tpEndDate).toBe("2028-08-31");
+  });
+});
+
+describe("applyRolloverDateSanity is calendar-safe", () => {
+  it("advances across a month boundary", () => {
+    expect(applyRolloverDateSanity("2026-08-01", "2026-08-31")).toBe("2026-09-01");
+  });
+
+  it("advances across a year boundary", () => {
+    expect(applyRolloverDateSanity("2026-12-01", "2026-12-31")).toBe("2027-01-01");
+  });
+
+  it("advances across a leap day", () => {
+    expect(applyRolloverDateSanity("2028-02-01", "2028-02-28")).toBe("2028-02-29");
+    expect(applyRolloverDateSanity("2028-02-01", "2028-02-29")).toBe("2028-03-01");
+  });
+
+  it("always yields a start strictly after the previous expiry", () => {
+    // The single property HDFC actually enforces. Checked across a DST
+    // transition window, where local-time date arithmetic would slip a day.
+    for (const expiry of ["2026-03-07", "2026-03-08", "2026-03-09", "2026-11-01", "2026-11-02"]) {
+      const shifted = applyRolloverDateSanity("2020-01-01", expiry);
+      expect(new Date(shifted).getTime()).toBeGreaterThan(new Date(expiry).getTime());
+    }
+  });
+});
