@@ -25,6 +25,7 @@ import {
   type HdfcEndpointName,
 } from "./config.ts";
 import { hdfcTokenFetcher, hdfcTokenCacheKey, hdfcTransactionId } from "./auth.ts";
+import { hdfcCompleteCkyc } from "./ckyc.ts";
 import { FetchTransport, assertHdfcSuccess, type HdfcTransport } from "./http.ts";
 import {
   toHdfcRequest,
@@ -208,9 +209,9 @@ export class HdfcProvider
     };
   }
 
-  /** Pehchaan e-KYC. Implemented in Task 18. */
-  async completeCkyc(_req: CkycRequest, _ctx: ProviderContext): Promise<KycResult> {
-    throw new AppError(501, "not yet implemented", "NOT_IMPLEMENTED");
+  /** Pehchaan e-KYC. */
+  async completeCkyc(req: CkycRequest, _ctx: ProviderContext): Promise<KycResult> {
+    return hdfcCompleteCkyc(this.config, req);
   }
 
   /**
