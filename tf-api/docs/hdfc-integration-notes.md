@@ -289,19 +289,73 @@ HDFC wants, so the port sends the same "nothing" value the frozen original did.
    `Policy_Details` that `liability-premium.json` shows (§6), or whether the
    Roll Over shape our resolver currently produces for it is close enough.
 
-## Live UAT probe
+## Live UAT probe — VERIFIED WORKING (2026-08-07)
 
 `npm run hdfc:probe` (`scripts/hdfc-uat-probe.ts`) runs authenticate → IDV →
-premium against a real vehicle from the kit's UAT test sheet, read-only —
-follows the `scripts/itgi-uat-probe.ts` precedent. It cannot succeed until
-open confirmation 1 is resolved: with no `HDFC_CREDENTIAL`/`HDFC_SOURCE`/
-`HDFC_CHANNEL_ID` set, `loadHdfcConfig()` fails fast before any network call:
+premium read-only against a UAT test vehicle. Credentials arrived and it now
+returns a real quote:
 
 ```
-HDFC provider enabled but missing env: HDFC_CREDENTIAL, HDFC_SOURCE, HDFC_CHANNEL_ID
+IDV            1244800 (band 1182560–1556000)
+OD premium     2861
+TP premium     6712
+Net premium    16326
+GST            2939
+Gross premium  19265
 ```
 
-That is the correct, expected failure today — it proves the fail-fast
-validation works, not that anything is broken. Once credentials arrive, re-run
-`npm run hdfc:probe` and record HDFC's verbatim response here (success or
-business error) rather than guessing at a fix.
+Authentication, the token cache, both payload builders and the normalizer are
+confirmed working end to end against the live vendor.
+
+### What the live run corrected
+
+**The response fixtures were invented, and most field names were wrong.** OD and
+TP premiums read 0 on every quote until this was found. On the wire HDFC sends:
+
+| We had guessed | HDFC actually sends |
+|---|---|
+| `Total_OD_Premium` | `Basic_OD_Premium` |
+| `Total_TP_Premium` | `Basic_TP_Premium` |
+| `ZeroDept_Premium` | `Vehicle_Base_ZD_Premium` |
+| `TyreSecure_Premium` | `Vehicle_Base_TySec_Premium` |
+| `NCBProtection_Premium` | `Vehicle_Base_NCB_Premium` |
+| `COC_Premium` | `Vehicle_Base_COC_Premium` |
+| `EA_Premium` | `EA_premium` (lowercase p) |
+| `NCB_Discount` | `NCBBonusDisc_Premium` |
+| `NCB_Percentage` | `Current_NCB_Per` |
+
+`fixtures/responses/premium.json` and `idv.json` are now **real captures**, and
+the tests assert the real numbers. `Resp_PvtCar` carries 108 fields.
+
+### EV rules HDFC enforces (both were fatal before)
+
+- **`EGP Add on cover not applicable for electric vehicles`** — engine-gearbox
+  cover is rejected outright for an EV. The mapper now drops it when the fuel
+  type is electric.
+- **`This cover cannot be opted unless addon "Battery, Charger & Accessories
+  Cover" is selected.`** — the battery zero-dep rider depends on the
+  battery/charger cover. The mapper now offers the rider only when the customer
+  also selected `batteryProtect`, rather than forcing on a paid cover they did
+  not choose.
+- EVs price **three** separate covers (`ElectricMotorCover_Premium`,
+  `ZeroDepClaimForBattery_Premium`, `BatteryChargerAccessory_Premium`); the
+  canonical contract has one `batteryProtect` slot, so they are summed.
+
+### Vehicle age ceiling — needs confirming with HDFC
+
+UAT prices these models only at roughly **one year old or newer**. At about two
+years and above it fails with an opaque `Exception while Call Blaze!` carrying a
+truncated stack trace and no stated reason.
+
+**Calendar year is not the constraint** — the same vehicle prices fine with a
+policy starting today; only age matters. Verified across policy years 2023–2026
+for six codes.
+
+Codes confirmed priceable on UAT: `42774`, `12763`, `12798`, `28735`, `32415`,
+`27224`. Note HDFC's *own* sample code `17532` no longer prices, and only 5 of
+the 27 codes in their `UAT Test Model` sheet do — their sandbox data is sparse
+and partly stale, which is a vendor-side issue, not a cross-walk fault.
+
+Whether the age ceiling is a UAT data gap or a real underwriting rule is open —
+it matters, because a rollover of a three-year-old car is an entirely ordinary
+request in production.
