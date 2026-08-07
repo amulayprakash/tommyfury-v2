@@ -62,14 +62,20 @@ export class FetchTransport implements HdfcTransport {
           await sleep(RETRY_BASE_MS * attempt);
           continue;
         }
-        // A parsed body usually carries HDFC's real reason — hand it to the
-        // caller so assertHdfcSuccess can surface it verbatim.
-        if (parsed && typeof parsed === "object") return parsed;
+        // HDFC returns diagnostic bodies WITH 4xx/5xx codes, so hand those to
+        // assertHdfcSuccess to surface verbatim rather than flattening them.
+        // But only when the body actually looks like an HDFC envelope:
+        // assertHdfcSuccess deliberately passes a body carrying neither a status
+        // nor an error (bare 200 document payloads do that), so returning an
+        // unrecognised non-2xx body — a gateway fault like
+        // {"fault":{"message":"Invalid credentials"}} — would be read as SUCCESS
+        // and normalize to a zero premium. Fail closed instead.
+        if (carriesHdfcEnvelope(parsed)) return parsed;
         throw new ProviderError(
           HDFC_SLUG,
           response.status,
           `HDFC request failed [${response.status}]`,
-          text,
+          parsed ?? text,
         );
       }
       return parsed;
@@ -83,6 +89,24 @@ function safeJson(text: string): unknown {
   } catch {
     return text;
   }
+}
+
+/**
+ * True when a body carries a field assertHdfcSuccess can actually judge. Arrays
+ * are excluded despite being typeof "object" — they can hold no status key, so
+ * treating one as an envelope would silently pass.
+ */
+export function carriesHdfcEnvelope(body: unknown): boolean {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return false;
+  const b = body as Record<string, unknown>;
+  return (
+    b.StatusCode !== undefined ||
+    b.statusCode !== undefined ||
+    b.Status !== undefined ||
+    b.status !== undefined ||
+    b.Error !== undefined ||
+    b.error !== undefined
+  );
 }
 
 export interface NormalizedHdfcResponse {
