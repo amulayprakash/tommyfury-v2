@@ -79,6 +79,32 @@ export interface HdfcAddons {
   nomineeAge?: number;
   nomineeRelationship?: string;
   effectiveDrivingLicense: boolean;
+  /**
+   * Used Car only — the Used template emits IsFibertank / NumberOfDrivers, which
+   * no other business type sends. `numberOfDrivers` has a canonical source
+   * (MotorQuoteRequest.numberOfDrivers); `fibertank` has none, so it stays
+   * unset until a used-vehicle journey exists to supply it.
+   */
+  fibertank?: boolean;
+  numberOfDrivers?: number;
+}
+
+/**
+ * Hypothecation / lease details. HDFC's Policy_Details carries these for
+ * financed vehicles on both Roll Over and New Vehicle.
+ *
+ * Currently always undefined: the canonical request carries the financier's
+ * NAME (MotorFullQuoteRequest.financierName) while HDFC wants its numeric
+ * FinancierCode from the kit's GENMST_FINANCIER master, and BranchName has no
+ * canonical source at all. The original integration sent null here too, so
+ * emitting null is faithful, not a regression — but a financed vehicle's
+ * hypothecation will not be recorded on the HDFC policy until a
+ * financier-code cross-walk exists. Tracked in the integration notes.
+ */
+export interface HdfcFinancier {
+  agreementType?: string;
+  financierCode?: string;
+  branchName?: string;
 }
 
 export interface HdfcEv {
@@ -125,6 +151,7 @@ export interface HdfcRequestShape {
   previousPolicy: HdfcPreviousPolicy;
   addons: HdfcAddons;
   ev: HdfcEv;
+  financier?: HdfcFinancier;
   customer?: HdfcCustomer;
   payment?: HdfcPayment;
   /** Proposal number returned by CreateProposal, for the payment/document steps. */
