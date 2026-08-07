@@ -99,6 +99,19 @@ async function main() {
     },
   });
 
+  // Quote.providerSlug is a foreign key onto Provider.slug, so a provider with
+  // no row here cannot have its quotes persisted at all.
+  await prisma.provider.upsert({
+    where: { slug: "hdfc" },
+    update: { capabilities: ["fourWheeler", "newVehicle"] },
+    create: {
+      slug: "hdfc",
+      displayName: "HDFC ERGO",
+      isActive: true,
+      capabilities: ["fourWheeler", "newVehicle"],
+    },
+  });
+
   await seedHealthMasters();
 
   console.log("Seed complete.");
