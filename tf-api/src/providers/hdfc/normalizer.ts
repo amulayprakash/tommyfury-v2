@@ -133,30 +133,48 @@ export function normalizeQuote(body: unknown, ctx: HdfcQuoteCtx): CanonicalQuote
   const b = obj(body);
   const r = obj(b.Resp_PvtCar ?? b.Resp_Motor);
 
+  // Field names below are taken from a REAL HDFC UAT CalculatePremium response
+  // (captured 2026-08-07, 108 keys in Resp_PvtCar), not from the data dictionary.
+  // Several differ from the obvious guess — the cover premiums are prefixed
+  // `Vehicle_Base_`, own-damage and third-party are `Basic_*` rather than
+  // `Total_*`, and `EA_premium` has a lowercase p. The older spellings are kept
+  // as fallbacks in case another product spells them the documented way.
   const addonPremiums = {
-    zeroDep: opt(r.ZeroDept_Premium),
-    tyreProtect: opt(r.TyreSecure_Premium),
-    ncbProtection: opt(r.NCBProtection_Premium),
-    rti: opt(r.RTI_Premium),
-    consumables: opt(r.COC_Premium),
-    engineProtect: opt(r.EngGearBox_Premium),
-    rsa: opt(r.EA_Premium),
+    zeroDep: opt(r.Vehicle_Base_ZD_Premium ?? r.ZeroDept_Premium),
+    tyreProtect: opt(r.Vehicle_Base_TySec_Premium ?? r.TyreSecure_Premium),
+    ncbProtection: opt(r.Vehicle_Base_NCB_Premium ?? r.NCBProtection_Premium),
+    rti: opt(r.Vehicle_Base_RTI_Premium ?? r.RTI_Premium),
+    consumables: opt(r.Vehicle_Base_COC_Premium ?? r.COC_Premium),
+    engineProtect: opt(r.Vehicle_Base_EGP_Premium ?? r.EngGearBox_Premium),
+    rsa: opt(r.EA_premium ?? r.EA_Premium),
     lossOfBelongings: opt(r.LossOfPersonalBelongings_Premium),
     paOwner: opt(r.CPA_Premium),
     paUnnamedPassenger: opt(r.UnnamedPerson_Premium),
     legalLiabilityPaidDriver: opt(r.LLPaiddriver_Premium),
-    batteryProtect: opt(r.ElectricMotor_Premium),
+    // EVs price three separate battery/motor covers; the canonical contract has
+    // one batteryProtect slot, so report their sum rather than dropping two.
+    batteryProtect:
+      opt(
+        num(r.ElectricMotorCover_Premium) +
+          num(r.ZeroDepClaimForBattery_Premium) +
+          num(r.BatteryChargerAccessory_Premium),
+      ) ?? opt(r.ElectricMotor_Premium),
   };
 
   const discounts = {
-    ncbPercent: opt(r.NCB_Percentage),
-    ncbAmount: opt(r.NCB_Discount),
+    ncbPercent: opt(r.Current_NCB_Per ?? r.NCB_Percentage),
+    ncbAmount: opt(r.NCBBonusDisc_Premium ?? r.NCB_Discount),
     antiTheft: opt(r.AntiTheft_Discount),
     voluntaryDeductible: opt(r.Voluntary_Excess_Discount),
+    ownDamageDiscount: opt(r.Other_Discount),
   };
 
   const totalAddonPremium = Object.values(addonPremiums).reduce<number>((s, v) => s + (v ?? 0), 0);
-  const totalDiscount = num(r.NCB_Discount) + num(r.AntiTheft_Discount) + num(r.Voluntary_Excess_Discount);
+  const totalDiscount =
+    num(r.NCBBonusDisc_Premium ?? r.NCB_Discount) +
+    num(r.AntiTheft_Discount) +
+    num(r.Voluntary_Excess_Discount) +
+    num(r.Other_Discount);
   const netPremium = num(r.Net_Premium);
   const serviceTaxAmount = num(r.Service_Tax);
   const grossPremium = num(r.Total_Premium);
@@ -170,8 +188,10 @@ export function normalizeQuote(body: unknown, ctx: HdfcQuoteCtx): CanonicalQuote
     policyType: ctx.policyType,
     vehicleCategory: ctx.vehicleCategory,
     idvValue: num(r.IDV ?? r.Vehicle_IDV),
-    basicOdPremium: num(r.Total_OD_Premium ?? r.OD_Premium),
-    thirdPartyPremium: num(r.Total_TP_Premium ?? r.TP_Premium),
+    minIdv: opt(r.MinimumIDV),
+    maxIdv: opt(r.MaximumIDV),
+    basicOdPremium: num(r.Basic_OD_Premium ?? r.Total_OD_Premium ?? r.OD_Premium),
+    thirdPartyPremium: num(r.Basic_TP_Premium ?? r.Total_TP_Premium ?? r.TP_Premium),
     addonPremiums,
     discounts,
     totalAddonPremium,

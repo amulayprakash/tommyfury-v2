@@ -136,7 +136,11 @@ export function toHdfcRequest(
       rti: req.rti,
       rtiPlanType: req.rti ? "A" : undefined,
       consumables: req.consumables,
-      engineProtect: req.engineProtect,
+      // HDFC UAT rejects engine-gearbox cover on an electric vehicle outright:
+      // "EGP Add on cover not applicable for electric vehicles". An EV has no
+      // engine or gearbox, so dropping the flag is faithful to what the
+      // customer can actually buy rather than a workaround.
+      engineProtect: req.engineProtect && !isElectric,
       roadsideAssistance: req.rsa,
       roadsideAssistanceWorldwide: false,
       roadsideAssistanceAdvance: false,
@@ -163,7 +167,12 @@ export function toHdfcRequest(
     ev: isElectric
       ? {
           motorCover: 1,
-          zeroDepBattery: req.zeroDep ? 1 : 0,
+          // HDFC enforces a dependency: "This cover cannot be opted unless
+          // addon 'Battery, Charger & Accessories Cover' is selected." So the
+          // battery zero-dep rider is only offered when the customer also took
+          // batteryProtect. Forcing batteryProtect on instead would silently
+          // add a paid cover they did not ask for.
+          zeroDepBattery: req.zeroDep && req.batteryProtect ? 1 : 0,
           batteryChargerCover: req.batteryProtect ? 1 : 0,
         }
       : {},

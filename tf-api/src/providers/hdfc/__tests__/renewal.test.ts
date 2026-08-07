@@ -277,13 +277,13 @@ describe("renewalQuote", () => {
     });
     const q = await provider(transport).renewalQuote({ policyNo: "POL-9" }, ctx);
     expect(q.providerSlug).toBe("hdfc");
-    expect(q.grossPremium).toBe(43150);
+    expect(q.grossPremium).toBe(25230);
     expect(q.policyType).toBe("comprehensive");
     expect(q.vehicleCategory).toBe("fourWheeler");
     expect(q.contractDetails?.previousPolicyNo).toBe("POL-9");
     // The IDV band from step 03 is surfaced for the UI slider.
-    expect(q.minIdv).toBe(854470);
-    expect(q.maxIdv).toBe(1044352);
+    expect(q.minIdv).toBe(1182560);
+    expect(q.maxIdv).toBe(1556000);
   });
 
   it("prices with HDFC's recommended IDV, not the expiring policy's", async () => {
@@ -294,7 +294,7 @@ describe("renewalQuote", () => {
     });
     await provider(transport).renewalQuote({ policyNo: "POL-9" }, ctx);
     const premium = calls[2]!.jsonBody as { Policy_Details: { Vehicle_IDV: number } };
-    expect(premium.Policy_Details.Vehicle_IDV).toBe(949411); // idv.json IDV_AMOUNT
+    expect(premium.Policy_Details.Vehicle_IDV).toBe(1244800); // idv.json IDV_AMOUNT
   });
 
   it("skips the IDV call when the snapshot has no model/RTO code", async () => {
@@ -342,7 +342,7 @@ describe("renewalProposal", () => {
     });
     const q = await provider(transport).renewalProposal(req, ctx);
     expect(q.contractDetails?.proposalNumber).toBe("PR2026080700123");
-    expect(q.grossPremium).toBe(43150);
+    expect(q.grossPremium).toBe(25230);
   });
 
   it("re-reads the snapshot so the proposal can carry Customer_Details", async () => {

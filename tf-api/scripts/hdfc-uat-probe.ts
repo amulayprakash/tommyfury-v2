@@ -16,6 +16,15 @@ import type { MotorQuoteRequest } from "@/contracts/quote-request.ts";
 // TATA NEXON EV (42774) at MH-1 Mumbai (10406). passthroughCodeResolver sends
 // these straight through as HDFC codes, so the probe exercises the vendor even
 // before the master cross-walk has run.
+//
+// The registration date is deliberately about a year before the policy start.
+// HDFC's UAT rules engine prices these models only for young vehicles: at
+// roughly two years and older it throws an opaque "Exception while Call Blaze!"
+// with a truncated stack trace and no stated reason. Calendar year is NOT the
+// constraint — the same vehicle prices fine with a policy starting today. Codes
+// verified priceable on UAT: 42774, 12763, 12798, 28735, 32415, 27224.
+// Whether that age ceiling is a UAT data gap or a real underwriting rule is an
+// open confirmation — see docs/hdfc-integration-notes.md.
 const req = {
   vehicleType: "fourWheeler",
   selectedPolicy: "comprehensive",
@@ -26,7 +35,7 @@ const req = {
   modelName: "NEXON EV",
   fuelType: "electric",
   rtoCode: "10406",
-  registrationDate: "2022-06-15",
+  registrationDate: "2025-07-01",
   registrationNumber: "MH01QQ7878",
   previousPolicyExpiryDate: "2026-08-31",
   isPreviousPolicyExpired: false,
@@ -45,7 +54,7 @@ const req = {
   keyProtect: false,
   garageCash: false,
   lossOfBelongings: false,
-  batteryProtect: false,
+  batteryProtect: true,
   drivingAccessories: false,
   ncbProtection: false,
 } as MotorQuoteRequest;

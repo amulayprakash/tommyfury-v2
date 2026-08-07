@@ -16,9 +16,9 @@ import {
 describe("normalizeIdv", () => {
   it("reads the recommended, min and max IDV", () => {
     expect(normalizeIdv(idvFixture)).toEqual({
-      recommended: 949411,
-      min: 854470,
-      max: 1044352,
+      recommended: 1244800,
+      min: 1182560,
+      max: 1556000,
     });
   });
 
@@ -58,33 +58,52 @@ describe("normalizeQuote", () => {
     vehicleCategory: "fourWheeler" as const,
   };
 
+  // premium.json is a REAL HDFC UAT response captured 2026-08-07 for a TATA
+  // NEXON EV at MH-1 Mumbai. Every number below came off the wire — the field
+  // names are not the ones the data dictionary implies, which is exactly why
+  // this fixture is a capture rather than a hand-written sample.
   it("reads the premium breakdown from Resp_PvtCar", () => {
     const q = normalizeQuote(premiumFixture, ctx);
-    expect(q.basicOdPremium).toBe(18450);
-    expect(q.thirdPartyPremium).toBe(7890);
-    expect(q.netPremium).toBe(36568);
-    expect(q.serviceTaxAmount).toBe(6582);
-    expect(q.grossPremium).toBe(43150);
-    expect(q.idvValue).toBe(949411);
+    // HDFC sends Basic_OD_Premium / Basic_TP_Premium, not Total_OD_/Total_TP_.
+    expect(q.basicOdPremium).toBe(2861);
+    expect(q.thirdPartyPremium).toBe(6712);
+    expect(q.netPremium).toBe(21381);
+    expect(q.serviceTaxAmount).toBe(3849);
+    expect(q.grossPremium).toBe(25230);
+    expect(q.idvValue).toBe(1244800);
+  });
+
+  it("reads the IDV band from the premium response too", () => {
+    const q = normalizeQuote(premiumFixture, ctx);
+    expect(q.minIdv).toBe(1182560);
+    expect(q.maxIdv).toBe(1556000);
   });
 
   it("maps HDFC cover premiums onto canonical add-on keys", () => {
     const q = normalizeQuote(premiumFixture, ctx);
-    expect(q.addonPremiums.zeroDep).toBe(4200);
-    expect(q.addonPremiums.tyreProtect).toBe(1800);
-    expect(q.addonPremiums.ncbProtection).toBe(950);
-    expect(q.addonPremiums.rti).toBe(1600);
-    expect(q.addonPremiums.consumables).toBe(700);
-    expect(q.addonPremiums.rsa).toBe(350);
-    expect(q.addonPremiums.paOwner).toBe(375);
+    // The cover premiums carry a Vehicle_Base_ prefix on the wire.
+    expect(q.addonPremiums.zeroDep).toBe(4357);
+    expect(q.addonPremiums.tyreProtect).toBe(1245);
+    expect(q.addonPremiums.ncbProtection).toBe(2490);
+    expect(q.addonPremiums.consumables).toBe(1245);
+    // EA_premium — lowercase p, unlike every sibling field.
+    expect(q.addonPremiums.rsa).toBe(75);
     // A zero premium means "not selected" — omit rather than report 0.
+    expect(q.addonPremiums.rti).toBeUndefined();
     expect(q.addonPremiums.engineProtect).toBeUndefined();
+  });
+
+  it("sums the three EV covers into the single canonical batteryProtect slot", () => {
+    // HDFC prices ElectricMotorCover (871) + ZeroDepClaimForBattery (1369) +
+    // BatteryChargerAccessory (871) separately; the contract has one slot, so
+    // reporting only one of them would understate the quote by ~₹1,700.
+    expect(normalizeQuote(premiumFixture, ctx).addonPremiums.batteryProtect).toBe(3111);
   });
 
   it("reads the NCB discount", () => {
     const q = normalizeQuote(premiumFixture, ctx);
-    expect(q.discounts.ncbAmount).toBe(3200);
-    expect(q.discounts.ncbPercent).toBe(20);
+    expect(q.discounts.ncbAmount).toBe(715);
+    expect(q.discounts.ncbPercent).toBe(25);
   });
 
   it("stamps identity fields", () => {
@@ -99,7 +118,10 @@ describe("normalizeQuote", () => {
   it("reports amounts in whole rupees, not paise", () => {
     // The whole stack is rupees end to end; a paise conversion here would show
     // a 100x premium on the compare card.
-    expect(normalizeQuote(premiumFixture, ctx).grossPremium).toBe(43150);
+    const q = normalizeQuote(premiumFixture, ctx);
+    expect(q.grossPremium).toBe(25230);
+    // And the vendor's own arithmetic must reconcile: net + tax == gross.
+    expect(q.netPremium + q.serviceTaxAmount).toBe(q.grossPremium);
   });
 });
 

@@ -141,10 +141,12 @@ describe("toHdfcRequest", () => {
     expect(toHdfcRequest(baseRequest(), codes, "T").isElectric).toBe(false);
   });
 
-  it("turns on the EV covers for an electric vehicle", () => {
+  it("turns on the electric motor cover for an electric vehicle", () => {
     const out = toHdfcRequest(baseRequest({ fuelType: "electric", zeroDep: true }), codes, "T");
     expect(out.ev.motorCover).toBe(1);
-    expect(out.ev.zeroDepBattery).toBe(1);
+    // zeroDepBattery deliberately stays off here: HDFC refuses it unless the
+    // battery/charger cover is also selected. See the EV cover-rules block below.
+    expect(out.ev.zeroDepBattery).toBe(0);
   });
 
   it("applies rollover date sanity to the policy start date", () => {
@@ -202,5 +204,40 @@ describe("applyRolloverDateSanity is calendar-safe", () => {
       const shifted = applyRolloverDateSanity("2020-01-01", expiry);
       expect(new Date(shifted).getTime()).toBeGreaterThan(new Date(expiry).getTime());
     }
+  });
+});
+
+describe("electric-vehicle cover rules (learned from HDFC UAT)", () => {
+  it("drops engine-gearbox cover for an EV", () => {
+    // "EGP Add on cover not applicable for electric vehicles" — a live rejection.
+    const ev = toHdfcRequest(baseRequest({ fuelType: "electric", engineProtect: true }), codes, "T");
+    expect(ev.addons.engineProtect).toBe(false);
+  });
+
+  it("keeps engine-gearbox cover for a petrol vehicle", () => {
+    const petrol = toHdfcRequest(baseRequest({ engineProtect: true }), codes, "T");
+    expect(petrol.addons.engineProtect).toBe(true);
+  });
+
+  it("only claims battery zero-dep when the battery cover is also taken", () => {
+    // "This cover cannot be opted unless addon 'Battery, Charger & Accessories
+    // Cover' is selected." Without this the quote is rejected outright.
+    const withoutBattery = toHdfcRequest(
+      baseRequest({ fuelType: "electric", zeroDep: true, batteryProtect: false }),
+      codes,
+      "T",
+    );
+    expect(withoutBattery.ev.zeroDepBattery).toBe(0);
+    expect(withoutBattery.ev.batteryChargerCover).toBe(0);
+  });
+
+  it("claims battery zero-dep when both are taken", () => {
+    const withBattery = toHdfcRequest(
+      baseRequest({ fuelType: "electric", zeroDep: true, batteryProtect: true }),
+      codes,
+      "T",
+    );
+    expect(withBattery.ev.zeroDepBattery).toBe(1);
+    expect(withBattery.ev.batteryChargerCover).toBe(1);
   });
 });

@@ -99,7 +99,7 @@ describe("getQuote", () => {
     });
     await provider(transport).getQuote(quoteReq, ctx);
     const premiumBody = calls[1]!.jsonBody as { Policy_Details: { Vehicle_IDV: number } };
-    expect(premiumBody.Policy_Details.Vehicle_IDV).toBe(949411);
+    expect(premiumBody.Policy_Details.Vehicle_IDV).toBe(1244800);
   });
 
   it("sends the channel headers and the bearer token on every data call", async () => {
@@ -125,10 +125,10 @@ describe("getQuote", () => {
     });
     const q = await provider(transport).getQuote(quoteReq, ctx);
     expect(q.providerSlug).toBe("hdfc");
-    expect(q.grossPremium).toBe(43150);
-    expect(q.idvValue).toBe(949411);
-    expect(q.minIdv).toBe(854470);
-    expect(q.maxIdv).toBe(1044352);
+    expect(q.grossPremium).toBe(25230);
+    expect(q.idvValue).toBe(1244800);
+    expect(q.minIdv).toBe(1182560);
+    expect(q.maxIdv).toBe(1556000);
   });
 
   it("shares one TransactionID across the IDV and premium calls", async () => {
