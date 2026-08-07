@@ -1232,7 +1232,22 @@ correct the `WANTED` keys against the folder names printed by
 - [ ] **Step 3: Sanity-check one fixture**
 
 Run: `cd tf-api && node -e "const b=require('./src/providers/hdfc/fixtures/collection/new-premium.json');console.log(b.Policy_Details.BusinessType_Mandatary, Object.keys(b.Req_PvtCar).length)"`
-Expected: `New Vehicle 78`
+Expected: `New Vehicle 68`
+
+Verified counts from the real collection, for reference — the parity tests in
+Tasks 10 and 11 derive these from the fixtures via `Object.keys()`, so treat the
+fixtures, never this table, as the source of truth:
+
+| Fixture | `Req_PvtCar` keys | `Policy_Details` keys |
+|---|---|---|
+| new-premium.json | 68 | 12 |
+| rollover-premium.json | 70 | 29 |
+| used-premium.json | 59 | 22 |
+
+Note `new-idv.json` and `rollover-idv.json` are byte-identical. That is a genuine
+property of the collection, not an extraction fault: the IDV step sends
+`Registration_No: "New"` for both business types (see behaviour 2 in §3.5 of the
+spec), so the two samples coincide.
 
 - [ ] **Step 4: Commit**
 
