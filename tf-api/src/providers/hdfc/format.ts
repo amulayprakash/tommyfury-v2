@@ -6,7 +6,18 @@
 /** HDFC expects every date as DD/MM/YYYY. Accepts Date, ISO string, or DD/MM/YYYY. */
 export function toHdfcDate(input?: string | Date | null): string | null {
   if (!input) return null;
-  if (typeof input === "string" && /^\d{2}\/\d{2}\/\d{4}$/.test(input)) return input;
+  if (typeof input === "string") {
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(input)) return input;
+    // Date-only ISO is reordered as pure string manipulation, deliberately never
+    // touching Date. `new Date("2024-03-19")` parses as UTC midnight, and reading
+    // it back with local getters shifts the day backwards on any host behind UTC.
+    // Every canonical date field (policyStartDate, registrationDate,
+    // previousPolicyExpiryDate) is date-only, and HDFC rejects a rollover unless
+    // the previous policy expires strictly before the new start — so a one-day
+    // slip here is a vendor rejection, not a cosmetic bug.
+    const iso = input.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  }
   const d = input instanceof Date ? input : new Date(input);
   if (Number.isNaN(d.getTime())) return null;
   const dd = String(d.getDate()).padStart(2, "0");

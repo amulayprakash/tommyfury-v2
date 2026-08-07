@@ -23,6 +23,19 @@ describe("toHdfcDate", () => {
     expect(toHdfcDate("")).toBeNull();
     expect(toHdfcDate("not-a-date")).toBeNull();
   });
+
+  // Date-only ISO must not round-trip through Date: parsing gives UTC midnight,
+  // and local getters would shift the day back on any host behind UTC. These
+  // boundary dates are where that slip is most visible.
+  it("does not shift date-only input across a year or month boundary", () => {
+    expect(toHdfcDate("2024-01-01")).toBe("01/01/2024");
+    expect(toHdfcDate("2026-03-01")).toBe("01/03/2026");
+    expect(toHdfcDate("2026-12-31")).toBe("31/12/2026");
+  });
+
+  it("still accepts a Date instance", () => {
+    expect(toHdfcDate(new Date(2024, 2, 19))).toBe("19/03/2024");
+  });
 });
 
 describe("formatRegWithDashes", () => {
