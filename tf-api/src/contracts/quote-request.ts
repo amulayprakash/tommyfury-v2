@@ -69,6 +69,28 @@ export const MotorQuoteRequestSchema = z.object({
   policyStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   policyEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 
+  /**
+   * Policy tenure in YEARS — the length of the cover being bought, not of the
+   * expiring one. Optional and defaulted to 1 so every existing caller and
+   * provider is unchanged: FG, ICICI and ITGI ignore it entirely and keep
+   * issuing annual policies.
+   *
+   * The Indian market writes a motor term as "OD + TP" (1+1, 1+3, 3+3, 0+3…).
+   * This field is the OWN-DAMAGE leg for a package or standalone-OD policy, and
+   * the THIRD-PARTY leg for a liability-only policy — i.e. whichever leg the
+   * chosen `selectedPolicy` actually rates. The other leg is not a free
+   * variable in any vendor contract we hold: it follows from the business type
+   * (a new private car is sold with a statutory 3-year TP leg, a rollover with
+   * a 1-year one). Consumed today only by HDFC ERGO (POLICY_TENURE).
+   *
+   * `.default(1).optional()` (rather than a bare `.default(1)`) is deliberate:
+   * the default still fires when the key is absent from a parsed request, but
+   * the INFERRED type stays `number | undefined`, so the dozens of existing
+   * MotorQuoteRequest object literals across the FG / ICICI / ITGI tests and
+   * probe scripts keep compiling untouched. Read it as `req.tenureYears ?? 1`.
+   */
+  tenureYears: z.coerce.number().int().min(1).max(5).default(1).optional(),
+
   // Addons
   zeroDep: z.boolean().default(false),
   engineProtect: z.boolean().default(false),

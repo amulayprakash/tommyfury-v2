@@ -138,6 +138,8 @@ export interface paths {
                         ncbPercent?: number | null;
                         policyStartDate?: string;
                         policyEndDate?: string;
+                        /** @default 1 */
+                        tenureYears?: number;
                         /** @default false */
                         zeroDep?: boolean;
                         /** @default false */
@@ -362,6 +364,8 @@ export interface paths {
                         ncbPercent?: number | null;
                         policyStartDate?: string;
                         policyEndDate?: string;
+                        /** @default 1 */
+                        tenureYears?: number;
                         /** @default false */
                         zeroDep?: boolean;
                         /** @default false */
@@ -688,6 +692,8 @@ export interface paths {
                         ncbPercent?: number | null;
                         policyStartDate?: string;
                         policyEndDate?: string;
+                        /** @default 1 */
+                        tenureYears?: number;
                         /** @default false */
                         zeroDep?: boolean;
                         /** @default false */
@@ -2379,6 +2385,8 @@ export interface components {
             ncbPercent: number | null;
             policyStartDate?: string;
             policyEndDate?: string;
+            /** @default 1 */
+            tenureYears: number;
             /** @default false */
             zeroDep: boolean;
             /** @default false */
@@ -2482,6 +2490,8 @@ export interface components {
             ncbPercent: number | null;
             policyStartDate?: string;
             policyEndDate?: string;
+            /** @default 1 */
+            tenureYears: number;
             /** @default false */
             zeroDep: boolean;
             /** @default false */
@@ -2649,6 +2659,8 @@ export interface components {
             ncbPercent: number | null;
             policyStartDate?: string;
             policyEndDate?: string;
+            /** @default 1 */
+            tenureYears: number;
             /** @default false */
             zeroDep: boolean;
             /** @default false */

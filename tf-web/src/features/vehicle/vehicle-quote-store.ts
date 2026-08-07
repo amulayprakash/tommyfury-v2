@@ -231,6 +231,12 @@ export function buildQuoteRequest(state: QuoteInputs): CompareQuotesRequest | nu
     isPreviousPolicyExpired: v.isPreviousPolicyExpired,
     claimInPreviousPolicy: state.claimInPreviousPolicy,
     ncbPercent: state.ncbPercent,
+    // The wizard only ever sells an annual policy — there is no tenure step in
+    // the journey. Sent explicitly (rather than relying on the server default)
+    // because the generated contract type treats every defaulted field as
+    // present. Long-term terms (1+3, 3+3, …) are reachable through the API but
+    // have no UI yet.
+    tenureYears: 1,
     // Previous-TP details (FG needs an ACTIVE TP policy for standalone OD).
     ...(state.planType === "standAloneOD"
       ? {

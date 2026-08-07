@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { MotorQuoteRequest } from "@/contracts/quote-request.ts";
 import { toHdfcRequest, resolveBusinessType, applyRolloverDateSanity } from "../mapper/canonical.ts";
+import { reqPvtCarFor } from "../mapper/req-pvtcar.ts";
 import type { HdfcResolvedCodes } from "../types.ts";
 
 const codes: HdfcResolvedCodes = {
@@ -83,6 +84,55 @@ describe("applyRolloverDateSanity", () => {
 
   it("leaves the start date alone when there is no previous expiry", () => {
     expect(applyRolloverDateSanity("2026-08-01", undefined)).toBe("2026-08-01");
+  });
+});
+
+describe("policy tenure (canonical tenureYears → POLICY_TENURE)", () => {
+  // Evidence for this mapping: PrivateCarDataDictionary.xlsx, sheet
+  // "03 CalculatePremium Request" row 40 — "POLICY_TENURE … Policy Tenure(1,2,3).
+  // Product Code 2311 (Comprehensive) New Policy - 1OD–3TP, 2OD-3TP, 3OD-3TP;
+  // Rollover - 1OD–1TP, 3OD. Product Code 2319 (TP Only Product) New Policy - 3TP;
+  // Rollover - 1TP, 2TP, 3TP." One int, carrying the OD leg on the package /
+  // SA-OD product and the TP leg on the liability product. There is no second
+  // tenure field, so the "+3" of a 1+3 is implied by BusinessType, not sent.
+  it("defaults to 1 when the caller supplies no tenure", () => {
+    expect(toHdfcRequest(baseRequest(), codes, "T").policy.tenure).toBe(1);
+  });
+
+  it("carries a long-term tenure through to the HDFC shape", () => {
+    for (const years of [1, 2, 3]) {
+      expect(toHdfcRequest(baseRequest({ tenureYears: years }), codes, "T").policy.tenure).toBe(
+        years,
+      );
+    }
+  });
+
+  it("reaches POLICY_TENURE on every business type's Req_PvtCar template", () => {
+    // New Business (1+3 / 2+3 / 3+3), Roll Over (1+1 / 3+0) and Used Car all
+    // read the same policy.tenure — the long-term cases in HDFC's own
+    // PVTcarTestScenarios.xls "Long Team" sheet are unreachable otherwise.
+    const newBiz = toHdfcRequest(
+      baseRequest({ businessType: "new", registrationNumber: undefined, tenureYears: 3 }),
+      codes,
+      "T",
+    );
+    expect(reqPvtCarFor(newBiz).POLICY_TENURE).toBe(3);
+
+    const rollover = toHdfcRequest(baseRequest({ tenureYears: 2 }), codes, "T");
+    expect(rollover.businessType).toBe("Roll Over");
+    expect(reqPvtCarFor(rollover).POLICY_TENURE).toBe(2);
+
+    // Used Car is not reachable from a canonical request (BusinessTypeSchema has
+    // no "used" member and resolveBusinessType never returns it), so its template
+    // is checked by re-labelling an otherwise identical shape.
+    const used = toHdfcRequest(baseRequest({ tenureYears: 3 }), codes, "T");
+    expect(reqPvtCarFor({ ...used, businessType: "Used Car" }).POLICY_TENURE).toBe(3);
+  });
+
+  it("does not disturb any other mapped field", () => {
+    const one = toHdfcRequest(baseRequest({ tenureYears: 1 }), codes, "T");
+    const three = toHdfcRequest(baseRequest({ tenureYears: 3 }), codes, "T");
+    expect({ ...three, policy: { ...three.policy, tenure: 1 } }).toEqual(one);
   });
 });
 

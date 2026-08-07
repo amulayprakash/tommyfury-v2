@@ -110,7 +110,15 @@ export function toHdfcRequest(
     policy: {
       startDate,
       proposalDate: todayIso(),
-      tenure: 1,
+      // POLICY_TENURE is a SINGLE int carrying one leg of the market's "OD+TP"
+      // notation, per the kit's data dictionary (PrivateCarDataDictionary.xlsx,
+      // "03 CalculatePremium Request" row 40): "Policy Tenure(1,2,3). Product
+      // Code 2311 (Comprehensive): New Policy 1OD–3TP, 2OD–3TP, 3OD–3TP;
+      // Rollover 1OD–1TP, 3OD. Product Code 2319 (TP Only Product): New Policy
+      // 3TP; Rollover 1TP, 2TP, 3TP." So on the package/SA-OD product it is the
+      // OD term and the TP leg is implied by business type; on the TP-only
+      // product it is the TP term. There is no second tenure field to send.
+      tenure: req.tenureYears ?? 1,
       policyType: hdfcPolicyType(req.selectedPolicy),
     },
     previousPolicy: {

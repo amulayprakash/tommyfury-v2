@@ -289,6 +289,41 @@ HDFC wants, so the port sends the same "nothing" value the frozen original did.
    `Policy_Details` that `liability-premium.json` shows (§6), or whether the
    Roll Over shape our resolver currently produces for it is close enough.
 
+Raised by the certification-pack run (2026-08-07):
+
+10. **A 2-year OD term is refused.** `POLICY_TENURE: 2` on a New Vehicle
+    comprehensive fails with `SA_OD Policy is only allowed for Short Term Policy
+    period`, even though HDFC's own data dictionary
+    (`PrivateCarDataDictionary.xlsx`, "03 CalculatePremium Request" row 40)
+    documents `2OD - 3TP` under PRODUCT_CODE 2311. 1+3 and 3+3 both work. This
+    blocks 38 of the 152 "Long Team" conditions.
+11. **How a multi-year standalone OD should be requested.** HDFC's own
+    "New Business / SA_OD / 3 years" sample expresses the term through
+    `Policy_Details.PolicyEndDate` (start 03/07/2025, end 01/07/2028) while
+    leaving `POLICY_TENURE: 1`. Confirmed live: adding `PolicyEndDate` produces a
+    genuine multi-year OD with `IdvYear2` populated, while `POLICY_TENURE` alone
+    is ignored for `OD Only`. Our `Policy_Details` templates emit no
+    `PolicyEndDate` key, so 3+0 and 2+0 are unreachable today.
+12. **Is the RTI ceiling 3 years or 5?** The scenario sheet says "RTI cover is
+    valid up to 3 year's for all product", but UAT prices RTI on a 4-year-old
+    car and only declines it at 5, in the same message as the other add-ons.
+13. **Is the anti-theft discount live or not?** The sheet says "Anti Theft
+    Discount not applicable for all motor product", yet `AntiTheftDiscFlag: true`
+    earns an `AntiTheftDisc_Premium` discount on UAT.
+14. **Is `PlanType` inert?** Rows 33-38 of "Long Team" ask for six named plans
+    (Gold / Silver / Diamond / Platinum / Titanium / Menu Card). The New Business
+    `Req_PvtCar` sample carries no `PlanType` key at all; forced onto the Roll
+    Over template, HDFC accepts every value — including a made-up one — and the
+    gross premium never changes. The master workbook's own `PlanTypes` sheet
+    lists a different set again (Silver / Platinum / Titanium / Diamond /
+    Essential ZD / Essential EGP).
+15. **Is `Effectivedrivinglicense: true` really the CPA opt-OUT?** The data
+    dictionary says `CPA_Tenure` applies when "Effectivedrivinglicense tag should
+    be false", and UAT agrees: with it `true` (what our mapper always sends)
+    `PAOwnerDriver_Premium` comes back 0 however `CPA_Tenure` is set; flipping it
+    to `false` charges ₹325. If that reading is right, compulsory PA is never
+    actually bought today — see §6.
+
 ## Live UAT probe — VERIFIED WORKING (2026-08-07)
 
 `npm run hdfc:probe` (`scripts/hdfc-uat-probe.ts`) runs authenticate → IDV →
@@ -341,21 +376,53 @@ the tests assert the real numbers. `Resp_PvtCar` carries 108 fields.
   `ZeroDepClaimForBattery_Premium`, `BatteryChargerAccessory_Premium`); the
   canonical contract has one `batteryProtect` slot, so they are summed.
 
-### Vehicle age ceiling — needs confirming with HDFC
+### Vehicle age and model coverage — CORRECTED 2026-08-07
 
-UAT prices these models only at roughly **one year old or newer**. At about two
-years and above it fails with an opaque `Exception while Call Blaze!` carrying a
-truncated stack trace and no stated reason.
+An earlier revision of this section claimed UAT prices only at "roughly one year
+old or newer", that anything older throws `Exception while Call Blaze!`, and that
+only six model codes work at all. **Running HDFC's own certification pack
+disproved all three claims** (see the next section). What is actually true:
 
-**Calendar year is not the constraint** — the same vehicle prices fine with a
-policy starting today; only age matters. Verified across policy years 2023–2026
-for six codes.
+- **Model coverage is wide, not sparse.** 28 of the 33 codes tried — every code
+  in the `UAT Test Model` sheet plus the Postman collection's own samples — price
+  fine as a ~1-year-old Roll Over at RTO 10406. That includes `17532`, the code
+  previously written off. The five that do not are `31199` (Ford Endeavour,
+  `Rate is not defined in the R2 Master`), `17800` (absent from HDFC's own
+  `Model_Master`), `50740`, and the two Mercedes-Benz codes.
+- **Age is a real underwriting ladder, not a Blaze crash.** On `12798` at RTO
+  10406 HDFC answers, in order:
 
-Codes confirmed priceable on UAT: `42774`, `12763`, `12798`, `28735`, `32415`,
-`27224`. Note HDFC's *own* sample code `17532` no longer prices, and only 5 of
-the 27 codes in their `UAT Test Model` sheet do — their sandbox data is sparse
-and partly stale, which is a vendor-side issue, not a cross-walk fault.
+  | Vehicle age | HDFC's behaviour |
+  |---|---|
+  | 1–4 years | prices, all add-ons available |
+  | from 5 years | `<>Upto 5 years / COSG Corp role - 10 years = Decline Cover not eligible for selected vehicle age \| <> Upto 3 years = decline Cover not eligible for selected vehicle age` — add-ons declined by age |
+  | from ~11 years | `Please provide Vehicle IDV` — the IDV master stops here |
+  | 16 years | `Maximum Vehicle Age limitation` — the 15-year rule, enforced explicitly |
 
-Whether the age ceiling is a UAT data gap or a real underwriting rule is open —
-it matters, because a rollover of a three-year-old car is an entirely ordinary
-request in production.
+  So a rollover of a three-year-old car — the ordinary production case the old
+  note worried about — works. Only the add-on ceiling bites earlier than the
+  sheet states (see §9.12).
+- **Missing IDV, not a crash, is the common failure.** Where a model genuinely
+  has no UAT data, HDFC answers either `Please provide Vehicle IDV` or a bare
+  `{"StatusCode":400,"Error":"BUSINESS EXCEPTION"}` from `getcalculateidv`. The
+  whole **Mercedes-Benz** make behaves this way (8 codes tried, all refused), as
+  does every **HYBRID** code tried (`48622`, `53024`, `47921`).
+
+### Certification pack — 205 conditions run live (2026-08-07)
+
+`npm run hdfc:scenarios` (`scripts/hdfc-uat-scenarios.ts`) encodes every
+condition of HDFC's `PVTcarTestScenarios.xls` and fires it read-only at UAT
+through the production provider. Results, per-row and verbatim, live in
+[`hdfc-uat-scenario-results.md`](./hdfc-uat-scenario-results.md).
+
+Rules HDFC **enforces server-side**, so we need not: the 15-year vehicle-age
+ceiling; add-ons declined by vehicle age; accessories capped at 25% of the
+vehicle's base value; NCB voided by a declared claim; NCB voided by a >90-day
+break; NCB never granted on a liability policy; CPA never charged on a
+standalone-OD policy; a 3-year CPA tenure only on a new vehicle; the NCB ladder
+itself (it computes the next slab from `PreviousPolicy_NCBPercentage`).
+
+Rules HDFC **silently accepts**, so they are ours to enforce: the RTI ≤3-year
+ceiling (HDFC prices RTI at 4 years); "anti-theft discount not applicable" (HDFC
+grants one); own-damage add-ons on a `TP Only` policy (HDFC bills a zero-dep
+premium against a zero own-damage premium).
