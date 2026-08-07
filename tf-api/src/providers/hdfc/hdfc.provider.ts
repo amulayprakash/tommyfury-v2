@@ -33,12 +33,15 @@ import {
   buildCalculatePremium,
   buildCreateProposal,
   buildGetProposalDocument,
+  buildSubmitPaymentDetails,
+  buildGetPolicyDocument,
 } from "./mapper/index.ts";
 import {
   normalizeIdv,
   normalizeQuote,
   normalizeProposal,
   normalizeCertificate,
+  normalizePayment,
   selectIdvForPremium,
 } from "./normalizer.ts";
 import { dbCodeResolver, type HdfcCodeResolver } from "./db-code-resolver.ts";
@@ -227,12 +230,69 @@ export class HdfcProvider
     );
   }
 
-  /** Payment (already collected) → policy. Implemented in Task 19. */
+  /**
+   * HDFC has no hosted payment gateway: submitpaymentdetails RECORDS a payment
+   * already collected. The canonical PaymentReceipt therefore maps directly onto
+   * its Payment_Details block.
+   */
   async issuePolicy(
-    _req: PolicyIssuanceRequest,
+    req: PolicyIssuanceRequest,
     _ctx: ProviderContext,
   ): Promise<PolicyIssuanceResult> {
-    throw new AppError(501, "not yet implemented", "NOT_IMPLEMENTED");
+    const token = await this.tokenProvider();
+    // quoteNo carries HDFC's Proposal_Number; transactionId is the cross-step id.
+    const transactionId = req.transactionId ?? req.clientId;
+    const shape = {
+      transactionId,
+      proposalNumber: req.quoteNo,
+      payment: {
+        amount: req.receipt.amount,
+        instrumentNumber: req.receipt.tranRefNo,
+        paymentDate: req.receipt.tranRefNoDate,
+        bankName: req.receipt.pgType,
+      },
+    } as HdfcRequestShape;
+
+    const paymentBody = await this.call(
+      "submitPaymentDetails",
+      token,
+      buildSubmitPaymentDetails(shape),
+      "submitPaymentDetails",
+    );
+    const { policyNumber } = normalizePayment(paymentBody);
+
+    if (!policyNumber) {
+      return {
+        providerSlug: HDFC_SLUG,
+        insurerName: HDFC_DISPLAY_NAME,
+        status: "IN_PROGRESS",
+        quoteNo: req.quoteNo,
+        clientId: req.clientId,
+        message: "HDFC accepted the payment but has not issued a policy number yet",
+        _rawResponse: paymentBody,
+      };
+    }
+
+    shape.policyNumber = policyNumber;
+    const policyDoc = await this.call(
+      "getPolicyDocument",
+      token,
+      buildGetPolicyDocument(shape),
+      "getPolicyDocument",
+      true,
+    );
+
+    return {
+      providerSlug: HDFC_SLUG,
+      insurerName: HDFC_DISPLAY_NAME,
+      status: "ISSUED",
+      policyNumber,
+      applicationNo: req.quoteNo,
+      receiptNo: req.receipt.tranRefNo,
+      clientId: req.clientId,
+      quoteNo: req.quoteNo,
+      _rawResponse: { payment: paymentBody, policyDocument: policyDoc },
+    };
   }
 
   async getCertificate(transactionId: string, _ctx: ProviderContext): Promise<CertificateResult> {

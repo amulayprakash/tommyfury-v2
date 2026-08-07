@@ -2356,6 +2356,9 @@
             "type": "string",
             "minLength": 1
           },
+          "transactionId": {
+            "type": "string"
+          },
           "vehicleCategory": {
             "type": "string",
             "enum": [
@@ -7618,6 +7621,9 @@
                   "clientId": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "transactionId": {
+                    "type": "string"
                   },
                   "vehicleCategory": {
                     "type": "string",

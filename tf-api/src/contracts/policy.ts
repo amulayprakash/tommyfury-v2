@@ -62,6 +62,12 @@ export const PolicyIssuanceRequestSchema = z.object({
   quoteNo: z.string().min(1),
   /** FG ClientId returned by GetQuote/CreateProposal → PolicyHeader.ClientID. */
   clientId: z.string().min(1),
+  /**
+   * Vendor correlation id that keys the issuance call. HDFC threads one
+   * TransactionID across all seven HEI steps and needs it at payment time;
+   * `quoteNo` carries the HDFC Proposal_Number. FG ignores this field.
+   */
+  transactionId: z.string().optional(),
   vehicleCategory: VehicleCategorySchema,
   policyType: PolicyTypeSchema.optional(),
   /** Policy dates (ISO); converted to FG DD/MM/YYYY in the mapper. */

@@ -1132,6 +1132,7 @@ export interface paths {
                     "application/json": {
                         quoteNo: string;
                         clientId: string;
+                        transactionId?: string;
                         /** @enum {string} */
                         vehicleCategory: "fourWheeler" | "twoWheeler" | "commercial" | "newVehicle" | "newCommercial";
                         /** @enum {string} */
@@ -2936,6 +2937,7 @@ export interface components {
         PolicyIssuanceRequest: {
             quoteNo: string;
             clientId: string;
+            transactionId?: string;
             /** @enum {string} */
             vehicleCategory: "fourWheeler" | "twoWheeler" | "commercial" | "newVehicle" | "newCommercial";
             /** @enum {string} */
