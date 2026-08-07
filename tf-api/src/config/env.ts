@@ -49,6 +49,29 @@ const envSchema = z.object({
   ITGI_DOWNLOAD_USER: z.string().default(""),
   ITGI_DOWNLOAD_PASSWORD: z.string().default(""),
 
+  // ── HDFC ERGO — credentials env-only, never in DB/code ──
+  // HEI motor service (JSON) + Pehchaan e-KYC (separate host, separate JWT).
+  // Private Car only: the vendor kit ships no two-wheeler or commercial
+  // collection, product code or master data.
+  HDFC_ENABLED: z
+    .string()
+    .default("false")
+    .transform((v) => v === "true"),
+  HDFC_BASE_URL: z
+    .string()
+    .default("https://accessuat.hdfcergo.com/cp/integration/heiintegrationservice/integration/"),
+  HDFC_SOURCE: z.string().default(""),
+  HDFC_CHANNEL_ID: z.string().default(""),
+  HDFC_CREDENTIAL: z.string().optional(),
+  HDFC_PRODUCT_PVTCAR: z.string().default("2311"),
+  /** Token lifetime in seconds. HDFC returns no expiry — value unconfirmed. */
+  HDFC_TOKEN_TTL: z.coerce.number().int().positive().default(1500),
+  HDFC_KYC_BASE_URL: z.string().default("https://ekyc-uat.hdfcergo.com/e-kyc"),
+  HDFC_KYC_API_KEY: z.string().optional(),
+  HDFC_KYC_TOKEN_TTL: z.coerce.number().int().positive().default(480),
+  /** Absolute URL Pehchaan returns the browser to after its hosted journey. */
+  HDFC_KYC_RETURN_URL: z.string().default(""),
+
   // ── Future Generali (TCS Motor API) — credentials env-only, never in DB/code ──
   FG_ENABLED: z
     .string()
