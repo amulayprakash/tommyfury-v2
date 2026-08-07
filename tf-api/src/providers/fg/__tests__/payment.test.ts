@@ -307,3 +307,58 @@ describe("FG payment recon", () => {
     expect(res.reason).toMatch(/not found/i);
   });
 });
+
+/**
+ * FG's own v1.41 doc gives the recon service under TWO different URLs, and ASP.NET
+ * treats them as different bindings: `.asmx` is the SOAP endpoint (WSDL
+ * `soap:address`) while `.asmx/FetchTRNDetails` is the HTTP-POST binding, which
+ * expects form-urlencoded parameters. Posting a SOAP envelope to the slash form
+ * makes IIS answer **500 "The page cannot be displayed because an internal server
+ * error has occurred."** — live-verified against the real service, and the cause of
+ * a failed post-payment callback. The transport must speak whichever protocol the
+ * configured URL implies.
+ */
+describe("FG payment recon transport speaks the protocol its URL implies", () => {
+  const RESPONSE_OK = "<Response><listQuickPayFields/></Response>";
+
+  function stubFetch(): { calls: { url: string; init: RequestInit }[]; restore: () => void } {
+    const calls: { url: string; init: RequestInit }[] = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      return { ok: true, status: 200, text: async () => RESPONSE_OK } as unknown as Response;
+    }) as unknown as typeof fetch;
+    return { calls, restore: () => { globalThis.fetch = original; } };
+  }
+
+  it("posts a SOAP envelope with SOAPAction to the .asmx SOAP endpoint", async () => {
+    const { calls, restore } = stubFetch();
+    try {
+      await reconcilePayment(
+        { payment: { reconUrl: "https://pg.example.com/quickpay/comservice.asmx", reconSource: "webaggregator" } } as unknown as FgConfig,
+        { transactionId: "T1", expectedAmount: 1, source: "webaggregator" },
+      );
+    } finally { restore(); }
+    const { url, init } = calls[0]!;
+    const headers = init.headers as Record<string, string>;
+    expect(url).toBe("https://pg.example.com/quickpay/comservice.asmx");
+    expect(headers["Content-Type"]).toMatch(/text\/xml/);
+    expect(headers.SOAPAction).toBe("http://tempuri.org/FetchTRNDetails");
+    expect(String(init.body)).toContain("<soap:Envelope");
+  });
+
+  it("posts form-urlencoded parameters to the .asmx/FetchTRNDetails HTTP-POST endpoint", async () => {
+    const { calls, restore } = stubFetch();
+    try {
+      await reconcilePayment(
+        { payment: { reconUrl: "https://pg.example.com/quickpay/comservice.asmx/FetchTRNDetails", reconSource: "webaggregator" } } as unknown as FgConfig,
+        { transactionId: "T497555205", expectedAmount: 1, source: "webaggregator" },
+      );
+    } finally { restore(); }
+    const { init } = calls[0]!;
+    const headers = init.headers as Record<string, string>;
+    expect(headers["Content-Type"]).toMatch(/application\/x-www-form-urlencoded/);
+    expect(String(init.body)).not.toContain("<soap:Envelope");
+    expect(String(init.body)).toBe("transactionId=T497555205&source=webaggregator");
+  });
+});

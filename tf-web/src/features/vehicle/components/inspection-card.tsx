@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/api/error-message";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { useCreateInspection, useInspectionStatus } from "../api/hooks";
 import type { InspectionResult, SupportedCategory } from "../api/types";
@@ -165,11 +166,7 @@ export function InspectionCard({ providerSlug }: { providerSlug: string }) {
                 onChange={(e) => setManualNo(e.target.value)}
                 placeholder="Inspection report number"
               />
-              <Input
-                type="date"
-                value={manualDate}
-                onChange={(e) => setManualDate(e.target.value)}
-              />
+              <DateInput value={manualDate} onChange={setManualDate} />
               <Button
                 variant="outline"
                 className="w-full"

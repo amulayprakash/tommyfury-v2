@@ -5,6 +5,7 @@ import { Link, useNavigate } from "react-router";
 import { ROUTES } from "@/app/router/paths";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useMmvSearch, useRtoSearch } from "../api/hooks";
@@ -291,7 +292,7 @@ export function NewVehiclePage({ category }: NewVehiclePageProps) {
 
           <label className="block space-y-2">
             <span className="text-sm font-medium">Purchase / delivery date</span>
-            <Input type="date" value={regDate} onChange={(e) => setRegDate(e.target.value)} />
+            <DateInput value={regDate} onChange={setRegDate} />
           </label>
 
           {isCommercial ? (

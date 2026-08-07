@@ -77,6 +77,9 @@ export async function recordProposal(
       grossPremium: Math.round(result.grossPremium),
       policyNumber: result.policyNumber ?? null,
       policyStatus: (result.contractDetails?.status as string | undefined) ?? null,
+      // Replayed at issuance (FG rejects IssueProposal without the policy period).
+      policyStartDate: result.policyStartDate ?? null,
+      policyEndDate: result.policyEndDate ?? null,
       paymentLink: result.paymentUrl ?? null,
       clientId: (result.contractDetails?.clientId as string | undefined) ?? null,
       addonPremiums: toJson(result.addonPremiums),

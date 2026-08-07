@@ -208,10 +208,19 @@ export function normalizeQuote(body: unknown, ctx: QuoteNormalizeCtx): Canonical
   return result;
 }
 
-export function normalizeProposal(body: unknown, ctx: QuoteNormalizeCtx): CanonicalQuoteResult {
+export function normalizeProposal(
+  body: unknown,
+  ctx: QuoteNormalizeCtx & { policyStartDate?: string; policyEndDate?: string },
+): CanonicalQuoteResult {
   // Same response shape as a quote; ClientId + (eventual) PolicyNo are the extras,
   // already captured by buildResult. The real PolicyNo arrives only at issuance.
-  return buildResult(body, ctx);
+  // FG's response omits the policy period, so the caller supplies the dates its
+  // payload carried — issuance has to send the same ones back.
+  return {
+    ...buildResult(body, ctx),
+    ...(ctx.policyStartDate ? { policyStartDate: ctx.policyStartDate } : {}),
+    ...(ctx.policyEndDate ? { policyEndDate: ctx.policyEndDate } : {}),
+  };
 }
 
 /**

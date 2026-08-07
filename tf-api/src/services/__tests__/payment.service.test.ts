@@ -18,6 +18,9 @@ const quoteRow = {
   grossPremium: 2530,
   vehicleCategory: "fourWheeler",
   policyType: "comprehensive",
+  // The period CreateProposal was bound with, persisted on the proposal row.
+  policyStartDate: "2026-08-06",
+  policyEndDate: "2029-08-05",
 };
 
 function makeDeps(overrides: Partial<PaymentCallbackDeps>): PaymentCallbackDeps {
@@ -113,5 +116,45 @@ describe("handlePaymentCallback recon gate", () => {
     const args = issue.mock.calls[0] as unknown as [string, { receipt: { amount: number } }];
     expect(args[1].receipt.amount).toBe(2530);
     expect(args[1].receipt.amount).not.toBe(5);
+  });
+
+  // A recon MISS and a recon CALL FAILURE must be governed by the same switch.
+  // Before this, a transport error (FG 500/timeout) escaped the callback as a 502
+  // even with enforcement OFF — the customer had already paid, so an unverified,
+  // deliberately non-blocking check hard-blocked issuance at the worst moment.
+  it("with recon enforcement OFF, a recon transport failure still issues", async () => {
+    const softConfig = {
+      payment: { ...config.payment, reconEnforce: false },
+    } as unknown as FgConfig;
+    const issue = vi.fn(async () => ({ providerSlug: "fg", status: "issued", policyNumber: "POL-1" }) as never);
+    const reconcile = vi.fn(async () => { throw new Error("FG payment recon failed [500]"); });
+    const deps = makeDeps({ issue, reconcile, loadConfig: () => softConfig });
+    const out = await handlePaymentCallback("fg", okPg, deps);
+    expect(out.ok).toBe(true);
+    expect(out.policyNumber).toBe("POL-1");
+    expect(issue).toHaveBeenCalledOnce();
+    expect(out.redirectUrl).toContain("insurance_ps");
+  });
+
+  // FG's IssueProposal refuses the call without the policy period ("Policy start
+  // date is missing in the request"), so the callback must replay the dates the
+  // proposal was created with — it has no request to re-derive them from.
+  it("issues with the policy period the proposal was bound with", async () => {
+    const issue = vi.fn(async () => ({ providerSlug: "fg", status: "issued", policyNumber: "POL-1" }) as never);
+    const deps = makeDeps({ issue });
+    await handlePaymentCallback("fg", okPg, deps);
+    const args = issue.mock.calls[0] as unknown as [string, { policyStartDate?: string; policyEndDate?: string }];
+    expect(args[1].policyStartDate).toBe("2026-08-06");
+    expect(args[1].policyEndDate).toBe("2029-08-05");
+  });
+
+  it("with recon enforcement ON, a recon transport failure redirects to failure instead of throwing", async () => {
+    const issue = vi.fn(async () => ({ providerSlug: "fg", status: "issued" }) as never);
+    const reconcile = vi.fn(async () => { throw new Error("FG payment recon failed [500]"); });
+    const deps = makeDeps({ issue, reconcile });
+    const out = await handlePaymentCallback("fg", okPg, deps);
+    expect(out.ok).toBe(false);
+    expect(issue).not.toHaveBeenCalled();
+    expect(out.redirectUrl).toContain("failure");
   });
 });

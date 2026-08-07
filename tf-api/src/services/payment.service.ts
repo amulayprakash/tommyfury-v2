@@ -100,11 +100,13 @@ export async function handlePaymentCallback(
   // id FG_PAYMENT_RECON_KEY selects (our TID, or FG's WS_P_ID). Note the DB lookup
   // above always uses our TID (quoteNo); only the recon call uses the chosen key.
   const reconTransactionId = (config.payment.reconKey === "wsPId" ? pg.wsPId : pg.tid) ?? "";
-  const recon = await deps.reconcile(config, {
-    transactionId: reconTransactionId,
-    expectedAmount,
-    source: config.payment.reconSource,
-  });
+  // A recon CALL FAILURE (FG 5xx, timeout, unreachable) is governed by the same
+  // switch as a recon MISS. Letting it throw would surface a 502 to a customer who
+  // has ALREADY PAID and would bypass `reconEnforce` entirely — the one check we
+  // deliberately do not trust yet must never be the thing that blocks issuance.
+  const recon = await deps
+    .reconcile(config, { transactionId: reconTransactionId, expectedAmount, source: config.payment.reconSource })
+    .catch((e: unknown) => ({ ok: false, reason: `recon call failed: ${(e as Error).message}` }) as ReconResult);
   if (!recon.ok) {
     // Log BOTH ids + the recon outcome so a wrong recon-key guess is diagnosable
     // from a single line, and only hard-block when recon is trusted. Until
@@ -133,11 +135,23 @@ export async function handlePaymentCallback(
   // paymentAmount — and when that failure IS an amount mismatch (partial or
   // tampered payment) adopting it would bind the policy for the wrong amount.
   const amount = recon.ok ? recon.paymentAmount ?? expectedAmount : expectedAmount;
+  // FG's IssueProposal refuses the call without the policy period ("Policy start
+  // date is missing in the request"), and it must be the SAME period CreateProposal
+  // bound — which the provider recorded on the proposal row, since the PG callback
+  // carries no quote request to re-derive it from.
+  if (!row.policyStartDate) {
+    logger.warn(
+      { providerSlug, quoteNo },
+      "Proposal row has no policy period; FG will reject issuance (proposal predates date persistence)",
+    );
+  }
   const issuanceReq = PolicyIssuanceRequestSchema.parse({
     quoteNo,
     clientId: row.clientId,
     vehicleCategory: row.vehicleCategory as VehicleCategory,
     policyType: row.policyType as PolicyType,
+    policyStartDate: row.policyStartDate ?? undefined,
+    policyEndDate: row.policyEndDate ?? undefined,
     receipt: pgResultToReceipt(pg, config, amount),
   });
 

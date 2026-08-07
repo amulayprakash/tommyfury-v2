@@ -43,6 +43,12 @@ model Quote {
   policyStatus    String?  @db.VarChar(32)
   paymentLink     String?  @db.VarChar(512)
 
+  // Policy period (ISO yyyy-mm-dd) the proposal was created with. Issuance must
+  // replay it — FG refuses IssueProposal without it ("Policy start date is missing
+  // in the request") and the payment callback has no request to re-derive it from.
+  policyStartDate String?  @db.VarChar(10)
+  policyEndDate   String?  @db.VarChar(10)
+
   // Issuance binding (FG: ClientID + QuotationNo → real PolicyNo + ApplicationNo)
   clientId        String?  @db.VarChar(64)
   applicationNo   String?  @db.VarChar(128)

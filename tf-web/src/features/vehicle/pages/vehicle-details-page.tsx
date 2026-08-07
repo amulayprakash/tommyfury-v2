@@ -5,6 +5,7 @@ import { Link, useNavigate } from "react-router";
 import { ROUTES } from "@/app/router/paths";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { useMmvSearch } from "../api/hooks";
 import { COMMERCIAL_SUBTYPE_LABELS, type CommercialSubType } from "../api/types";
@@ -76,6 +77,9 @@ export function VehicleDetailsPage() {
   const [variantOverride, setVariantOverride] = useState<number | null>(null);
   const variantIdx = variantOverride ?? bestVariantIdx;
   const [regDate, setRegDate] = useState(rc?.registrationDate ?? "");
+  // The RC feed's expiry is often stale or unreadable, and it drives break-in
+  // detection plus FG's 45-day advance-inception window — let the user correct it.
+  const [prevExpiry, setPrevExpiry] = useState(rc?.previousPolicyExpiryDate ?? "");
 
   // Commercial-only inputs (RC lookup can't supply these).
   const isCommercial = category === "commercial";
@@ -135,8 +139,12 @@ export function VehicleDetailsPage() {
       pincode: rc.pincode,
       previousInsurerName: rc.previousInsurerName,
       previousPolicyNumber: rc.previousPolicyNumber,
-      previousPolicyExpiryDate: rc.previousPolicyExpiryDate,
-      isPreviousPolicyExpired: rc.isPreviousPolicyExpired,
+      previousPolicyExpiryDate: prevExpiry || undefined,
+      // Derive from the confirmed date so an edit re-decides break-in; fall back
+      // to the RC flag only when no expiry is known at all.
+      isPreviousPolicyExpired: prevExpiry
+        ? prevExpiry < new Date().toISOString().slice(0, 10)
+        : rc.isPreviousPolicyExpired,
       ...(isCommercial
         ? {
             commercialSubType: subType,
@@ -201,7 +209,6 @@ export function VehicleDetailsPage() {
             <DetailRow label="RTO" value={rtoCode} />
             <DetailRow label="Owner" value={rc.ownerName} />
             <DetailRow label="Previous insurer" value={rc.previousInsurerName} />
-            <DetailRow label="Previous policy expiry" value={rc.previousPolicyExpiryDate} />
           </div>
 
           <div className="mt-5 space-y-4">
@@ -223,12 +230,21 @@ export function VehicleDetailsPage() {
               </label>
             ) : null}
 
-            {!regDate ? (
-              <label className="block space-y-2">
-                <span className="text-sm font-medium">Registration date</span>
-                <Input type="date" value={regDate} onChange={(e) => setRegDate(e.target.value)} />
-              </label>
-            ) : null}
+            {/* Always editable: the insurer rates on the year in this date, and the
+                RC feed's date is regularly mis-parsed or missing. */}
+            <label className="block space-y-2">
+              <span className="text-sm font-medium">Registration date</span>
+              <DateInput value={regDate} onChange={setRegDate} />
+            </label>
+
+            <label className="block space-y-2">
+              <span className="text-sm font-medium">Previous policy expiry</span>
+              <DateInput value={prevExpiry} onChange={setPrevExpiry} />
+              <span className="block text-xs text-muted-foreground">
+                Renewal can start at most 45 days before this date. Correct it if it doesn't match
+                your policy.
+              </span>
+            </label>
 
             {isCommercial ? (
               <>

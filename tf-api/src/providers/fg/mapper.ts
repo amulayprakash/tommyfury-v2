@@ -111,6 +111,20 @@ export function policyStartIso(req: MotorQuoteRequest): string {
   return isRollover && expiry && expiry >= today ? addDaysIso(expiry, 1) : today;
 }
 
+/**
+ * The policy period (ISO) this request actually binds: the risk-start rule above
+ * plus the product's tenure (F13 bundled new vehicle = 3yr, everything else 1yr).
+ * IssueProposal must replay the SAME period the proposal was created with — FG
+ * refuses the call without it ("Policy start date is missing in the request") — and
+ * the payment callback has no request to re-derive it from, so the provider reports
+ * this on the proposal result and it is persisted with the proposal.
+ */
+export function effectivePolicyDates(req: MotorQuoteRequest): { start: string; end: string } {
+  const { tenureYears } = resolveContract(req);
+  const start = policyStartIso(req);
+  return { start, end: req.policyEndDate ?? addYearsIso(start, tenureYears) };
+}
+
 function policyDates(req: MotorQuoteRequest, tenureYears: number): { start: string; end: string } {
   const start = policyStartIso(req);
   const end = req.policyEndDate ?? addYearsIso(start, tenureYears);
@@ -513,9 +527,9 @@ export function assertSupportedJourney(req: MotorQuoteRequest): void {
   if (start > latest) {
     throw new AppError(
       422,
-      `Future Generali can start a policy at most ${FG_MAX_ADVANCE_INCEPTION_DAYS} days in advance, but this policy would start on ${start}` +
+      `Future Generali can start a policy at most ${FG_MAX_ADVANCE_INCEPTION_DAYS} days in advance, but this policy would start on ${toFgDate(start)}` +
         (req.previousPolicyExpiryDate
-          ? ` (the day after your current policy expires on ${req.previousPolicyExpiryDate}). Please come back within ${FG_MAX_ADVANCE_INCEPTION_DAYS} days of your policy's expiry to renew.`
+          ? ` (the day after your current policy expires on ${toFgDate(req.previousPolicyExpiryDate)}). Please come back within ${FG_MAX_ADVANCE_INCEPTION_DAYS} days of your policy's expiry to renew.`
           : `. Choose a start date within ${FG_MAX_ADVANCE_INCEPTION_DAYS} days.`),
       "VALIDATION",
     );
@@ -588,7 +602,7 @@ export function buildCreateProposalPayload(
     if (req.previousTpExpiryDate < odEnd) {
       throw new AppError(
         422,
-        `Standalone Own-Damage cover runs until ${odEnd}, but your Third-Party policy expires ${req.previousTpExpiryDate}. The TP policy must stay in force for the full OD year — choose Comprehensive, or renew once the TP covers that period.`,
+        `Standalone Own-Damage cover runs until ${toFgDate(odEnd)}, but your Third-Party policy expires ${toFgDate(req.previousTpExpiryDate)}. The TP policy must stay in force for the full OD year — choose Comprehensive, or renew once the TP covers that period.`,
         "VALIDATION",
       );
     }

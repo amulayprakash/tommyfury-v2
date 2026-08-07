@@ -192,6 +192,7 @@ type QuoteInputs = Pick<
   | "claimInPreviousPolicy"
   | "addons"
   | "previousTp"
+  | "providerAddonCodes"
 >;
 
 /**
@@ -244,6 +245,11 @@ export function buildQuoteRequest(state: QuoteInputs): CompareQuotesRequest | nu
     ...(v.commercialSubType ? { commercialSubType: v.commercialSubType } : {}),
     ...(v.grossVehicleWeight ? { grossVehicleWeight: v.grossVehicleWeight } : {}),
     ...(v.carryingCapacity ? { carryingCapacity: v.carryingCapacity } : {}),
+    // FG prices add-ons ONLY from these provider cover codes — the boolean flags
+    // below are never derived from. Carrying them here keeps the PROPOSAL priced
+    // like the quote the customer accepted; omitting them made FG re-rate the
+    // proposal with no add-ons (review ₹68,081 → payment ₹39,707).
+    ...(state.providerAddonCodes.length ? { providerAddonCodes: state.providerAddonCodes } : {}),
     ...addonFlags,
   };
 }

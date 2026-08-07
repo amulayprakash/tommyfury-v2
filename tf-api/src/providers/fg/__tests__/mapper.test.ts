@@ -9,6 +9,7 @@ import {
   toNumericUid,
   fgSalutation,
   todayIst,
+  effectivePolicyDates,
   nextNcbSlab,
   type FgResolvedCodes,
   type FgPayloadMeta,
@@ -385,6 +386,38 @@ describe("buildIssueProposalPayload", () => {
     expect(ph.strPolicyQuoteNumber).toBe("0000112799");
     expect(ph.ClientID).toBe("80036976");
     expect((p.payload.Receipt as Record<string, unknown>).Amount).toBe("26652");
+  });
+});
+
+/**
+ * IssueProposal needs the SAME policy period the proposal was created with, and FG
+ * rejects the call outright without it ("Policy start date is missing in the
+ * request"). The dates are a pure function of the request (start rule + product
+ * tenure), so they are computed once here and replayed at issuance — the payment
+ * callback has no request to re-derive them from.
+ */
+describe("effectivePolicyDates — the period CreateProposal actually sent", () => {
+  it("new business with no explicit start begins today", () => {
+    const { start } = effectivePolicyDates(baseQuote({ businessType: "new" }));
+    expect(start).toBe(todayIst());
+  });
+
+  it("new business (F13, bundled 1yr OD + 3yr TP) runs three years, ending the day before the anniversary", () => {
+    const req = baseQuote({ businessType: "new", policyStartDate: "2026-08-06" });
+    expect(effectivePolicyDates(req)).toEqual({ start: "2026-08-06", end: "2029-08-05" });
+  });
+
+  it("rollover starts the day after the previous policy expires and runs one year", () => {
+    const req = baseQuote({ businessType: "rollover", previousPolicyExpiryDate: "2030-01-15" });
+    expect(effectivePolicyDates(req)).toEqual({ start: "2030-01-16", end: "2031-01-15" });
+  });
+
+  it("matches the PolicyStartDate/PolicyEndDate the proposal payload carries", () => {
+    const req = fullQuote({ businessType: "new" });
+    const { start, end } = effectivePolicyDates(req);
+    const ph = buildCreateProposalPayload(req, codes, meta, "req-1").payload.PolicyHeader as Record<string, unknown>;
+    expect(ph.PolicyStartDate).toBe(toFgDate(start));
+    expect(ph.PolicyEndDate).toBe(toFgDate(end));
   });
 });
 

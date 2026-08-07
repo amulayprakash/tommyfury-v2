@@ -14,6 +14,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { proposalSchema, type ProposalValues } from "../lib/proposal-schema";
 import { WizardSteps } from "../components/wizard-steps";
@@ -107,7 +108,23 @@ export function ProposalPage() {
               {text("lastName", "Last name")}
               {text("mobile", "Mobile number", { type: "tel", inputMode: "numeric", maxLength: 10 })}
               {text("email", "Email", { type: "email" })}
-              {text("dob", "Date of birth", { type: "date" })}
+              <FormField
+                control={form.control}
+                name="dob"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Date of birth</FormLabel>
+                    <FormControl>
+                      <DateInput
+                        value={field.value as string}
+                        onChange={field.onChange}
+                        showError={false}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={form.control}
                 name="gender"

@@ -47,6 +47,7 @@ import {
   buildGetQuotePayload,
   buildCreateProposalPayload,
   buildIssueProposalPayload,
+  effectivePolicyDates,
   type FgResolvedCodes,
   type FgPayloadMeta,
 } from "./mapper.ts";
@@ -283,10 +284,16 @@ export class FgProvider
     );
     assertFgSuccess(extractRoot(body), "create-proposal");
 
+    // FG's CRT response does NOT echo the policy period, so report the dates the
+    // payload carried: IssueProposal has to replay them and the payment callback
+    // (which fires with only the PG result) can't re-derive them.
+    const { start, end } = effectivePolicyDates(req);
     return normalizeProposal(body, {
       requestId: ctx.requestId,
       policyType: req.selectedPolicy,
       vehicleCategory: req.vehicleType,
+      policyStartDate: start,
+      policyEndDate: end,
     });
   }
 

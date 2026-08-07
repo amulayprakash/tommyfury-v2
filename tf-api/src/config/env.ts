@@ -171,16 +171,17 @@ const envSchema = z.object({
   FG_PAYMENT_SUCCESS_URL: z.string().optional(),
   FG_PAYMENT_FAILURE_URL: z.string().optional(),
   /**
-   * Server-side reconciliation SOAP endpoint (FetchTRNDetails), v1.41. Defaults to
-   * the PDF-documented REST-style slash form (`.../comservice.asmx/FetchTRNDetails`).
-   * The `?op=FetchTRNDetails` form and the schema-stub method `GetQuickPayDetailsNew`
-   * are unconfirmed alternatives — see open confirmations before changing this.
+   * Server-side reconciliation endpoint (FetchTRNDetails), v1.41 — one service for
+   * both UAT and production (the doc lists no UAT variant). Defaults to the SOAP
+   * endpoint from the live WSDL's `soap:address`, i.e. the bare `.asmx`. The doc
+   * also prints a slash form (`.../comservice.asmx/FetchTRNDetails`); that is
+   * ASP.NET's HTTP-POST binding, which takes form-urlencoded parameters — posting a
+   * SOAP envelope to it returns 500. Either URL now works (the transport picks the
+   * matching encoding), but prefer this one.
    */
   FG_PAYMENT_RECON_URL: z
     .string()
-    .default(
-      "https://pg.generalicentralinsurance.com/quick_pay/quickpay/comservice.asmx/FetchTRNDetails",
-    ),
+    .default("https://pg.generalicentralinsurance.com/quick_pay/quickpay/comservice.asmx"),
   /** `source` value in the FetchTRNDetails request (web-agg transactions). */
   FG_PAYMENT_RECON_SOURCE: z.string().default("webaggregator"),
   /**

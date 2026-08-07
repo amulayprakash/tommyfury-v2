@@ -63,6 +63,52 @@ describe("classifyFgError", () => {
   });
 });
 
+describe("assertFgSuccess — Description outranks the generic Message", () => {
+  // FG's CRT/issuance failures pair a generic stage label in `Message` with the
+  // real reason in `Description`. Reading Message alone hid the cause AND
+  // mis-classified a permanent UW rejection as a retryable outage.
+  it("surfaces Description, not the 'Error During UW Validation' wrapper", () => {
+    const root = {
+      Status: "Failed!",
+      Message: "Error During UW Validation",
+      Description: "Vehicle Age is not Configured for this Rule",
+    };
+    expect(() => assertFgSuccess(root, "create-proposal")).toThrowError(
+      /Vehicle Age is not Configured for this Rule/,
+    );
+  });
+
+  it("no longer tells the user to retry a permanent rejection", () => {
+    const root = {
+      Status: "Failed!",
+      Message: "Error During Quote Issuance",
+      Description: "Duplicate Registration Number",
+    };
+    try {
+      assertFgSuccess(root, "create-proposal");
+      expect.unreachable("expected assertFgSuccess to throw");
+    } catch (e) {
+      expect((e as { code?: string }).code).toBe("PROVIDER_ERROR");
+      expect((e as Error).message).toContain("Duplicate Registration Number");
+      expect((e as Error).message).not.toContain("temporarily unavailable");
+    }
+  });
+
+  it("still treats a genuine BANCS fault (no Description) as transient", () => {
+    const root = {
+      Status: "Failed!",
+      Message: "POLICY HAS NOT BEEN ISSUED due to User-Defined Exception from Reinsurance",
+    };
+    try {
+      assertFgSuccess(root, "create-proposal");
+      expect.unreachable("expected assertFgSuccess to throw");
+    } catch (e) {
+      expect((e as { code?: string }).code).toBe("UPSTREAM_UNAVAILABLE");
+      expect((e as Error).message).toContain("temporarily unavailable");
+    }
+  });
+});
+
 describe("assertFgSuccess — JSON business failures (HTTP 200)", () => {
   it("passes when every block Status is Successful", () => {
     const root = {

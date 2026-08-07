@@ -5,8 +5,10 @@ import { Link, useNavigate } from "react-router";
 import { NEW_VEHICLE_ROUTES, ROUTES } from "@/app/router/paths";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { isAddonSelectable, standaloneOdTpIssue, toggleAddonSelection } from "../addon-selection";
 import { useCompareQuotesQuery, useProviderAddons, useProviders } from "../api/hooks";
 import type { CompareQuotesRequest, CompareResult, PolicyType } from "../api/types";
 import { IdvControl } from "../components/idv-control";
@@ -42,6 +44,7 @@ function ProviderAddonPanel({
   vehicleAge,
   baseRequest,
   baseQuote,
+  blockedReason,
 }: {
   providerSlug: string;
   displayName: string;
@@ -50,6 +53,8 @@ function ProviderAddonPanel({
   vehicleAge: number;
   baseRequest: CompareQuotesRequest;
   baseQuote: number;
+  /** Set when the journey can't proceed yet (e.g. standalone-OD TP dates missing). */
+  blockedReason?: string | null;
 }) {
   const navigate = useNavigate();
   const selectPlan = useVehicleQuoteStore((s) => s.selectPlan);
@@ -73,8 +78,10 @@ function ProviderAddonPanel({
     void navigate(ROUTES.vehicle.apiForm);
   };
 
+  // Provider covers are overlapping combo packages — let the selection rules decide
+  // what survives a tick rather than blindly appending (see addon-selection.ts).
   const toggle = (code: string, on: boolean) =>
-    setCodes((prev) => (on ? [...prev, code] : prev.filter((c) => c !== code)));
+    setCodes((prev) => toggleAddonSelection(catalog.data ?? [], prev, code, on));
 
   return (
     <>
@@ -90,7 +97,10 @@ function ProviderAddonPanel({
           ) : (
             <ul className="space-y-2">
               {catalog.data!.map((a) => {
-                const disabled = ineligible(a.maxAgeYears);
+                const tooOld = ineligible(a.maxAgeYears);
+                // A zero-dep extra can't stand alone — FG rejects the proposal.
+                const needsZeroDep = !isAddonSelectable(catalog.data ?? [], codes, a);
+                const disabled = tooOld || needsZeroDep;
                 return (
                   <li key={a.code}>
                     <label
@@ -105,13 +115,13 @@ function ProviderAddonPanel({
                       />
                       <span>
                         <span className="font-medium">{a.label}</span>
-                        {disabled ? (
+                        {tooOld ? (
                           <span className="ml-1 text-xs text-muted-foreground">
                             (not available for this vehicle&apos;s age)
                           </span>
                         ) : a.requiresZeroDep ? (
                           <span className="ml-1 text-xs text-muted-foreground">
-                            (needs a Zero-Dep add-on)
+                            (needs a Zero-Dep cover)
                           </span>
                         ) : null}
                       </span>
@@ -147,9 +157,10 @@ function ProviderAddonPanel({
         </CardContent>
       </Card>
 
-      <Button size="lg" className="w-full" onClick={onContinue}>
+      <Button size="lg" className="w-full" onClick={onContinue} disabled={Boolean(blockedReason)}>
         Continue with {displayName} <ArrowRight />
       </Button>
+      {blockedReason ? <p className="text-xs text-destructive">{blockedReason}</p> : null}
     </>
   );
 }
@@ -212,6 +223,7 @@ export function ComparePage() {
         claimInPreviousPolicy,
         addons: {},
         previousTp,
+        providerAddonCodes: [], // base compare is priced without add-ons
       }),
     [vehicle, planType, idvValue, ncbPercent, claimInPreviousPolicy, previousTp],
   );
@@ -245,7 +257,20 @@ export function ComparePage() {
   }
 
   const showOdControls = planType !== "thirdParty";
-  const showAddons = Boolean(selected) && planType === "comprehensive";
+  // Standalone OD needs a third-party policy in force for the whole OD year. Blank TP
+  // dates used to fall through to the vendor, which answered with its own raw error
+  // ("OD Policy Expiry cannot be after TP policy expiry date") from the review step.
+  const tpIssue =
+    planType === "standAloneOD"
+      ? standaloneOdTpIssue({
+          previousPolicyExpiryDate: vehicle.previousPolicyExpiryDate,
+          tpExpiryDate: previousTp.expiryDate,
+          today: new Date().toISOString().slice(0, 10),
+        })
+      : null;
+  // Add-ons ride the own-damage section, so they apply to standalone-OD too
+  // (FG prices its OD combo codes on FVO); only third-party has none.
+  const showAddons = Boolean(selected) && planType !== "thirdParty";
   const fuelClass = vehicle.fuelType === "electric" ? "electric" : "standard";
 
   return (
@@ -316,24 +341,26 @@ export function ComparePage() {
                     <div className="grid grid-cols-2 gap-2">
                       <label className="space-y-1 text-xs">
                         <span className="text-muted-foreground">Start</span>
-                        <Input
-                          type="date"
-                          value={previousTp.startDate ?? ""}
-                          onChange={(e) => setPreviousTp({ ...previousTp, startDate: e.target.value })}
+                        <DateInput
+                          value={previousTp.startDate}
+                          onChange={(iso) => setPreviousTp({ ...previousTp, startDate: iso })}
                         />
                       </label>
                       <label className="space-y-1 text-xs">
                         <span className="text-muted-foreground">Expiry</span>
-                        <Input
-                          type="date"
-                          value={previousTp.expiryDate ?? ""}
-                          onChange={(e) => setPreviousTp({ ...previousTp, expiryDate: e.target.value })}
+                        <DateInput
+                          value={previousTp.expiryDate}
+                          onChange={(iso) => setPreviousTp({ ...previousTp, expiryDate: iso })}
                         />
                       </label>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Own-Damage cover needs an active (not expired) third-party policy.
-                    </p>
+                    {tpIssue ? (
+                      <p className="text-xs text-destructive">{tpIssue}</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Own-Damage cover needs an active (not expired) third-party policy.
+                      </p>
+                    )}
                   </div>
                 ) : null}
                 <p className="text-xs text-muted-foreground">
@@ -403,6 +430,7 @@ export function ComparePage() {
               vehicleAge={vehicleAge}
               baseRequest={baseRequest}
               baseQuote={selected.quote.grossPremium}
+              blockedReason={tpIssue}
             />
           ) : selected ? (
             <Button

@@ -12,8 +12,15 @@ import type { FgConfig } from "./config.ts";
  * should not be fulfilled."
  */
 
-/** Transport seam so tests supply a recorded response without hitting the network. */
-export type ReconTransport = (url: string, soapBody: string) => Promise<string>;
+/**
+ * Transport seam so tests supply a recorded response without hitting the network.
+ * Takes the request FIELDS (not a pre-built body) because the wire encoding depends
+ * on which of FG's two recon URLs is configured — see `defaultReconTransport`.
+ */
+export type ReconTransport = (
+  url: string,
+  input: { transactionId: string; source: string },
+) => Promise<string>;
 
 export interface ReconInput {
   /**
@@ -112,15 +119,36 @@ export function parseReconResponse(xml: string): ReconRecord | null {
   };
 }
 
-const defaultReconTransport: ReconTransport = async (url, soapBody) => {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/xml; charset=utf-8",
-      SOAPAction: "http://tempuri.org/FetchTRNDetails",
-    },
-    body: soapBody,
-  });
+/**
+ * FG documents the recon service under two URLs, and ASP.NET serves them as
+ * DIFFERENT bindings (confirmed against the live WSDL): `comservice.asmx` is the
+ * SOAP endpoint (`soap:address`), while `comservice.asmx/FetchTRNDetails` is the
+ * HTTP-POST binding, which expects `application/x-www-form-urlencoded` parameters.
+ * Posting our SOAP envelope to the slash form makes IIS answer 500 "The page cannot
+ * be displayed because an internal server error has occurred." (live-verified), so
+ * pick the encoding the configured URL implies rather than assuming SOAP. Both
+ * bindings answer with a shape `parseReconResponse` already handles.
+ */
+function isHttpPostBinding(url: string): boolean {
+  return /\/FetchTRNDetails\/?$/i.test(new URL(url).pathname);
+}
+
+const defaultReconTransport: ReconTransport = async (url, input) => {
+  const request: RequestInit = isHttpPostBinding(url)
+    ? {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `transactionId=${encodeURIComponent(input.transactionId)}&source=${encodeURIComponent(input.source)}`,
+      }
+    : {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/xml; charset=utf-8",
+          SOAPAction: "http://tempuri.org/FetchTRNDetails",
+        },
+        body: buildReconSoapBody(input.transactionId, input.source),
+      };
+  const response = await fetch(url, request);
   const text = await response.text().catch(() => "");
   if (!response.ok) {
     throw new ProviderError(
@@ -145,7 +173,10 @@ export async function reconcilePayment(
   input: ReconInput,
   transport: ReconTransport = defaultReconTransport,
 ): Promise<ReconResult> {
-  const xml = await transport(config.payment.reconUrl, buildReconSoapBody(input.transactionId, input.source));
+  const xml = await transport(config.payment.reconUrl, {
+    transactionId: input.transactionId,
+    source: input.source,
+  });
   const rec = parseReconResponse(xml);
   if (!rec) return { ok: false, reason: "recon record not found" };
 

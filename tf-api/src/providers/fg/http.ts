@@ -140,8 +140,14 @@ export function extractFgError(value: unknown, depth = 0): string {
       ? o.Error.trim()
       : "";
 
-  // Prefer the inner ErrorMessage/message, then any nested Root, then scan.
-  for (const key of ["ErrorMessage", "message", "Message", "Root"] as const) {
+  // `Description` outranks `Message`: on CRT/issuance failures FG sets Message to
+  // a generic stage label ("Error During UW Validation", "Error During Quote
+  // Issuance") and puts the actionable reason in Description ("Vehicle Age is not
+  // Configured for this Rule", "Duplicate Registration Number"). Reading Message
+  // alone both hid the cause and mis-classified permanent UW rejections as
+  // transient — telling users to "try again in a moment" for something that can
+  // never succeed.
+  for (const key of ["ErrorMessage", "message", "Description", "Message", "Root"] as const) {
     if (key in o) {
       const inner = extractFgError(o[key], depth + 1);
       if (inner && inner !== label) return label ? `${label}: ${inner}` : inner;
