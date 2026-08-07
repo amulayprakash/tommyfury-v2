@@ -1,7 +1,8 @@
 import type { VehicleCategory } from "@/contracts/enums.ts";
 import type { CanonicalQuoteResult } from "@/contracts/quote-result.ts";
 import type { CertificateResult } from "@/contracts/policy.ts";
-import { HDFC_SLUG, HDFC_DISPLAY_NAME } from "./config.ts";
+import { HDFC_SLUG, HDFC_DISPLAY_NAME, HDFC_POLICY_TYPE } from "./config.ts";
+import type { HdfcCustomer } from "./types.ts";
 
 type Json = Record<string, unknown>;
 
@@ -43,6 +44,81 @@ export function selectIdvForPremium(band: HdfcIdvBand, callerIdv: number): numbe
   if (band.min && callerIdv < band.min) return null;
   if (band.max && callerIdv > band.max) return null;
   return callerIdv;
+}
+
+/**
+ * The expiring-policy snapshot returned by `getpolicydataforrenewal`. Renewal is
+ * keyed by policy number alone, so this response is the ONLY source for the IDV,
+ * cover, vehicle codes and customer that the later renewal steps need.
+ *
+ * Field names follow the kit's data dictionary sheet "03 RenewalExtract", whose
+ * response lives under `Resp_RE` (+ a `Customer_Details` block). The
+ * `Policy_Details.Vehicle_IDV` / bare-root fallbacks are what the UAT-exercised
+ * standalone module read, kept so either observed shape works.
+ */
+export interface HdfcRenewalSnapshot {
+  idv: number;
+  /** HDFC vocabulary ("OD Plus TP" / "OD Only" / "TP Only"). */
+  policyType: string;
+  tenure: number;
+  registrationNo?: string;
+  modelCode?: string;
+  rtoCode?: string;
+  registrationDate?: string;
+  policyStartDate?: string;
+  previousPolicyType?: string;
+  previousPolicyEndDate?: string;
+  previousPolicyTpStartDate?: string;
+  previousPolicyTpEndDate?: string;
+  customer: HdfcCustomer;
+}
+
+/** Renewal step 02 response → the snapshot the remaining renewal steps build on. */
+export function normalizeRenewalExtract(body: unknown): HdfcRenewalSnapshot {
+  const b = obj(body);
+  const re = obj(b.Resp_RE);
+  const pd = obj(b.Policy_Details);
+  const c = obj(b.Customer_Details);
+
+  return {
+    idv: num(re.IDV ?? pd.Vehicle_IDV ?? b.Vehicle_IDV),
+    // A renewal defaults to the package cover, never to OD-only: guessing
+    // "OD Only" for a comprehensive policy would silently drop TP cover.
+    policyType: str(re.Policy_Type) ?? HDFC_POLICY_TYPE.comprehensive,
+    tenure: num(re.Policy_Term) || 1,
+    registrationNo: str(re.Registration_No),
+    modelCode: str(re.VehicleModelCode),
+    rtoCode: str(re.RTOLocationCode),
+    registrationDate: str(re.DateofDeliveryOrRegistration),
+    policyStartDate: str(re.Policy_Effective_From_Date),
+    previousPolicyType: str(re.PreviousPolicy_PolicyType),
+    previousPolicyEndDate: str(re.PreviousPolicy_PolicyEndDate),
+    previousPolicyTpStartDate: str(re.PreviousPolicy_TPStartDate),
+    previousPolicyTpEndDate: str(re.PreviousPolicy_TPEndDate),
+    customer: {
+      firstName: str(c.Customer_FirstName),
+      middleName: str(c.Customer_MiddleName),
+      lastName: str(c.Customer_LastName),
+      dob: str(c.CustomerDOB),
+      email: str(c.CustomerEmail),
+      mobile: str(c.CustomerMobile),
+      panNo: str(c.Customer_PANNum),
+      salutation: str(c.Customer_Salutation),
+      gender: str(c.CustomerGender),
+      permAddress1: str(c.PermanentAddress1),
+      permAddress2: str(c.PermanentAddress2),
+      permCityDistrict: str(c.PermanentCityDistrict),
+      permState: str(c.PermanentState),
+      permPinCode: str(c.PermanentPinCode),
+      pehchaanId: str(c.Customer_PehchaanID),
+    },
+  };
+}
+
+/** HDFC's POLICY_TYPE vocabulary → the canonical policy type. */
+export function canonicalPolicyType(hdfcPolicyType: string): string {
+  const hit = Object.entries(HDFC_POLICY_TYPE).find(([, v]) => v === hdfcPolicyType);
+  return hit ? hit[0] : "comprehensive";
 }
 
 export interface HdfcQuoteCtx {

@@ -2,7 +2,17 @@ import type { VehicleCategory, ProviderOperation, MotorCapabilities } from "@/co
 import type { MotorQuoteRequest, MotorFullQuoteRequest } from "@/contracts/quote-request.ts";
 import type { CanonicalQuoteResult } from "@/contracts/quote-result.ts";
 import type { CkycRequest, KycResult, OvdRequest, OvdFile, OvdResult } from "@/contracts/kyc.ts";
-import type { CertificateResult, PolicyIssuanceRequest, PolicyIssuanceResult } from "@/contracts/policy.ts";
+import type {
+  CertificateResult,
+  PaymentReceipt,
+  PolicyIssuanceRequest,
+  PolicyIssuanceResult,
+} from "@/contracts/policy.ts";
+import type {
+  RenewalQuoteRequest,
+  RenewalProposalRequest,
+  RenewalCreatePolicyRequest,
+} from "@/contracts/renewal.ts";
 import { AppError, ProviderError } from "@/errors/app-error.ts";
 import type {
   InsuranceProvider,
@@ -10,6 +20,7 @@ import type {
   KycCapableProvider,
   IssuanceProvider,
   CertificateProvider,
+  RenewalProvider,
 } from "@/providers/insurance-provider.ts";
 import { tokenManager } from "@/providers/token-manager.ts";
 
@@ -37,12 +48,23 @@ import {
   buildGetPolicyDocument,
 } from "./mapper/index.ts";
 import {
+  buildRenewalExtract,
+  buildRenewalGetCalculateIDV,
+  buildRenewalCalculatePremium,
+  buildRenewalCreateProposal,
+  type HdfcRenewalInput,
+} from "./mapper/renewal.ts";
+import {
   normalizeIdv,
   normalizeQuote,
   normalizeProposal,
   normalizeCertificate,
   normalizePayment,
+  normalizeRenewalExtract,
+  canonicalPolicyType,
   selectIdvForPremium,
+  type HdfcIdvBand,
+  type HdfcRenewalSnapshot,
 } from "./normalizer.ts";
 import { dbCodeResolver, type HdfcCodeResolver } from "./db-code-resolver.ts";
 import type { HdfcRequestShape } from "./types.ts";
@@ -56,7 +78,12 @@ export interface HdfcProviderDeps {
 }
 
 export class HdfcProvider
-  implements InsuranceProvider, KycCapableProvider, IssuanceProvider, CertificateProvider
+  implements
+    InsuranceProvider,
+    KycCapableProvider,
+    IssuanceProvider,
+    CertificateProvider,
+    RenewalProvider
 {
   readonly slug = HDFC_SLUG;
   readonly displayName = HDFC_DISPLAY_NAME;
@@ -231,25 +258,26 @@ export class HdfcProvider
   }
 
   /**
-   * HDFC has no hosted payment gateway: submitpaymentdetails RECORDS a payment
-   * already collected. The canonical PaymentReceipt therefore maps directly onto
-   * its Payment_Details block.
+   * submitPaymentDetails → getPolicyDocument, shared by new-business issuance and
+   * renewal issuance. HDFC's step 06/07 pair is identical for both: only the way
+   * the proposal number was obtained differs, so keeping one implementation stops
+   * the two paths drifting apart.
    */
-  async issuePolicy(
-    req: PolicyIssuanceRequest,
-    _ctx: ProviderContext,
-  ): Promise<PolicyIssuanceResult> {
+  private async recordPaymentAndIssue(args: {
+    transactionId: string;
+    proposalNumber: string;
+    receipt: PaymentReceipt;
+    clientId?: string;
+  }): Promise<PolicyIssuanceResult> {
     const token = await this.tokenProvider();
-    // quoteNo carries HDFC's Proposal_Number; transactionId is the cross-step id.
-    const transactionId = req.transactionId ?? req.clientId;
     const shape = {
-      transactionId,
-      proposalNumber: req.quoteNo,
+      transactionId: args.transactionId,
+      proposalNumber: args.proposalNumber,
       payment: {
-        amount: req.receipt.amount,
-        instrumentNumber: req.receipt.tranRefNo,
-        paymentDate: req.receipt.tranRefNoDate,
-        bankName: req.receipt.pgType,
+        amount: args.receipt.amount,
+        instrumentNumber: args.receipt.tranRefNo,
+        paymentDate: args.receipt.tranRefNoDate,
+        bankName: args.receipt.pgType,
       },
     } as HdfcRequestShape;
 
@@ -266,8 +294,8 @@ export class HdfcProvider
         providerSlug: HDFC_SLUG,
         insurerName: HDFC_DISPLAY_NAME,
         status: "IN_PROGRESS",
-        quoteNo: req.quoteNo,
-        clientId: req.clientId,
+        quoteNo: args.proposalNumber,
+        clientId: args.clientId,
         message: "HDFC accepted the payment but has not issued a policy number yet",
         _rawResponse: paymentBody,
       };
@@ -287,12 +315,201 @@ export class HdfcProvider
       insurerName: HDFC_DISPLAY_NAME,
       status: "ISSUED",
       policyNumber,
-      applicationNo: req.quoteNo,
-      receiptNo: req.receipt.tranRefNo,
-      clientId: req.clientId,
-      quoteNo: req.quoteNo,
+      applicationNo: args.proposalNumber,
+      receiptNo: args.receipt.tranRefNo,
+      clientId: args.clientId,
+      quoteNo: args.proposalNumber,
       _rawResponse: { payment: paymentBody, policyDocument: policyDoc },
     };
+  }
+
+  /**
+   * HDFC has no hosted payment gateway: submitpaymentdetails RECORDS a payment
+   * already collected. The canonical PaymentReceipt therefore maps directly onto
+   * its Payment_Details block.
+   */
+  async issuePolicy(
+    req: PolicyIssuanceRequest,
+    _ctx: ProviderContext,
+  ): Promise<PolicyIssuanceResult> {
+    // quoteNo carries HDFC's Proposal_Number; transactionId is the cross-step id.
+    return this.recordPaymentAndIssue({
+      transactionId: req.transactionId ?? req.clientId,
+      proposalNumber: req.quoteNo,
+      receipt: req.receipt,
+      clientId: req.clientId,
+    });
+  }
+
+  // ── Renewal (HDFC Postman "Renewal" folder, steps 02–08) ───────────────────
+  //
+  // Renewal is keyed by policy number alone. Step 02 (getpolicydataforrenewal)
+  // returns the expiring-policy snapshot, and it is the ONLY source for the IDV,
+  // the cover block and Customer_Details that steps 03–05 need — the canonical
+  // renewal contract carries none of them. Both renewalQuote and renewalProposal
+  // therefore begin by re-reading it; the call is read-only and idempotent.
+  //
+  // HDFC calls `requireFields` nowhere: everything it needs (previousPolicyNo /
+  // policyNo, proposalNo, receipt) is still mandatory in the relaxed schemas.
+  // The fields that became optional are FG's alone.
+
+  /** Renewal step 02 → the expiring-policy snapshot. */
+  private async renewalSnapshot(
+    token: string,
+    transactionId: string,
+    policyNo: string,
+  ): Promise<HdfcRenewalSnapshot> {
+    const body = await this.call(
+      "renewalExtract",
+      token,
+      buildRenewalExtract(transactionId, policyNo),
+      "renewalExtract",
+      true,
+    );
+    return normalizeRenewalExtract(body);
+  }
+
+  /**
+   * Renewal step 03. HDFC's GetCalculateIDV is keyed by model + RTO code, which
+   * only the snapshot can supply; when it carries neither, the call is skipped
+   * and the expiring policy's own IDV stands, rather than sending blank codes and
+   * earning an opaque vendor rejection.
+   */
+  private async renewalIdv(
+    token: string,
+    transactionId: string,
+    snap: HdfcRenewalSnapshot,
+  ): Promise<{ idv: number; band?: HdfcIdvBand }> {
+    if (!snap.modelCode || !snap.rtoCode) return { idv: snap.idv };
+    const body = await this.call(
+      "getCalculateIDV",
+      token,
+      buildRenewalGetCalculateIDV(transactionId, snap),
+      "getCalculateIDV",
+      true,
+    );
+    const band = normalizeIdv(body);
+    // Same rule as new business: HDFC rejects deviation from its recommendation.
+    return { idv: selectIdvForPremium(band, snap.idv) ?? snap.idv, band };
+  }
+
+  async renewalQuote(
+    req: RenewalQuoteRequest,
+    ctx: ProviderContext,
+  ): Promise<CanonicalQuoteResult> {
+    const token = await this.tokenProvider();
+    const transactionId = hdfcTransactionId("REN");
+    const snap = await this.renewalSnapshot(token, transactionId, req.policyNo);
+    const { idv, band } = await this.renewalIdv(token, transactionId, snap);
+
+    const premiumBody = await this.call(
+      "calculatePremium",
+      token,
+      buildRenewalCalculatePremium({
+        transactionId,
+        previousPolicyNo: req.policyNo,
+        registrationNo: req.registrationNo ?? snap.registrationNo,
+        idv,
+        policyType: snap.policyType,
+        tenure: snap.tenure,
+      }),
+      "calculatePremium",
+      true,
+    );
+
+    const quote = normalizeQuote(premiumBody, {
+      requestId: ctx.requestId,
+      quoteNo: transactionId,
+      policyType: canonicalPolicyType(snap.policyType),
+      // PRODUCT_CODE 2311 is Private Car; HDFC ships no other renewal product.
+      vehicleCategory: "fourWheeler",
+    });
+
+    return {
+      ...quote,
+      minIdv: band?.min ?? undefined,
+      maxIdv: band?.max ?? undefined,
+      contractDetails: {
+        previousPolicyNo: req.policyNo,
+        transactionId,
+        registrationNo: snap.registrationNo,
+      },
+    };
+  }
+
+  async renewalProposal(
+    req: RenewalProposalRequest,
+    ctx: ProviderContext,
+  ): Promise<CanonicalQuoteResult> {
+    const token = await this.tokenProvider();
+    // Reuse the quote's TransactionID when the caller threads it through: HDFC
+    // correlates every renewal step by it.
+    const transactionId = req.transactionId ?? hdfcTransactionId("REN");
+    const snap = await this.renewalSnapshot(token, transactionId, req.previousPolicyNo);
+
+    const input: HdfcRenewalInput = {
+      transactionId,
+      previousPolicyNo: req.previousPolicyNo,
+      registrationNo: req.registrationNo ?? snap.registrationNo,
+      // The caller's IDV wins when supplied; otherwise the expiring policy's.
+      idv: req.vehicleIdv || snap.idv,
+      policyType: snap.policyType,
+      tenure: snap.tenure,
+      customer: snap.customer,
+    };
+
+    const premiumBody = await this.call(
+      "calculatePremium",
+      token,
+      buildRenewalCalculatePremium(input),
+      "calculatePremium",
+      true,
+    );
+    const quote = normalizeQuote(premiumBody, {
+      requestId: ctx.requestId,
+      quoteNo: transactionId,
+      policyType: canonicalPolicyType(snap.policyType),
+      vehicleCategory: "fourWheeler",
+    });
+
+    const proposalBody = await this.call(
+      "createProposal",
+      token,
+      buildRenewalCreateProposal(input),
+      "createProposal",
+    );
+    const { proposalNumber } = normalizeProposal(proposalBody);
+    if (!proposalNumber) {
+      throw new ProviderError(
+        HDFC_SLUG,
+        502,
+        "HDFC renewal createProposal returned no proposal number",
+        proposalBody,
+      );
+    }
+
+    return {
+      ...quote,
+      contractDetails: {
+        proposalNumber,
+        transactionId,
+        previousPolicyNo: req.previousPolicyNo,
+      },
+      _rawResponse: { premium: quote._rawResponse, proposal: proposalBody },
+    };
+  }
+
+  async renewalCreatePolicy(
+    req: RenewalCreatePolicyRequest,
+    _ctx: ProviderContext,
+  ): Promise<PolicyIssuanceResult> {
+    // proposalNo carries HDFC's own Proposal_Number (not FG's "00"+policy form).
+    return this.recordPaymentAndIssue({
+      transactionId: req.transactionId ?? req.proposalNo,
+      proposalNumber: req.proposalNo,
+      receipt: req.receipt,
+      clientId: req.clientId,
+    });
   }
 
   async getCertificate(transactionId: string, _ctx: ProviderContext): Promise<CertificateResult> {

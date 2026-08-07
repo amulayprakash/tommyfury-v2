@@ -1376,18 +1376,18 @@ export interface paths {
             requestBody?: {
                 content: {
                     "application/json": {
-                        productCode: string;
+                        productCode?: string;
                         previousPolicyNo: string;
                         proposalNo: string;
-                        clientCode: string;
+                        clientCode?: string;
                         startDate: string;
                         expiryDate: string;
                         ckycNo?: string;
                         ckycRefNo?: string;
-                        agentCode: string;
-                        branch: string;
+                        agentCode?: string;
+                        branch?: string;
                         /** @enum {string} */
-                        coverCode: "CO" | "OD" | "LO";
+                        coverCode?: "CO" | "OD" | "LO";
                         vehicleIdv: number;
                         discountPercentage: number;
                         /** @default [] */
@@ -1404,6 +1404,8 @@ export interface paths {
                         imt29?: string;
                         inspectionNo?: string;
                         inspectionDate?: string;
+                        transactionId?: string;
+                        registrationNo?: string;
                     };
                 };
             };
@@ -1508,11 +1510,12 @@ export interface paths {
                 content: {
                     "application/json": {
                         policyNo: string;
-                        clientId: string;
+                        clientId?: string;
                         proposalNo: string;
-                        agentCode: string;
-                        branchCode: string;
+                        agentCode?: string;
+                        branchCode?: string;
                         registrationNo?: string;
+                        transactionId?: string;
                         receipt: {
                             uniqueTranKey: string;
                             transactionDate: string;
@@ -2987,18 +2990,18 @@ export interface components {
             registrationNo?: string;
         };
         RenewalProposalRequest: {
-            productCode: string;
+            productCode?: string;
             previousPolicyNo: string;
             proposalNo: string;
-            clientCode: string;
+            clientCode?: string;
             startDate: string;
             expiryDate: string;
             ckycNo?: string;
             ckycRefNo?: string;
-            agentCode: string;
-            branch: string;
+            agentCode?: string;
+            branch?: string;
             /** @enum {string} */
-            coverCode: "CO" | "OD" | "LO";
+            coverCode?: "CO" | "OD" | "LO";
             vehicleIdv: number;
             discountPercentage: number;
             /** @default [] */
@@ -3015,14 +3018,17 @@ export interface components {
             imt29?: string;
             inspectionNo?: string;
             inspectionDate?: string;
+            transactionId?: string;
+            registrationNo?: string;
         };
         RenewalCreatePolicyRequest: {
             policyNo: string;
-            clientId: string;
+            clientId?: string;
             proposalNo: string;
-            agentCode: string;
-            branchCode: string;
+            agentCode?: string;
+            branchCode?: string;
             registrationNo?: string;
+            transactionId?: string;
             receipt: {
                 uniqueTranKey: string;
                 transactionDate: string;

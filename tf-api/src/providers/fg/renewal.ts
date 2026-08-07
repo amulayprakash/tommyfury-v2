@@ -1,4 +1,5 @@
 import { ProviderError } from "@/errors/app-error.ts";
+import { requireFields } from "@/lib/require-fields.ts";
 import type { CanonicalQuoteResult } from "@/contracts/quote-result.ts";
 import type { PolicyIssuanceResult } from "@/contracts/policy.ts";
 import type {
@@ -228,8 +229,15 @@ export async function fgRenewalProposal(
   token: string,
   ctx: { requestId: string },
 ): Promise<CanonicalQuoteResult> {
+  // These are optional in the canonical schema so HDFC can share it; FG needs them.
+  requireFields(req, ["productCode", "clientCode", "agentCode", "branch", "coverCode"], FG_SLUG);
+  // requireFields returns void rather than narrowing, so restate the two values
+  // used in typed positions (not just copied into the JSON payload) as locals.
+  const productCode = req.productCode!;
+  const coverCode = req.coverCode!;
+
   const payload = {
-    ProductCode: req.productCode,
+    ProductCode: productCode,
     PolicyDetails: {
       PreviousPolicyNo: req.previousPolicyNo,
       ProposalNo: req.proposalNo,
@@ -242,7 +250,7 @@ export async function fgRenewalProposal(
     ModifyDetails: {
       AgentCode: req.agentCode,
       Branch: req.branch,
-      CoverCode: req.coverCode,
+      CoverCode: coverCode,
       VehicleIDV: String(req.vehicleIdv),
       DiscountPercentage: String(req.discountPercentage),
       ElectricalAccessoriesValues: req.electricalAccessoriesValues ?? "",
@@ -285,8 +293,8 @@ export async function fgRenewalProposal(
     requestId: ctx.requestId,
     providerSlug: FG_SLUG,
     insurerName: FG_DISPLAY_NAME,
-    policyType: COVER_TO_POLICY[req.coverCode] ?? "comprehensive",
-    vehicleCategory: productToCategory(req.productCode),
+    policyType: COVER_TO_POLICY[coverCode] ?? "comprehensive",
+    vehicleCategory: productToCategory(productCode),
     idvValue: req.vehicleIdv,
     basicOdPremium,
     thirdPartyPremium,
@@ -317,6 +325,8 @@ export async function fgRenewalCreatePolicy(
   req: RenewalCreatePolicyRequest,
   token: string,
 ): Promise<PolicyIssuanceResult> {
+  // Optional in the canonical schema so HDFC can share it; FG needs them.
+  requireFields(req, ["clientId", "agentCode", "branchCode"], FG_SLUG);
   const r = req.receipt;
   const payload = {
     PolicyNo: req.policyNo,
