@@ -1,0 +1,25 @@
+{
+  "StatusCode": "1",
+  "Error": null,
+  "Resp_PvtCar": {
+    "IDV": 949411,
+    "Total_OD_Premium": 18450,
+    "Total_TP_Premium": 7890,
+    "Net_Premium": 36568,
+    "Service_Tax": 6582,
+    "Total_Premium": 43150,
+    "ZeroDept_Premium": 4200,
+    "TyreSecure_Premium": 1800,
+    "NCBProtection_Premium": 950,
+    "RTI_Premium": 1600,
+    "COC_Premium": 700,
+    "EngGearBox_Premium": 0,
+    "EA_Premium": 350,
+    "LossOfPersonalBelongings_Premium": 0,
+    "CPA_Premium": 375,
+    "UnnamedPerson_Premium": 0,
+    "LLPaiddriver_Premium": 0,
+    "NCB_Discount": 3200,
+    "NCB_Percentage": 20
+  }
+}

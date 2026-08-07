@@ -1,0 +1,10 @@
+{
+  "StatusCode": "1",
+  "Error": null,
+  "CalculatedIDV": {
+    "IDV_AMOUNT": 949411,
+    "MIN_IDV_AMOUNT": 854470,
+    "MAX_IDV_AMOUNT": 1044352,
+    "EX_SHOWROOM_PRICE": 1150000
+  }
+}
