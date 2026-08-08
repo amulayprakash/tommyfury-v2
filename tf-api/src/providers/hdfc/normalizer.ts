@@ -169,6 +169,35 @@ export function normalizeQuote(body: unknown, ctx: HdfcQuoteCtx): CanonicalQuote
     ownDamageDiscount: opt(r.Other_Discount),
   };
 
+  /**
+   * Break-in: the cover lapsed before this policy starts, so HDFC will not put
+   * it on risk until the vehicle has been inspected. Without this the customer
+   * saw a broken-in HDFC quote on the compare card indistinguishable from a
+   * clean one, and only discovered the inspection after choosing it.
+   *
+   * Both field names come from a real UAT CalculatePremium response, and the
+   * signal is `BreakIN_Premium`, NOT `BreakInLoadingPercent`. HDFC returns the
+   * loading PERCENTAGE on a liability break-in as well — live, a TP-only policy
+   * whose cover lapsed 120 days earlier comes back with
+   * `BreakInLoadingPercent: 15` and `BreakIN_Premium: 0` — while its own pack
+   * says that case needs no inspection ("Verify if Break-in in laibility
+   * product" → "Inspection not required"). The percentage is the rate that
+   * WOULD apply; the premium is what HDFC actually charged, and it is charged
+   * only where a break-in genuinely bites. Live values behind that reading:
+   *
+   *   lapsed  1 day  (< 24 h)   0% / ₹0      — no loading
+   *   lapsed  3 days             15% / ₹220
+   *   lapsed 60 days             15% / ₹220
+   *   lapsed 120 days            15% / ₹1,000
+   *   lapsed 120 days, TP only   15% / ₹0     — no inspection
+   *   never insured, 100-day-old new vehicle  0% / ₹0 — no lapse to break in from
+   *
+   * KNOWN GAP: HDFC's "Break In" sheet says a lapse under 24 hours is also sent
+   * for inspection, and that case carries no loading — CalculatePremium exposes
+   * nothing that separates it from a clean quote, so it is not flagged here.
+   */
+  const isInspectionRequired = num(r.BreakIN_Premium) > 0;
+
   const totalAddonPremium = Object.values(addonPremiums).reduce<number>((s, v) => s + (v ?? 0), 0);
   const totalDiscount =
     num(r.NCBBonusDisc_Premium ?? r.NCB_Discount) +
@@ -190,6 +219,7 @@ export function normalizeQuote(body: unknown, ctx: HdfcQuoteCtx): CanonicalQuote
     idvValue: num(r.IDV ?? r.Vehicle_IDV),
     minIdv: opt(r.MinimumIDV),
     maxIdv: opt(r.MaximumIDV),
+    isInspectionRequired,
     basicOdPremium: num(r.Basic_OD_Premium ?? r.Total_OD_Premium ?? r.OD_Premium),
     thirdPartyPremium: num(r.Basic_TP_Premium ?? r.Total_TP_Premium ?? r.TP_Premium),
     addonPremiums,

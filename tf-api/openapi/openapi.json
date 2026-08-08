@@ -347,6 +347,11 @@
             "nullable": true,
             "minimum": 0
           },
+          "lossOfBelongingsSI": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
           "numberOfDrivers": {
             "type": "integer",
             "nullable": true,
@@ -710,6 +715,11 @@
             "minimum": 0
           },
           "keyProtectSI": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "lossOfBelongingsSI": {
             "type": "number",
             "nullable": true,
             "minimum": 0
@@ -1300,6 +1310,11 @@
             "minimum": 0
           },
           "keyProtectSI": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "lossOfBelongingsSI": {
             "type": "number",
             "nullable": true,
             "minimum": 0
@@ -5204,6 +5219,11 @@
                     "nullable": true,
                     "minimum": 0
                   },
+                  "lossOfBelongingsSI": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
                   "numberOfDrivers": {
                     "type": "integer",
                     "nullable": true,
@@ -5886,6 +5906,11 @@
                     "minimum": 0
                   },
                   "keyProtectSI": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "lossOfBelongingsSI": {
                     "type": "number",
                     "nullable": true,
                     "minimum": 0
@@ -6791,6 +6816,11 @@
                     "minimum": 0
                   },
                   "keyProtectSI": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "lossOfBelongingsSI": {
                     "type": "number",
                     "nullable": true,
                     "minimum": 0

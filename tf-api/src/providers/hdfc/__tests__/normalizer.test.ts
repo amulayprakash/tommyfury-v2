@@ -125,6 +125,65 @@ describe("normalizeQuote", () => {
   });
 });
 
+describe("break-in detection", () => {
+  const ctx = {
+    requestId: "req-1",
+    quoteNo: "TXN-1",
+    policyType: "comprehensive",
+    vehicleCategory: "fourWheeler" as const,
+  };
+  /** Only the two break-in fields vary; everything else is the captured response. */
+  const withBreakIn = (percent: number, premium: number) => ({
+    Resp_PvtCar: {
+      ...premiumFixture.Resp_PvtCar,
+      BreakInLoadingPercent: percent,
+      BreakIN_Premium: premium,
+    },
+  });
+
+  // PVTcarTestScenarios.xls "New and Rollover" rows 3, 9 and 12 all reached the
+  // customer as ordinary quotes: normalizeQuote read neither break-in field, so
+  // isInspectionRequired stayed undefined and the compare card showed nothing.
+  it("flags a quote HDFC charged break-in loading on", () => {
+    // Live: previous policy lapsed 45 days ago → 15% / ₹220 (rows 9 and 12).
+    expect(normalizeQuote(withBreakIn(15, 220), ctx).isInspectionRequired).toBe(true);
+  });
+
+  it("does not flag a clean quote", () => {
+    expect(normalizeQuote(withBreakIn(0, 0), ctx).isInspectionRequired).toBe(false);
+    expect(normalizeQuote(premiumFixture, ctx).isInspectionRequired).toBe(false);
+  });
+
+  it("reads the charged premium, not the loading percentage", () => {
+    // The distinction is load-bearing, not cosmetic. On a LIABILITY break-in
+    // HDFC returns BreakInLoadingPercent 15 with BreakIN_Premium 0, while its
+    // own Break In sheet row 5 says that case needs no inspection — so keying
+    // off the percentage would send every liability roll-over to an inspection
+    // the insurer never asked for.
+    expect(normalizeQuote(withBreakIn(15, 0), ctx).isInspectionRequired).toBe(false);
+  });
+
+  it("flags on the premium even where HDFC reported no percentage", () => {
+    expect(normalizeQuote(withBreakIn(0, 1000), ctx).isInspectionRequired).toBe(true);
+  });
+
+  it("is always a boolean, never undefined", () => {
+    // undefined is what the defect looked like; the UI treats it as "no
+    // inspection", so an absent field must not be able to mean that again.
+    expect(normalizeQuote({ Resp_PvtCar: {} }, ctx).isInspectionRequired).toBe(false);
+    expect(typeof normalizeQuote({}, ctx).isInspectionRequired).toBe("boolean");
+  });
+
+  it("changes nothing else about the quote", () => {
+    const clean = normalizeQuote(premiumFixture, ctx);
+    const brokenIn = normalizeQuote(withBreakIn(15, 220), ctx);
+    expect({ ...brokenIn, isInspectionRequired: false, _rawResponse: null }).toEqual({
+      ...clean,
+      _rawResponse: null,
+    });
+  });
+});
+
 describe("normalizeProposal", () => {
   it("reads the proposal number", () => {
     expect(normalizeProposal(proposalFixture).proposalNumber).toBe("PR2026080700123");

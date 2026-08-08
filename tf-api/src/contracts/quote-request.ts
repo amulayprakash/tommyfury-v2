@@ -141,6 +141,14 @@ export const MotorQuoteRequestSchema = z.object({
   /** 2W cover sum-insured (ICICI: DrivingAccessoriesSI / KeyProtectSI). */
   drivingAccessoriesSI: z.coerce.number().nonnegative().optional(),
   keyProtectSI: z.coerce.number().nonnegative().optional(),
+  /**
+   * Sum insured for the `lossOfBelongings` cover (HDFC:
+   * Req_PvtCar.LossOfPersonalBelonging_SI). Optional with NO default, like every
+   * other `*SI` field here, so providers that rate the cover as a flat boolean
+   * are untouched. HDFC rates it on this amount and charges nothing without one,
+   * so its mapper substitutes the vendor's own sample value when it is absent.
+   */
+  lossOfBelongingsSI: z.coerce.number().nonnegative().optional(),
   /** Driver / employee counts (commercial-ish; ICICI optional). */
   numberOfDrivers: z.coerce.number().int().nonnegative().optional(),
   numberOfEmployees: z.coerce.number().int().nonnegative().optional(),

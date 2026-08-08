@@ -190,6 +190,7 @@ export interface paths {
                         proposerName?: string;
                         drivingAccessoriesSI?: number | null;
                         keyProtectSI?: number | null;
+                        lossOfBelongingsSI?: number | null;
                         numberOfDrivers?: number | null;
                         numberOfEmployees?: number | null;
                         pincode?: string;
@@ -416,6 +417,7 @@ export interface paths {
                         proposerName?: string;
                         drivingAccessoriesSI?: number | null;
                         keyProtectSI?: number | null;
+                        lossOfBelongingsSI?: number | null;
                         numberOfDrivers?: number | null;
                         numberOfEmployees?: number | null;
                         pincode?: string;
@@ -744,6 +746,7 @@ export interface paths {
                         proposerName?: string;
                         drivingAccessoriesSI?: number | null;
                         keyProtectSI?: number | null;
+                        lossOfBelongingsSI?: number | null;
                         numberOfDrivers?: number | null;
                         numberOfEmployees?: number | null;
                         pincode?: string;
@@ -2437,6 +2440,7 @@ export interface components {
             proposerName?: string;
             drivingAccessoriesSI?: number | null;
             keyProtectSI?: number | null;
+            lossOfBelongingsSI?: number | null;
             numberOfDrivers?: number | null;
             numberOfEmployees?: number | null;
             pincode?: string;
@@ -2542,6 +2546,7 @@ export interface components {
             proposerName?: string;
             drivingAccessoriesSI?: number | null;
             keyProtectSI?: number | null;
+            lossOfBelongingsSI?: number | null;
             numberOfDrivers?: number | null;
             numberOfEmployees?: number | null;
             pincode?: string;
@@ -2711,6 +2716,7 @@ export interface components {
             proposerName?: string;
             drivingAccessoriesSI?: number | null;
             keyProtectSI?: number | null;
+            lossOfBelongingsSI?: number | null;
             numberOfDrivers?: number | null;
             numberOfEmployees?: number | null;
             pincode?: string;

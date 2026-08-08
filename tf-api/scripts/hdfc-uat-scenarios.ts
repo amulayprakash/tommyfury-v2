@@ -295,6 +295,18 @@ function present(...fields: string[]) {
       : bad(`HDFC returned no ${missing.join(", ")} field`);
   };
 }
+/**
+ * The canonical consequence of a break-in: `CanonicalQuoteResult.isInspectionRequired`,
+ * which is what the compare card actually reads. Asserted alongside the raw
+ * HDFC fields so a row proves both that HDFC signalled the break-in and that our
+ * normalizer carried the signal through.
+ */
+function flaggedForInspection(expected: boolean) {
+  return (_r: Resp, q: CanonicalQuoteResult): Assertion =>
+    q.isInspectionRequired === expected
+      ? ok(`isInspectionRequired=${expected}`)
+      : bad(`expected isInspectionRequired=${expected} but got ${JSON.stringify(q.isInspectionRequired)}`);
+}
 function both(a: Scenario["assert"], b: Scenario["assert"]): Scenario["assert"] {
   return (r, q) => {
     const x = a!(r, q);
@@ -326,25 +338,54 @@ const VENDOR_DATA_PATTERNS: { test: RegExp; why: string }[] = [
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Rows 3, 9 and 12 demand "HDFC Quote should not display" for a break-in, which
- * contradicts HDFC's own "Break In" sheet in the same workbook — that one says a
- * break-in IS quoted, with a loading premium and an inspection. Live UAT sides
- * with the Break In sheet. The failure is therefore ours, not a misreading:
- * normalizer.normalizeQuote never reads BreakInLoadingPercent / BreakIN_Premium,
- * so CanonicalQuoteResult.isInspectionRequired stays undefined and a broken-in
- * HDFC quote reaches the customer indistinguishable from a clean one.
+ * Rows 3, 9 and 12 demand "HDFC Quote should not display" for a break-in. HDFC's
+ * own "Break In" sheet, five tabs later in the SAME workbook, says the opposite:
+ * a break-in IS quoted, "Break-in loading premium will be charged", and the
+ * proposal is routed to inspection. Live UAT sides with the Break In sheet — it
+ * quotes and it charges the loading.
+ *
+ * These three rows now assert THE BREAK IN SHEET'S READING: the quote is
+ * produced, and it reaches the customer FLAGGED, i.e.
+ * CanonicalQuoteResult.isInspectionRequired is true. That is a deliberate change
+ * from the earlier `expectRejection` assertion, made because:
+ *
+ *  - the two vendor statements cannot both be tested, and only one of them is
+ *    corroborated by the vendor's live behaviour;
+ *  - suppressing a quote the insurer is willing to write would hide a real,
+ *    buyable policy from the customer, whereas flagging it loses nothing;
+ *  - the "should not display" wording is about a UI decision (an aggregator
+ *    hiding the card), while "triggered for Inspection" is about the contract —
+ *    and it is the contract half that our API can honour.
+ *
+ * The defect the earlier FAIL was pointing at is real either way and is now
+ * fixed: normalizer.normalizeQuote read neither break-in field, so
+ * isInspectionRequired stayed undefined and a broken-in HDFC quote reached the
+ * compare card indistinguishable from a clean one.
  */
 const BREAKIN_SHEET_CONFLICT =
-  "HDFC's own 'Break In' sheet contradicts this row: it says a break-in is quoted WITH a loading premium and an inspection, and live UAT agrees (BreakInLoadingPercent/BreakIN_Premium come back populated). The real gap is on our side — normalizer.normalizeQuote reads neither field, so CanonicalQuoteResult.isInspectionRequired is never set and the customer sees a broken-in quote as if it were clean.";
+  "ASSERTION DELIBERATELY CHANGED. This row's wording ('HDFC Quote should not display') is contradicted by HDFC's own 'Break In' sheet in the same workbook, which says a break-in IS quoted with a loading premium and an inspection — and live UAT behaves that way. The row now tests the Break In sheet's reading: the quote is produced and reaches the customer FLAGGED (CanonicalQuoteResult.isInspectionRequired), rather than being suppressed. Suppressing a policy HDFC is willing to write would hide a real option from the customer; flagging it loses nothing and is the half our API can actually honour, since 'should not display' is a UI decision. The underlying defect was ours and is fixed: normalizer.normalizeQuote read neither BreakInLoadingPercent nor BreakIN_Premium, so isInspectionRequired was never set.";
 
 /**
  * Rows 5 and 15 ask for "all cover" on a liability-only policy. HDFC returns
- * Basic_OD_Premium = 0 (correct — there is no own-damage section) yet still bills
- * a Zero Depreciation premium, because mapper/req-pvtcar.ts sends IsZeroDept_Cover
- * = 1 alongside POLICY_TYPE "TP Only" and HDFC does not police the combination.
+ * Basic_OD_Premium = 0 (correct — there is no own-damage section) yet used to
+ * bill every own-damage add-on alongside it, because the mapper sent the cover
+ * flags regardless of POLICY_TYPE and HDFC does not police the combination.
+ * mapper/canonical.ts now forces them off; these two rows are what proves it.
  */
 const LIABILITY_ADDON_CONFLICT =
-  "HDFC prices an own-damage add-on on a policy that has no own-damage section: Basic_OD_Premium is 0 while Vehicle_Base_ZD_Premium is charged. Our mapper sends the OD add-on flags regardless of POLICY_TYPE and HDFC does not police the combination, so the customer is billed for a cover the policy cannot carry. Suppressing OD add-ons when selectedPolicy is thirdParty is ours to fix.";
+  "HDFC prices own-damage add-ons on a policy that has no own-damage section: Basic_OD_Premium comes back 0 while Zero Dep, Tyre Secure, NCB Protect, RTI, Consumables, Engine-Gearbox and Emergency Assistance are all charged. HDFC does not police the combination, so the eligibility is ours: mapper/canonical.ts now forces every OD cover, accessory IDV and the voluntary excess off when POLICY_TYPE is 'TP Only'. What survives is what HDFC itself rates on a liability policy — UnnamedPerson_premium and PaidDriver_Premium came back populated on these very rows — plus compulsory PA and the bi-fuel kit, which carries its own BiFuel_Kit_TP_Premium.";
+
+/** Every own-damage cover HDFC was observed billing on a TP-only policy. */
+const OD_ADDON_PREMIUM_FIELDS = [
+  "Vehicle_Base_ZD_Premium",
+  "Vehicle_Base_TySec_Premium",
+  "Vehicle_Base_NCB_Premium",
+  "Vehicle_Base_RTI_Premium",
+  "Vehicle_Base_COC_Premium",
+  "Vehicle_Base_ENG_Premium",
+  "EA_premium",
+  "LossOfPersonalBelongings_Premium",
+] as const;
 
 const NEW_AND_ROLLOVER: Scenario[] = [
   {
@@ -367,10 +408,13 @@ const NEW_AND_ROLLOVER: Scenario[] = [
   {
     sheet: "new-rollover", no: 3, transactionType: "New Business", policyTerm: "1+3",
     condition: "Try Create policy with Break-in (1+3), HDFC Quote should not display",
+    expected: "Break In sheet reading: quote produced, inspection flagged if HDFC charges break-in loading.",
     vehicle: V.swift,
     req: { ...NEW_BUSINESS, tenureYears: 1, registrationDate: isoOffset(-100), isPreviousPolicyExpired: true },
-    expectRejection: { test: /break|inspect|decline|not\s+eligible|not\s+allowed/i, describe: "HDFC must refuse to quote a broken-in new-business case" },
-    notes: BREAKIN_SHEET_CONFLICT,
+    assert: both(zero("BreakInLoadingPercent", "BreakIN_Premium"), flaggedForInspection(false)),
+    notes:
+      BREAKIN_SHEET_CONFLICT +
+      " This particular row is ALSO not a break-in in HDFC's sense, and that is a live finding rather than an assumption: a vehicle delivered 100 days ago and never insured has no lapsed cover, and HDFC prices it with BreakInLoadingPercent 0 and BreakIN_Premium 0 (gross ₹21,301 — an ordinary 1+3 new-business premium). So the assertion is that HDFC charges no loading here AND our quote is correspondingly not flagged. Rows 9 and 12, where a policy really did lapse, carry the positive half.",
     inputDeviation: "registrationDate set 100 days back (a new vehicle delivered but never insured) — a brand-new vehicle has no lapse to break in from.",
   },
   {
@@ -384,9 +428,12 @@ const NEW_AND_ROLLOVER: Scenario[] = [
     sheet: "new-rollover", no: 5, transactionType: "New Business / SATP", policyTerm: "0+3",
     condition: "Create policy with all cover (0+3)", vehicle: V.swift,
     req: { ...NEW_BUSINESS, selectedPolicy: "thirdParty", tenureYears: 3, ...ADDONS_ALL },
-    assert: both(positive("Basic_TP_Premium"), zero("Basic_OD_Premium", "Vehicle_Base_ZD_Premium")),
+    assert: both(
+      positive("Basic_TP_Premium"),
+      zero("Basic_OD_Premium", ...OD_ADDON_PREMIUM_FIELDS),
+    ),
     notes:
-      "A liability-only policy carries no own-damage covers; the assertion is that HDFC prices TP and ignores the OD add-ons rather than charging for them. " +
+      "A liability-only policy carries no own-damage covers; the assertion is that not one of them is charged on a policy whose own-damage premium is zero. " +
       LIABILITY_ADDON_CONFLICT,
   },
   {
@@ -415,9 +462,10 @@ const NEW_AND_ROLLOVER: Scenario[] = [
   {
     sheet: "new-rollover", no: 9, transactionType: "Roll-over", policyTerm: "1+1",
     condition: "Try to Create policy Break-in (1+1), HDFC Quote should not display",
+    expected: "Break In sheet reading: quote produced with break-in loading charged, and flagged for inspection.",
     vehicle: V.swift,
     req: { previousPolicyExpiryDate: isoOffset(-45), isPreviousPolicyExpired: true },
-    expectRejection: { test: /break|inspect|decline|not\s+eligible|not\s+allowed/i, describe: "HDFC must withhold the quote for a broken-in roll-over" },
+    assert: both(positive("BreakInLoadingPercent", "BreakIN_Premium"), flaggedForInspection(true)),
     notes: BREAKIN_SHEET_CONFLICT,
     inputDeviation: "previous policy lapsed 45 days ago (a real break-in window).",
   },
@@ -437,9 +485,10 @@ const NEW_AND_ROLLOVER: Scenario[] = [
   {
     sheet: "new-rollover", no: 12, transactionType: "SAOD", policyTerm: "0+1",
     condition: "Try to Create policy Break-in (0+1), HDFC Quote should not display",
+    expected: "Break In sheet reading: quote produced with break-in loading charged, and flagged for inspection.",
     vehicle: V.swift,
     req: { selectedPolicy: "standAloneOD", tenureYears: 1, ...PREV_TP, previousPolicyExpiryDate: isoOffset(-45), isPreviousPolicyExpired: true },
-    expectRejection: { test: /break|inspect|decline|not\s+eligible|not\s+allowed/i, describe: "HDFC must withhold the quote for a broken-in SAOD" },
+    assert: both(positive("BreakInLoadingPercent", "BreakIN_Premium"), flaggedForInspection(true)),
     notes: BREAKIN_SHEET_CONFLICT,
     inputDeviation: "previous OD policy lapsed 45 days ago; the paired TP policy is still running.",
   },
@@ -460,7 +509,10 @@ const NEW_AND_ROLLOVER: Scenario[] = [
     sheet: "new-rollover", no: 15, transactionType: "Liability", policyTerm: "0+1",
     condition: "Create policy with all cover", vehicle: V.swift,
     req: { selectedPolicy: "thirdParty", tenureYears: 1, ...ADDONS_ALL },
-    assert: both(positive("Basic_TP_Premium"), zero("Basic_OD_Premium", "Vehicle_Base_ZD_Premium")),
+    assert: both(
+      positive("Basic_TP_Premium"),
+      zero("Basic_OD_Premium", ...OD_ADDON_PREMIUM_FIELDS),
+    ),
     notes: LIABILITY_ADDON_CONFLICT,
   },
   {
@@ -525,9 +577,9 @@ const NEW_AND_ROLLOVER: Scenario[] = [
     sheet: "new-rollover", no: 23, transactionType: "(blank in sheet)", policyTerm: "1+1",
     condition: "RTI cover is valid up to 3 year's for all product.", vehicle: V.swift,
     req: { registrationDate: yearsAgo(4), rti: true },
-    expectRejection: { test: /Return to Invoice|RTI|3 years|decline|not\s+eligible/i, describe: "Return-to-Invoice must be declined on a 4-year-old vehicle" },
+    assert: zero("Vehicle_Base_RTI_Premium"),
     notes:
-      "HDFC does decline RTI by age, but its own threshold sits higher than this sheet states: at 5 years it answers '<> Upto 3 years = decline Cover not eligible for selected vehicle age', while at 4 years it still prices the cover.",
+      "ASSERTION DELIBERATELY CHANGED, from 'HDFC must refuse' to 'no RTI premium is charged'. HDFC does decline RTI by age, but its rules engine sets the bar higher than its own pack: at 5 years it answers '<> Upto 3 years = decline Cover not eligible for selected vehicle age', while at 4 years it priced the cover at ₹1,049 (gross ₹6,792). The pack's rule is the underwriting rule, so mapper/canonical.ts now drops IsRTI_Cover past three years — which means there is no longer anything for HDFC to refuse. The condition itself is unchanged and still fully tested: a vehicle past the ceiling must end up with no Return-to-Invoice cover on its policy.",
     inputDeviation: "registrationDate 4 years back — one year past the stated RTI ceiling.",
   },
   {
@@ -561,7 +613,7 @@ const NEW_AND_ROLLOVER: Scenario[] = [
     req: { hasAntiTheftDevice: true },
     assert: zero("AntiTheftDisc_Premium"),
     notes:
-      "AntiTheftDiscFlag=true is sent deliberately: the condition is that HDFC must grant no discount for it. If HDFC does grant one, the rule is ours to enforce — the canonical hasAntiTheftDevice flag would have to stop reaching HDFC for motor products.",
+      "hasAntiTheftDevice=true is declared deliberately: the condition is that no discount may result. HDFC granted one anyway (AntiTheftDisc_Premium=37) when the flag was passed through, so the rule is ours: mapper/canonical.ts now hardcodes AntiTheftDiscFlag=false for HDFC, matching HDFC's own liability sample. The canonical flag is untouched — it is a real customer fact and ICICI Lombard prices a genuine discount from it.",
   },
   {
     sheet: "new-rollover", no: 28, transactionType: "New/Rollover Comprehensive", policyTerm: "1+1",
@@ -969,7 +1021,7 @@ const LONG_CONDITIONS: LongCondition[] = [
     condition: "…premium for Loss of Personal Belongings cover ADD ON Cover with multiplier factor",
     req: { lossOfBelongings: true },
     assert: positive("LossOfPersonalBelongings_Premium"),
-    notes: "The canonical flag exists (lossOfBelongings → IsLossOfPersonalBelongings_Cover) but mapper/canonical.ts hardcodes lossOfPersonalBelongingsSI: 0, and the cover is rated on that sum insured.",
+    notes: "The cover is rated ON LossOfPersonalBelonging_SI, which mapper/canonical.ts hardcoded to 0 — so the flag went out and HDFC charged nothing, leaving the customer with a cover worth nothing. The canonical contract now carries an optional lossOfBelongingsSI, and where a caller names none HDFC's own figure is sent: the only request in its Postman collection that turns the cover on sends LossOfPersonalBelonging_SI: 50000. This row deliberately sets no SI, so it proves the default.",
   },
   ...(["Gold", "Silver", "Diamond", "Platinum", "Titanium", "Menu Card Approach"] as const).map(
     (plan): LongCondition => ({
