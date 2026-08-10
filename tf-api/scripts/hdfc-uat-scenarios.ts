@@ -331,6 +331,28 @@ const VENDOR_DATA_PATTERNS: { test: RegExp; why: string }[] = [
   { test: /Rate is not defined in the R\d+ Master/i, why: "missing rate row in HDFC's UAT masters" },
   { test: /Add on system rate is not available/i, why: "add-on has no rate in HDFC's UAT masters" },
   { test: /SA_OD Policy is only allowed for Short Term Policy period/i, why: "HDFC's rules engine refuses a 2-year OD term its own data dictionary documents (2OD-3TP under PRODUCT_CODE 2311)" },
+  {
+    // Raised when Policy_Details.PolicyEndDate lands 366–730 days after
+    // inception — i.e. on a straight two-year standalone OD. Mapped live on
+    // 2026-08-10 by sweeping the end date one day at a time from +6 months to
+    // +3 years (policy starting 10/08/2026, model 12798, RTO 10406):
+    //
+    //     ≤   365 days   priced as a one-year OD, no IDV ladder
+    //     366–730 days   THIS refusal
+    //     731–1095 days  priced multi-year, IdvYear1 + IdvYear2 populated
+    //     ≥  1096 days   "Invalid Short Term Policy period"
+    //
+    // So HDFC UAT has exactly one multi-year standalone-OD band and a two-year
+    // term falls in the hole beneath it. Not our payload: POLICY_TENURE is inert
+    // for this product (identical results at 1, 2 and 3 for every end date
+    // tried), and the refusal tracks the end date alone.
+    test: /Policy Tenure is not Correct for Short-Term/i,
+    why: "HDFC's rules engine has no two-year standalone-OD band: an end date 366–730 days out is refused outright, while 731–1095 days prices as a multi-year OD",
+  },
+  {
+    test: /Invalid Short Term Policy period/i,
+    why: "HDFC caps a standalone OD below a full three years — an end date on or past the third anniversary of inception is refused",
+  },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -872,7 +894,7 @@ type LongTerm = "3+3" | "2+3" | "3+0" | "2+0";
  */
 const LONG_TERM_SETUP: Record<
   LongTerm,
-  { req: Partial<MotorQuoteRequest>; blocked?: string; gate: string }
+  { req: Partial<MotorQuoteRequest>; blocked?: string; gate: string; noTpLeg?: true }
 > = {
   "3+3": {
     req: { ...NEW_BUSINESS, selectedPolicy: "comprehensive", tenureYears: 3 },
@@ -882,17 +904,27 @@ const LONG_TERM_SETUP: Record<
     req: { ...NEW_BUSINESS, selectedPolicy: "comprehensive", tenureYears: 2 },
     gate: "POLICY_TENURE=2 with BusinessType 'New Vehicle'.",
   },
+  // Both standalone-OD terms below were BLOCKED until 2026-08-10, on the finding
+  // that a multi-year OD is driven by Policy_Details.PolicyEndDate rather than
+  // POLICY_TENURE and that our templates emitted no such key. That finding was
+  // correct and the mapper now emits it (mapper/policy-details.ts,
+  // multiYearOdEndDate), so these rows are live again rather than pre-judged.
+  //
+  // What the fix does NOT do is invent a term HDFC will not write. Sweeping the
+  // end date across three years on UAT showed one multi-year standalone-OD band
+  // — 731 to 1095 days after inception — with a refusal on either side of it.
+  // A three-year term (start + 3y − 1d) lands inside it; a two-year term
+  // (start + 2y − 1d) lands in the hole beneath it and is refused. HDFC's own
+  // "SA_OD / 3 years" sample lands inside the same band, 1094 days out.
   "3+0": {
     req: { ...NEW_BUSINESS, selectedPolicy: "standAloneOD", tenureYears: 3 },
-    blocked:
-      "A multi-year standalone OD is driven by Policy_Details.PolicyEndDate, not POLICY_TENURE — HDFC's own 'New Business / SA_OD / 3 years' sample sends PolicyStartDate 03/07/2025 + PolicyEndDate 01/07/2028 with POLICY_TENURE:1. Our New-Business and Roll-Over Policy_Details templates emit no PolicyEndDate key at all, so the request is priced as a one-year OD (proven live: identical premium at tenure 1/2/3, IdvYear2 and IdvYear3 both 0).",
-    gate: "unreachable — see the blocked reason.",
+    gate: "POLICY_TYPE 'OD Only' with PolicyEndDate at start + 3 years − 1 day; POLICY_TENURE is inert on this product.",
+    noTpLeg: true,
   },
   "2+0": {
     req: { ...NEW_BUSINESS, selectedPolicy: "standAloneOD", tenureYears: 2 },
-    blocked:
-      "Same as 3+0: the OD term for a standalone-OD policy comes from Policy_Details.PolicyEndDate, which our templates never send.",
-    gate: "unreachable — see the blocked reason.",
+    gate: "POLICY_TYPE 'OD Only' with PolicyEndDate at start + 2 years − 1 day; POLICY_TENURE is inert on this product.",
+    noTpLeg: true,
   },
 };
 
@@ -905,7 +937,27 @@ interface LongCondition {
   notes?: string;
   vehicle?: Vehicle;
   inputDeviation?: string;
+  /**
+   * Replacement for a condition that assumes a third-party leg, used under the
+   * "+0" (standalone OD) terms. The sheet is a Cartesian product — the same 38
+   * conditions repeated under all four terms — so seven of them ask for a TP or
+   * CPA premium on a policy that by definition has neither. Asserting the
+   * component is ABSENT is the faithful reading of those rows, and it is a real
+   * check: it proves the standalone OD really is own-damage only rather than a
+   * package quote wearing an OD label.
+   */
+  whenNoTpLeg?: { assert: Scenario["assert"]; notes: string };
 }
+
+/**
+ * A standalone OD carries no third-party premium: the TP cover sits on the
+ * separate, still-running TP policy this OD is written alongside.
+ */
+const NO_TP_LEG = {
+  assert: both(zero("Basic_TP_Premium"), positive("Basic_OD_Premium")),
+  notes:
+    "The condition asks for a third-party premium under a standalone-OD term, which cannot have one — the TP cover is on the separate long-term TP policy. Verified as HDFC returning Basic_TP_Premium=0 with a positive own-damage premium.",
+} as const;
 
 const LONG_CONDITIONS: LongCondition[] = [
   { condition: "Verify Private Car policy.", assert: positive("Total_Premium") },
@@ -919,12 +971,12 @@ const LONG_CONDITIONS: LongCondition[] = [
   { condition: "Create policy New Business policy and verify the Total IDV.", assert: positive("IDV") },
   { condition: "Create policy New Business policy and verify the OD Rate", assert: present("Basic_OD_Rate") },
   { condition: "Create policy New Business policy and verify the OD multiplier factor", assert: present("Basic_OD_Rate", "Tariff_Rate_Per") },
-  { condition: "Create policy New Business policy and verify the TP premium for fuel type Petrol", assert: positive("Basic_TP_Premium"), vehicle: V.swift },
-  { condition: "Create policy New Business policy and verify the TP premium for fuel type Desiel", assert: positive("Basic_TP_Premium"), vehicle: V.rapid },
-  { condition: "Create policy New Business policy and verify the TP premium for fuel type Hybrid", assert: positive("Basic_TP_Premium"), vehicle: V.hycrossHybrid },
-  { condition: "Create policy New Business policy and verify the TP premium for fuel type CNG", assert: positive("Basic_TP_Premium"), vehicle: V.niosCng },
-  { condition: "Create policy New Business policy and verify the TP premium for fuel type LPG", assert: positive("Basic_TP_Premium"), vehicle: V.santroLpg },
-  { condition: "Create policy New Business policy and verify the TP premium for fuel type Electric", assert: positive("Basic_TP_Premium"), vehicle: V.nexonEv },
+  { condition: "Create policy New Business policy and verify the TP premium for fuel type Petrol", assert: positive("Basic_TP_Premium"), vehicle: V.swift, whenNoTpLeg: NO_TP_LEG },
+  { condition: "Create policy New Business policy and verify the TP premium for fuel type Desiel", assert: positive("Basic_TP_Premium"), vehicle: V.rapid, whenNoTpLeg: NO_TP_LEG },
+  { condition: "Create policy New Business policy and verify the TP premium for fuel type Hybrid", assert: positive("Basic_TP_Premium"), vehicle: V.hycrossHybrid, whenNoTpLeg: NO_TP_LEG },
+  { condition: "Create policy New Business policy and verify the TP premium for fuel type CNG", assert: positive("Basic_TP_Premium"), vehicle: V.niosCng, whenNoTpLeg: NO_TP_LEG },
+  { condition: "Create policy New Business policy and verify the TP premium for fuel type LPG", assert: positive("Basic_TP_Premium"), vehicle: V.santroLpg, whenNoTpLeg: NO_TP_LEG },
+  { condition: "Create policy New Business policy and verify the TP premium for fuel type Electric", assert: positive("Basic_TP_Premium"), vehicle: V.nexonEv, whenNoTpLeg: NO_TP_LEG },
   {
     condition: "Create policy New Business policy and verify the IDV of CNG",
     req: { bifuelKitType: "CNG", bifuelKitSI: 60_000 },
@@ -950,8 +1002,13 @@ const LONG_CONDITIONS: LongCondition[] = [
     condition: "Create policy New Business policy and verify the CPA premium",
     req: { paOwner: true },
     assert: positive("PAOwnerDriver_Premium"),
+    whenNoTpLeg: {
+      assert: both(zero("PAOwnerDriver_Premium"), positive("Basic_OD_Premium")),
+      notes:
+        "Compulsory PA cover for the owner-driver rides on the liability policy, so a standalone OD cannot carry it. HDFC agrees: the same request that prices CPA on a package policy returns PAOwnerDriver_Premium=0 under an OD-only term.",
+    },
   },
-  { condition: "Create policy New Business policy and verify the Liability covers premium", assert: positive("Basic_TP_Premium") },
+  { condition: "Create policy New Business policy and verify the Liability covers premium", assert: positive("Basic_TP_Premium"), whenNoTpLeg: NO_TP_LEG },
   { condition: "Create policy New Business policy and verify the Other loading calculation", assert: present("OtherLoading_Premium") },
   { condition: "Create policy New Business policy and verify the Other Discount calculation", assert: present("Other_Discount", "OtherDiscount_Premium") },
   {
@@ -1040,6 +1097,9 @@ function longTermScenarios(): Scenario[] {
     for (const [i, c] of LONG_CONDITIONS.entries()) {
       no += 1;
       const blocked = setup.blocked ?? c.blocked;
+      // A "+0" term has no third-party leg, so the seven conditions that ask for
+      // one are re-read rather than failed — see LongCondition.whenNoTpLeg.
+      const swap = setup.noTpLeg ? c.whenNoTpLeg : undefined;
       out.push({
         sheet: "long-term",
         no,
@@ -1048,18 +1108,19 @@ function longTermScenarios(): Scenario[] {
         condition: c.condition,
         vehicle: c.vehicle ?? V.swift,
         req: { ...setup.req, ...c.req },
-        assert: c.assert,
+        assert: swap?.assert ?? c.assert,
         staticVerdict: blocked ? { verdict: "BLOCKED", reason: blocked } : undefined,
         // For a term our templates cannot express, fire only the term probe: one
-        // response is enough to show what HDFC does with the request we CAN build
-        // (a one-year premium with IdvYear2/IdvYear3 = 0), and 37 repeats of it
-        // would be noise on a shared sandbox.
+        // response is enough to show what HDFC does with the nearest request we
+        // CAN build, and 37 repeats of it would be noise on a shared sandbox.
+        // No term is in that state today — both standalone-OD terms became
+        // expressible on 2026-08-10 — but the machinery stays for the next one.
         probeAnyway: Boolean(setup.blocked) && i === 0,
         // Condition 0 ("Verify Private Car policy.") is the plainest request of
         // the term, so a refusal there is about the TERM; later conditions vary
         // the model or the cover and their failures are about those instead.
         termProbe: i === 0,
-        notes: c.notes,
+        notes: swap ? [swap.notes, c.notes].filter(Boolean).join(" ") : c.notes,
         inputDeviation: c.inputDeviation,
       });
     }

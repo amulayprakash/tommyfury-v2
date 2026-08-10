@@ -1,0 +1,12 @@
+{
+  "TransactionID": "PVTCARSAOD00001",
+  "IDV_DETAILS": {
+    "ModelCode": "17532",
+    "RTOCode": "10406",
+    "Vehicle_Registration_Date": "11/07/2023",
+    "Registration_No": "MH-01-AB-1234",
+    "Policy_Start_Date": "12/07/2023",
+    "PreviousPolicy_PreviousPolicyType": "COMPREHENSIVE",
+    "PreviousPolicy_EndDate": "01/05/2023"
+  }
+}

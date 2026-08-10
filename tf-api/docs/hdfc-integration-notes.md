@@ -287,7 +287,13 @@ HDFC wants, so the port sends the same "nothing" value the frozen original did.
 6. Production base URLs for both HEI and Pehchaan.
 7. Whether `Private Car_New.postman_collection` (SA_OD, 1+3 / 2+3 / 3+3
    multi-year) supersedes `Private Car.postman_collection.json`, which this port
-   is based on.
+   is based on. Partly answered 2026-08-10: its SA_OD folders are now the
+   authority for the standalone-OD term (see the last section of this file), but
+   its `Policy_Details` key sets differ wholesale from the older collection's and
+   the older ones are what UAT is proven against, so the port still follows those.
+   Its "1 OD + 3 TP" / "2 OD + 3 TP" / "3 OD + 3 TP" folders carry **byte-identical
+   CalculatePremium bodies** (all `POLICY_TENURE: 1`), so they say nothing about
+   how a multi-year package policy is expressed.
 8. Whether HDFC accepts a Roll Over payload carrying `kmsYouExpectToDrive` —
    restored in §7 but never proven live.
 9. Whether a TP-only quote genuinely needs the 28-key rollover-shaped
@@ -302,13 +308,19 @@ Raised by the certification-pack run (2026-08-07):
     (`PrivateCarDataDictionary.xlsx`, "03 CalculatePremium Request" row 40)
     documents `2OD - 3TP` under PRODUCT_CODE 2311. 1+3 and 3+3 both work. This
     blocks 38 of the 152 "Long Team" conditions.
-11. **How a multi-year standalone OD should be requested.** HDFC's own
-    "New Business / SA_OD / 3 years" sample expresses the term through
-    `Policy_Details.PolicyEndDate` (start 03/07/2025, end 01/07/2028) while
-    leaving `POLICY_TENURE: 1`. Confirmed live: adding `PolicyEndDate` produces a
-    genuine multi-year OD with `IdvYear2` populated, while `POLICY_TENURE` alone
-    is ignored for `OD Only`. Our `Policy_Details` templates emit no
-    `PolicyEndDate` key, so 3+0 and 2+0 are unreachable today.
+11. ~~**How a multi-year standalone OD should be requested.**~~ ANSWERED and
+    implemented 2026-08-10 — the term is carried by
+    `Policy_Details.PolicyEndDate` and `POLICY_TENURE` is inert on this product.
+    3+0 now runs live; see "Multi-year standalone OD" at the end of this file.
+    What remains open from it:
+    - **There is no 2-year standalone-OD band.** An end date 366–730 days out is
+      refused with `Policy Tenure is not Correct for Short-Term`; 731–1095 days
+      prices; 1096+ is refused with `Invalid Short Term Policy period`. Is the
+      two-year gap intentional, or a UAT rate-table hole?
+    - **`IdvYear3` is never populated**, not even by HDFC's own three-year SA_OD
+      sample replayed verbatim. Is the third-year IDV meant to come back?
+    - **The multi-year OD prices below the one-year OD** (₹8,070 vs ₹9,775 gross,
+      same vehicle, same day). Wrong direction for a longer term.
 12. **Is the RTI ceiling 3 years or 5?** The scenario sheet says "RTI cover is
     valid up to 3 year's for all product", but UAT prices RTI on a 4-year-old
     car and only declines it at 5, in the same message as the other add-ons.
@@ -431,3 +443,46 @@ Rules HDFC **silently accepts**, so they are ours to enforce: the RTI ≤3-year
 ceiling (HDFC prices RTI at 4 years); "anti-theft discount not applicable" (HDFC
 grants one); own-damage add-ons on a `TP Only` policy (HDFC bills a zero-dep
 premium against a zero own-damage premium).
+
+### Multi-year standalone OD — the term is a date, not a tenure (2026-08-10)
+
+`Req_PvtCar.POLICY_TENURE` is **inert** on the standalone-OD product. Proven by
+sweeping the payload on live UAT (model 12798, RTO 10406, policy starting
+10/08/2026): with no `Policy_Details.PolicyEndDate`, an `OD Only` quote priced
+identically at `POLICY_TENURE` 1, 2 and 3 — gross ₹9,775, `IdvYear1/2/3` all 0 —
+and adding a `PolicyEndDate` changed the answer identically at all three tenure
+values. HDFC's own SA_OD samples agree: all four send `POLICY_TENURE: 1` and
+differ only in `PolicyEndDate`.
+
+Those samples are **not** in `Private Car.postman_collection.json`, the older of
+the kit's two collections and the one the golden fixtures came from — it has no
+SA_OD folder at all. They are in `Private Car_New.postman_collection` (no `.json`
+suffix), extracted to `fixtures/collection/saod-*.json` by
+`scripts/extract-hdfc-collection.ts`.
+
+The accepted term bands, mapped one day at a time from +6 months to +3 years:
+
+| span from inception | HDFC UAT |
+| --- | --- |
+| ≤ 365 days | one-year OD, no IDV ladder |
+| 366–730 days | refused: *"Policy Tenure is not Correct for Short-Term"* |
+| 731–1095 days | multi-year OD — `IdvYear1` and `IdvYear2` populated, `IdvYear3` 0 |
+| ≥ 1096 days | refused: *"Invalid Short Term Policy period"* |
+
+So HDFC UAT writes exactly ONE multi-year standalone-OD product, and prices the
+whole 731–1095 band at a single premium. Consequences:
+
+- **3+0 works.** `PolicyEndDate` at start + 3 years − 1 day lands at 1094–1095
+  days, inside the band. HDFC's own *"SA_OD / 3 years"* sample lands there too
+  (03/07/2025 → 01/07/2028 = 1094 days) — it deliberately stops short of the
+  third anniversary, because 1096 days is refused.
+- **2+0 does not.** A straight two-year term (start + 2 years − 1 day = 730 days)
+  falls in the hole beneath the band and is refused outright. Nothing in the
+  payload fixes that; it is a vendor gap, classified VENDOR_DATA in the pack.
+- **`IdvYear3` is always 0**, even for HDFC's own three-year sample replayed
+  verbatim (which returns `IdvYear1: 1182591`, `IdvYear2: 995866`, `IdvYear3: 0`).
+  Ours is faithful to theirs.
+
+Open question for HDFC: the multi-year OD prices **below** the one-year OD on
+UAT (₹8,070 vs ₹9,775 gross for the same vehicle), which is the wrong direction
+for a longer term. Recorded in §9.

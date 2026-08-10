@@ -1,5 +1,5 @@
 import { boolTF, normalizeClaim, num, toHdfcDate, yearOnly } from "../format.ts";
-import { HDFC_BUSINESS_TYPE } from "../config.ts";
+import { HDFC_BUSINESS_TYPE, HDFC_POLICY_TYPE } from "../config.ts";
 import type { HdfcRequestShape } from "../types.ts";
 
 /**
@@ -66,6 +66,69 @@ function minusDays(date: Date, days: number): Date {
 }
 
 /**
+ * The end date of a multi-year STANDALONE OD policy, or null when the key must
+ * not be emitted at all.
+ *
+ * VENDOR BEHAVIOUR — on the standalone-OD product HDFC takes the OD term from
+ * Policy_Details.PolicyEndDate and IGNORES Req_PvtCar.POLICY_TENURE. Every
+ * SA_OD sample in the kit's newer collection (Private Car_New.postman_collection,
+ * fixtures saod-*.json) sends POLICY_TENURE: 1 and varies only PolicyEndDate:
+ *
+ *   New Business / SA_OD / 3 years           03/07/2025 → 01/07/2028
+ *   Roll Over / SA_OD / Short Term(<1 year)  19/06/2025 → 18/09/2025
+ *   Roll Over / SA_OD / 1 year               19/06/2025 → 18/06/2026
+ *   Roll Over / SA_OD / Long Term(>1 & <3)   13/08/2025 → 18/08/2027
+ *
+ * Confirmed live on UAT before this rule existed: an "OD Only" quote priced
+ * IDENTICALLY at tenure 1, 2 and 3 (New Business gross ₹9,775; Roll Over
+ * ₹1,300) with IdvYear2 and IdvYear3 both 0 — POLICY_TENURE alone buys nothing.
+ *
+ * WHY IT IS CONDITIONAL, AND ON WHAT.
+ * The key is emitted only for POLICY_TYPE "OD Only" with a tenure of 2 or more.
+ * It is deliberately NOT emitted for a 1-year OD, nor for any OD-Plus-TP or
+ * TP-Only policy, because Policy_Details key sets are asserted field-for-field
+ * against the older collection's premium samples (see policy-details.test.ts)
+ * and neither of those samples carries a PolicyEndDate. HDFC's Blaze engine
+ * rejects payloads carrying keys the sample for that business type does not
+ * send, so the 1-year path — the one every passing row in the certification
+ * pack goes down — keeps its proven key set untouched.
+ *
+ * The newer collection does send PolicyEndDate on a 1-year Roll Over too
+ * (saod-rollover-control-premium.json), so the key is evidently tolerated there
+ * as well; that is not a reason to start sending it on a path that already
+ * works, and it is recorded here only so a later reader knows the option exists.
+ *
+ * The date itself is start + N years − 1 day, the market's standard inclusive
+ * term and exactly what two of the three dated Roll Over samples show
+ * (19/06/2025 → 18/06/2026 for a year, 19/06/2025 → 18/09/2025 for a quarter).
+ *
+ * WHAT HDFC WILL ACTUALLY WRITE. Sweeping the end date a day at a time from +6
+ * months to +3 years on UAT (2026-08-10) found exactly one multi-year band:
+ *
+ *   ≤   365 days   priced as a one-year OD, no IDV ladder
+ *   366–730 days   refused, "Policy Tenure is not Correct for Short-Term"
+ *   731–1095 days  priced multi-year, IdvYear1 + IdvYear2 populated
+ *   ≥  1096 days   refused, "Invalid Short Term Policy period"
+ *
+ * So a 3-year term (1094–1095 days by the formula above) lands inside the band
+ * and prices — which is also where HDFC's own "SA_OD / 3 years" sample lands,
+ * 1094 days out; it stops two days short of the third anniversary precisely
+ * because 1096 is refused. A 2-year term (729–730 days) falls in the hole
+ * beneath the band and HDFC refuses it. That refusal is left to stand: sending
+ * 731 days instead would buy a pass by quoting a term the customer did not ask
+ * for, on a product HDFC prices identically across the whole band.
+ */
+function multiYearOdEndDate(req: HdfcRequestShape): string | null {
+  if (req.policy.policyType !== HDFC_POLICY_TYPE.standAloneOD) return null;
+  const years = num(req.policy.tenure, 1);
+  if (!Number.isInteger(years) || years < 2) return null;
+  const start = toLocalDate(req.policy.startDate);
+  if (!start) return null;
+  const end = new Date(start.getFullYear() + years, start.getMonth(), start.getDate());
+  return toHdfcDate(minusDays(end, 1));
+}
+
+/**
  * HDFC's Blaze schema needs a valid, non-empty previous policy type: an empty
  * value breaks it with "prevPolicyStartDate expected prevPolicyType", and the
  * frontend's all-caps "COMPREHENSIVE" is not a value it recognises.
@@ -88,8 +151,13 @@ function normalizePrevType(type?: string | null): string | null {
 /** New Business — order per Comprehensive/New Business/03 CalculatePremium. */
 export function policyDetailsNew(req: HdfcRequestShape): PolicyDetails {
   const v = req.vehicle;
+  const odEndDate = multiYearOdEndDate(req);
   return {
     PolicyStartDate: toHdfcDate(req.policy.startDate),
+    // Multi-year standalone OD only — see multiYearOdEndDate. The position is
+    // HDFC's: its SA_OD samples put PolicyEndDate immediately after
+    // PolicyStartDate, ahead of ProposalDate.
+    ...(odEndDate ? { PolicyEndDate: odEndDate } : {}),
     ProposalDate: toHdfcDate(req.policy.proposalDate),
     BusinessType_Mandatary: HDFC_BUSINESS_TYPE.new,
     VehicleModelCode: String(v.modelCode),
@@ -162,8 +230,13 @@ export function policyDetailsRollover(
   const tpInsurer = forProposal ? (pp.tpInsurer ?? prevInsurer) : (pp.tpInsurer ?? null);
   const tpPolicyNo = forProposal ? (pp.tpPolicyNo ?? prevPolicyNo) : (pp.tpPolicyNo ?? null);
 
+  const odEndDate = multiYearOdEndDate(req);
+
   return {
     PolicyStartDate: toHdfcDate(p.startDate),
+    // Multi-year standalone OD only — see multiYearOdEndDate. Same position as
+    // in HDFC's Roll Over / SA_OD samples: straight after PolicyStartDate.
+    ...(odEndDate ? { PolicyEndDate: odEndDate } : {}),
     ProposalDate: toHdfcDate(p.proposalDate),
     AgreementType: fin?.agreementType ?? null,
     FinancierCode: fin?.financierCode ?? null,
@@ -230,7 +303,10 @@ export function policyDetailsUsed(req: HdfcRequestShape): PolicyDetails {
     ChassisNumber: v.chassisNumber?.trim() ?? null,
     RTOLocationCode: String(v.rtoCode),
     Vehicle_IDV: num(v.idv),
-    PolicyEndDate: null,
+    // The Used Car template already carries this key — HDFC's own used sample
+    // sends it null — so a multi-year standalone OD only fills it in; the key
+    // set is unchanged either way. See multiYearOdEndDate.
+    PolicyEndDate: multiYearOdEndDate(req),
     EndorsementEffectiveDate: null,
     SumInsured: 0,
     Premium: 0,
