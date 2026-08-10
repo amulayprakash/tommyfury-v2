@@ -1,11 +1,21 @@
 import type { MotorQuoteRequest, MotorFullQuoteRequest } from "@/contracts/quote-request.ts";
+import type { AddonKey } from "@/contracts/enums.ts";
 import {
   hdfcPolicyType,
+  hdfcPlanFor,
   HDFC_BUSINESS_TYPE,
   HDFC_POLICY_TYPE,
+  HDFC_EMI_INSTALMENTS,
+  HDFC_EMI_PLAN_TYPE,
+  HDFC_PROVIDER_ADDON_CODES,
   type HdfcBusinessType,
 } from "../config.ts";
-import type { HdfcRequestShape, HdfcResolvedCodes, HdfcCustomer } from "../types.ts";
+import type {
+  HdfcRequestShape,
+  HdfcResolvedCodes,
+  HdfcCustomer,
+  HdfcFinancier,
+} from "../types.ts";
 
 /**
  * Canonical request → the intermediate shape the ported HDFC payload builders
@@ -16,11 +26,13 @@ import type { HdfcRequestShape, HdfcResolvedCodes, HdfcCustomer } from "../types
 /**
  * HDFC BusinessType_Mandatary. Mirrors FG's rule for what counts as new
  * business: either the explicit business type or the newVehicle category.
- * "Used Car" is not reachable from the canonical request today — the wizard has
- * no used-vehicle journey — so the template exists but is only selected when a
- * caller sets businessType explicitly through the full-quote path.
+ *
+ * "Used Car" is checked FIRST because it is the most specific signal a request
+ * can carry: a second-hand purchase is neither a rollover of the buyer's own
+ * cover nor a brand-new vehicle, whatever else the request says.
  */
 export function resolveBusinessType(req: MotorQuoteRequest): HdfcBusinessType {
+  if (req.isUsedVehiclePurchase) return HDFC_BUSINESS_TYPE.used;
   if (req.businessType === "new" || req.vehicleType === "newVehicle") {
     return HDFC_BUSINESS_TYPE.new;
   }
@@ -114,13 +126,77 @@ export function exceedsVehicleAge(
   return starts.getTime() > anniversary;
 }
 
+/**
+ * The chosen HDFC plan, and the add-on covers it makes mandatory.
+ *
+ * A plan is selected through `providerAddonCodes` — the canonical passthrough
+ * for "codes chosen from a vendor's own catalog" — because a plan name is HDFC
+ * branding, not an insurance concept: nothing about "Titanium" means anything to
+ * another insurer. What the plan RESOLVES TO is provider-agnostic, and that is
+ * what gets sent: the ordinary canonical cover flags. See HDFC_PLANS for the
+ * three-way vendor evidence behind each plan's cover list.
+ *
+ * An unrecognised code is ignored rather than rejected, which is what the
+ * passthrough's own contract promises ("passed through verbatim… providers that
+ * use the canonical boolean flags simply ignore this"). "Gold Plan" lands here
+ * deliberately — see HDFC_PLANS.
+ */
+export function resolvePlan(req: MotorQuoteRequest): {
+  planType?: string;
+  covers: ReadonlySet<AddonKey>;
+} {
+  for (const code of req.providerAddonCodes ?? []) {
+    const plan = hdfcPlanFor(code);
+    if (plan) return { planType: plan.planType, covers: new Set(plan.covers) };
+  }
+  return { covers: new Set<AddonKey>() };
+}
+
+/** True when the caller asked for an HDFC-only cover by its vendor code. */
+function hasProviderCode(req: MotorQuoteRequest, code: string): boolean {
+  return (req.providerAddonCodes ?? []).some((c) => c.trim().toUpperCase() === code);
+}
+
+/**
+ * HDFC's Policy_Details hypothecation block.
+ *
+ * `AgreementType` is genuinely ours to fill and was not being filled: the
+ * canonical `VehicleIdentitySchema.financeType` already states whether the
+ * vehicle is hypothecated or leased, and HDFC's field wants exactly that.
+ *
+ * `FinancierCode` still cannot be: HDFC wants a numeric code from its own
+ * `GENMST_FINANCIER` master (65k rows in `PrivateCarMasterData.xls`) while the
+ * canonical request carries only a financier NAME, and there is no canonical
+ * financier master to hang a `Provider*Code` cross-walk off — unlike insurers,
+ * which have `InsurerMaster` + `ProviderInsurerCode`. Sending a guessed code is
+ * worse than sending none, so `financierCode` stays null until that master
+ * exists. `BranchName` likewise has no canonical source.
+ */
+function toFinancier(req: MotorQuoteRequest): HdfcFinancier | undefined {
+  const full = req as Partial<MotorFullQuoteRequest>;
+  const financeType = full.vehicle?.financeType;
+  if (!financeType || financeType === "none") return undefined;
+  return {
+    agreementType: financeType === "lease" ? "Lease" : "Hypothecation",
+    financierCode: undefined,
+    branchName: undefined,
+  };
+}
+
 /** Full-quote requests carry a proposer + address; plain quotes do not. */
 function toCustomer(req: MotorQuoteRequest): HdfcCustomer | undefined {
   const full = req as Partial<MotorFullQuoteRequest>;
   if (!full.proposer) return undefined;
   const p = full.proposer;
   const a = full.address;
+  const corporate = full.customerType === "corporate";
   return {
+    // Customer_Details already carries Customer_Type and Company_Name, so a
+    // corporate policyholder changes VALUES only — no key-set change, and none
+    // of the golden proposal fixtures move.
+    customerType: corporate ? "Corporate" : "Individual",
+    companyName: full.companyName,
+    gstin: full.gstin,
     firstName: p.firstName,
     lastName: p.lastName,
     dob: p.dob,
@@ -176,8 +252,15 @@ export function toHdfcRequest(
    *    bi-fuel kit, which carries its own `BiFuel_Kit_TP_Premium`.
    */
   const liabilityOnly = policyType === HDFC_POLICY_TYPE.thirdParty;
+  /**
+   * The plan the customer chose, expanded to the covers it makes mandatory. A
+   * plan is additive: it turns covers ON that the request did not name, and
+   * never turns off one it did.
+   */
+  const plan = resolvePlan(req);
   /** An own-damage cover flag: forced off on a policy with no OD section. */
-  const odCover = (selected: boolean | undefined): boolean => Boolean(selected) && !liabilityOnly;
+  const odCover = (selected: boolean | undefined, key?: AddonKey): boolean =>
+    (Boolean(selected) || (key !== undefined && plan.covers.has(key))) && !liabilityOnly;
   /** An own-damage sum insured / discount amount: forced to 0 for the same reason. */
   const odAmount = (value: number | undefined): number => (liabilityOnly ? 0 : (value ?? 0));
 
@@ -186,9 +269,22 @@ export function toHdfcRequest(
    * too — RTI tops an own-damage total loss up to the invoice price.
    */
   const rti =
-    odCover(req.rti) && !exceedsVehicleAge(req, HDFC_RTI_MAX_VEHICLE_AGE_YEARS, startDate);
+    odCover(req.rti, "rti") && !exceedsVehicleAge(req, HDFC_RTI_MAX_VEHICLE_AGE_YEARS, startDate);
 
-  const lossOfPersonalBelongings = odCover(req.lossOfBelongings);
+  const lossOfPersonalBelongings = odCover(req.lossOfBelongings, "lossOfBelongings");
+
+  /**
+   * EMI Protector travels as a triple — cover flag, instalment count, instalment
+   * amount — plus `EMIPlanType`, and HDFC refuses the WHOLE payload when any of
+   * them is missing rather than just declining the cover. So the cover is only
+   * requested when the caller supplied an amount to rate it on; without one it
+   * is silently dropped, which is the same discipline the Loss-of-Personal-
+   * Belongings SI trap taught (a cover flag with a zero sum insured buys
+   * nothing). There is no vendor default to fall back on here: HDFC's own
+   * collection never turns the cover on.
+   */
+  const emiAmount = req.emiAmount ?? 0;
+  const emiProtector = odCover(req.emiProtect, "emiProtect") && emiAmount > 0;
 
   return {
     transactionId,
@@ -238,20 +334,46 @@ export function toHdfcRequest(
       hadZeroDep: req.previousPolicyHasZdCover,
     },
     addons: {
-      zeroDep: odCover(req.zeroDep),
-      tyreSecure: odCover(req.tyreProtect),
-      ncbProtection: odCover(req.ncbProtection),
+      planType: plan.planType,
+      zeroDep: odCover(req.zeroDep, "zeroDep"),
+      tyreSecure: odCover(req.tyreProtect, "tyreProtect"),
+      ncbProtection: odCover(req.ncbProtection, "ncbProtection"),
       rti,
       rtiPlanType: rti ? "A" : undefined,
-      consumables: odCover(req.consumables),
+      consumables: odCover(req.consumables, "consumables"),
       // HDFC UAT rejects engine-gearbox cover on an electric vehicle outright:
       // "EGP Add on cover not applicable for electric vehicles". An EV has no
       // engine or gearbox, so dropping the flag is faithful to what the
       // customer can actually buy rather than a workaround.
-      engineProtect: odCover(req.engineProtect) && !isElectric,
-      roadsideAssistance: odCover(req.rsa),
-      roadsideAssistanceWorldwide: false,
+      engineProtect: odCover(req.engineProtect, "engineProtect") && !isElectric,
+      roadsideAssistance: odCover(req.rsa, "rsa"),
+      /**
+       * `IsEAW_Cover` — the wider RSA tier, a cover HDFC sells separately from
+       * ordinary Emergency Assistance and prices separately too (live: EA ₹50
+       * and EAW ₹499 on the same quote). It was hardcoded false, so the ₹499
+       * cover HDFC's own New Business sample switches ON could never be bought.
+       */
+      roadsideAssistanceWorldwide: odCover(req.rsaWorldwide, "rsaWorldwide"),
       roadsideAssistanceAdvance: false,
+      /**
+       * `IsLossofUseDownTimeProt_Cover`, from the canonical `garageCash` — the
+       * same benefit under the other market name. See PRIVATE_CAR_ADDONS.
+       */
+      lossOfUse: odCover(req.garageCash, "garageCash"),
+      emiProtector,
+      noOfEmi: emiProtector ? HDFC_EMI_INSTALMENTS : undefined,
+      emiAmount: emiProtector ? emiAmount : 0,
+      emiPlanType: emiProtector ? HDFC_EMI_PLAN_TYPE : undefined,
+      /**
+       * HDFC-only, so it comes in through providerAddonCodes rather than a
+       * canonical flag. `HigherTowingLimit` is left unset on purpose: sweeping
+       * it on UAT (null / 1 / 2 / 3 / 25000 / 50000) changed nothing — every
+       * value returns "Higher Protection and Removal Costs - Add on system rate
+       * is not available" — so no value is more truthful than none.
+       */
+      highProtection: odCover(
+        hasProviderCode(req, HDFC_PROVIDER_ADDON_CODES.highProtection),
+      ),
       lossOfPersonalBelongings,
       // Rated ON this sum insured, so sending the cover flag with a zero SI buys
       // nothing — see HDFC_DEFAULT_LOSS_OF_BELONGINGS_SI.
@@ -317,9 +439,10 @@ export function toHdfcRequest(
           // batteryProtect. Forcing batteryProtect on instead would silently
           // add a paid cover they did not ask for.
           zeroDepBattery: odCover(req.zeroDep && req.batteryProtect) ? 1 : 0,
-          batteryChargerCover: odCover(req.batteryProtect) ? 1 : 0,
+          batteryChargerCover: odCover(req.batteryProtect, "batteryProtect") ? 1 : 0,
         }
       : {},
+    financier: toFinancier(req),
     customer: toCustomer(req),
     payment: full.amountCollected
       ? { amount: full.amountCollected, instrumentNumber: full.paymentTransactionId }

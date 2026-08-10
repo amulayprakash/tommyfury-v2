@@ -138,6 +138,9 @@
             "nullable": true,
             "minimum": 0
           },
+          "isUsedVehiclePurchase": {
+            "type": "boolean"
+          },
           "previousPolicyNumber": {
             "type": "string"
           },
@@ -214,6 +217,12 @@
           "rsa": {
             "type": "boolean",
             "default": false
+          },
+          "rsaWorldwide": {
+            "type": "boolean"
+          },
+          "emiProtect": {
+            "type": "boolean"
           },
           "tyreProtect": {
             "type": "boolean",
@@ -348,6 +357,11 @@
             "minimum": 0
           },
           "lossOfBelongingsSI": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "emiAmount": {
             "type": "number",
             "nullable": true,
             "minimum": 0
@@ -510,6 +524,9 @@
             "nullable": true,
             "minimum": 0
           },
+          "isUsedVehiclePurchase": {
+            "type": "boolean"
+          },
           "previousPolicyNumber": {
             "type": "string"
           },
@@ -586,6 +603,12 @@
           "rsa": {
             "type": "boolean",
             "default": false
+          },
+          "rsaWorldwide": {
+            "type": "boolean"
+          },
+          "emiProtect": {
+            "type": "boolean"
           },
           "tyreProtect": {
             "type": "boolean",
@@ -720,6 +743,11 @@
             "minimum": 0
           },
           "lossOfBelongingsSI": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "emiAmount": {
             "type": "number",
             "nullable": true,
             "minimum": 0
@@ -880,6 +908,19 @@
             "type": "string"
           },
           "ckyc": {
+            "type": "string"
+          },
+          "customerType": {
+            "type": "string",
+            "enum": [
+              "individual",
+              "corporate"
+            ]
+          },
+          "companyName": {
+            "type": "string"
+          },
+          "gstin": {
             "type": "string"
           },
           "inspectionReportNumber": {
@@ -1105,6 +1146,9 @@
             "nullable": true,
             "minimum": 0
           },
+          "isUsedVehiclePurchase": {
+            "type": "boolean"
+          },
           "previousPolicyNumber": {
             "type": "string"
           },
@@ -1181,6 +1225,12 @@
           "rsa": {
             "type": "boolean",
             "default": false
+          },
+          "rsaWorldwide": {
+            "type": "boolean"
+          },
+          "emiProtect": {
+            "type": "boolean"
           },
           "tyreProtect": {
             "type": "boolean",
@@ -1319,6 +1369,11 @@
             "nullable": true,
             "minimum": 0
           },
+          "emiAmount": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
           "numberOfDrivers": {
             "type": "integer",
             "nullable": true,
@@ -1428,6 +1483,14 @@
                 "minimum": 0
               },
               "rsa": {
+                "type": "number",
+                "minimum": 0
+              },
+              "rsaWorldwide": {
+                "type": "number",
+                "minimum": 0
+              },
+              "emiProtect": {
                 "type": "number",
                 "minimum": 0
               },
@@ -1664,6 +1727,8 @@
                               "zeroDep",
                               "engineProtect",
                               "rsa",
+                              "rsaWorldwide",
+                              "emiProtect",
                               "tyreProtect",
                               "rimProtect",
                               "rti",
@@ -1708,6 +1773,8 @@
                               "zeroDep",
                               "engineProtect",
                               "rsa",
+                              "rsaWorldwide",
+                              "emiProtect",
                               "tyreProtect",
                               "rimProtect",
                               "rti",
@@ -1752,6 +1819,8 @@
                               "zeroDep",
                               "engineProtect",
                               "rsa",
+                              "rsaWorldwide",
+                              "emiProtect",
                               "tyreProtect",
                               "rimProtect",
                               "rti",
@@ -1796,6 +1865,8 @@
                               "zeroDep",
                               "engineProtect",
                               "rsa",
+                              "rsaWorldwide",
+                              "emiProtect",
                               "tyreProtect",
                               "rimProtect",
                               "rti",
@@ -1840,6 +1911,8 @@
                               "zeroDep",
                               "engineProtect",
                               "rsa",
+                              "rsaWorldwide",
+                              "emiProtect",
                               "tyreProtect",
                               "rimProtect",
                               "rti",
@@ -1973,6 +2046,14 @@
                           "minimum": 0
                         },
                         "rsa": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "rsaWorldwide": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "emiProtect": {
                           "type": "number",
                           "minimum": 0
                         },
@@ -4655,6 +4736,8 @@
                                         "zeroDep",
                                         "engineProtect",
                                         "rsa",
+                                        "rsaWorldwide",
+                                        "emiProtect",
                                         "tyreProtect",
                                         "rimProtect",
                                         "rti",
@@ -4699,6 +4782,8 @@
                                         "zeroDep",
                                         "engineProtect",
                                         "rsa",
+                                        "rsaWorldwide",
+                                        "emiProtect",
                                         "tyreProtect",
                                         "rimProtect",
                                         "rti",
@@ -4743,6 +4828,8 @@
                                         "zeroDep",
                                         "engineProtect",
                                         "rsa",
+                                        "rsaWorldwide",
+                                        "emiProtect",
                                         "tyreProtect",
                                         "rimProtect",
                                         "rti",
@@ -4787,6 +4874,8 @@
                                         "zeroDep",
                                         "engineProtect",
                                         "rsa",
+                                        "rsaWorldwide",
+                                        "emiProtect",
                                         "tyreProtect",
                                         "rimProtect",
                                         "rti",
@@ -4831,6 +4920,8 @@
                                         "zeroDep",
                                         "engineProtect",
                                         "rsa",
+                                        "rsaWorldwide",
+                                        "emiProtect",
                                         "tyreProtect",
                                         "rimProtect",
                                         "rti",
@@ -5010,6 +5101,9 @@
                     "nullable": true,
                     "minimum": 0
                   },
+                  "isUsedVehiclePurchase": {
+                    "type": "boolean"
+                  },
                   "previousPolicyNumber": {
                     "type": "string"
                   },
@@ -5086,6 +5180,12 @@
                   "rsa": {
                     "type": "boolean",
                     "default": false
+                  },
+                  "rsaWorldwide": {
+                    "type": "boolean"
+                  },
+                  "emiProtect": {
+                    "type": "boolean"
                   },
                   "tyreProtect": {
                     "type": "boolean",
@@ -5220,6 +5320,11 @@
                     "minimum": 0
                   },
                   "lossOfBelongingsSI": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "emiAmount": {
                     "type": "number",
                     "nullable": true,
                     "minimum": 0
@@ -5363,6 +5468,14 @@
                                     "minimum": 0
                                   },
                                   "rsa": {
+                                    "type": "number",
+                                    "minimum": 0
+                                  },
+                                  "rsaWorldwide": {
+                                    "type": "number",
+                                    "minimum": 0
+                                  },
+                                  "emiProtect": {
                                     "type": "number",
                                     "minimum": 0
                                   },
@@ -5701,6 +5814,9 @@
                     "nullable": true,
                     "minimum": 0
                   },
+                  "isUsedVehiclePurchase": {
+                    "type": "boolean"
+                  },
                   "previousPolicyNumber": {
                     "type": "string"
                   },
@@ -5777,6 +5893,12 @@
                   "rsa": {
                     "type": "boolean",
                     "default": false
+                  },
+                  "rsaWorldwide": {
+                    "type": "boolean"
+                  },
+                  "emiProtect": {
+                    "type": "boolean"
                   },
                   "tyreProtect": {
                     "type": "boolean",
@@ -5915,6 +6037,11 @@
                     "nullable": true,
                     "minimum": 0
                   },
+                  "emiAmount": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
                   "numberOfDrivers": {
                     "type": "integer",
                     "nullable": true,
@@ -6025,6 +6152,14 @@
                           "minimum": 0
                         },
                         "rsa": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "rsaWorldwide": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "emiProtect": {
                           "type": "number",
                           "minimum": 0
                         },
@@ -6301,6 +6436,14 @@
                           "minimum": 0
                         },
                         "rsa": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "rsaWorldwide": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "emiProtect": {
                           "type": "number",
                           "minimum": 0
                         },
@@ -6611,6 +6754,9 @@
                     "nullable": true,
                     "minimum": 0
                   },
+                  "isUsedVehiclePurchase": {
+                    "type": "boolean"
+                  },
                   "previousPolicyNumber": {
                     "type": "string"
                   },
@@ -6687,6 +6833,12 @@
                   "rsa": {
                     "type": "boolean",
                     "default": false
+                  },
+                  "rsaWorldwide": {
+                    "type": "boolean"
+                  },
+                  "emiProtect": {
+                    "type": "boolean"
                   },
                   "tyreProtect": {
                     "type": "boolean",
@@ -6821,6 +6973,11 @@
                     "minimum": 0
                   },
                   "lossOfBelongingsSI": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "emiAmount": {
                     "type": "number",
                     "nullable": true,
                     "minimum": 0
@@ -6981,6 +7138,19 @@
                     "type": "string"
                   },
                   "ckyc": {
+                    "type": "string"
+                  },
+                  "customerType": {
+                    "type": "string",
+                    "enum": [
+                      "individual",
+                      "corporate"
+                    ]
+                  },
+                  "companyName": {
+                    "type": "string"
+                  },
+                  "gstin": {
                     "type": "string"
                   },
                   "inspectionReportNumber": {
@@ -7158,6 +7328,14 @@
                           "minimum": 0
                         },
                         "rsa": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "rsaWorldwide": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "emiProtect": {
                           "type": "number",
                           "minimum": 0
                         },
@@ -8028,6 +8206,14 @@
                           "type": "number",
                           "minimum": 0
                         },
+                        "rsaWorldwide": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "emiProtect": {
+                          "type": "number",
+                          "minimum": 0
+                        },
                         "tyreProtect": {
                           "type": "number",
                           "minimum": 0
@@ -8402,6 +8588,14 @@
                           "minimum": 0
                         },
                         "rsa": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "rsaWorldwide": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "emiProtect": {
                           "type": "number",
                           "minimum": 0
                         },

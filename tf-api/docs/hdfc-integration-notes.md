@@ -5,7 +5,7 @@ Provider: `src/providers/hdfc/`. Design spec:
 Frozen predecessor: `docs/reference/hdfc-ergo-standalone/`.
 
 HDFC is fully wired — quote, proposal, Pehchaan CKYC, issuance, renewal and
-COI — behind `HDFC_ENABLED` (default `false`). 201 unit tests, fixture-driven
+COI — behind `HDFC_ENABLED` (default `false`). 270 unit tests, fixture-driven
 against JSON extracted from HDFC's own Postman collection and, for the response
 side, against real captures from live UAT.
 
@@ -51,6 +51,15 @@ Pehchaan e-KYC is a separate service: own host, `api_key` → ~10-minute JWT.
     Key order is asserted against collection fixtures in
     `src/providers/hdfc/__tests__/req-pvtcar.test.ts` and
     `__tests__/policy-details.test.ts`.
+11. Two keys are emitted CONDITIONALLY, on top of those fixed sets, each because
+    a payload that needs it is refused without it: `Policy_Details.PolicyEndDate`
+    on a multi-year standalone OD, and `Req_PvtCar.EMIPlanType` on New Business
+    when the EMI Protector cover is bought. Neither ships on a payload that does
+    not need it, so every proven request keeps its proven shape.
+12. Several covers are rated ON a sum insured we must send, and HDFC does not say
+    so — it either charges ₹0 (Loss of Personal Belongings) or refuses the whole
+    payload with an unrelated-sounding message (EMI Protector's "add on system
+    rate is not available"). Treat a newly-enabled cover priced at ₹0 as a bug.
 
 ## 3. Master cross-walk
 
@@ -191,11 +200,21 @@ HDFC wants, so the port sends the same "nothing" value the frozen original did.
   their `Mailing` twins) because `HdfcCustomer` has no source for them. With a
   fully-populated customer these eight blanks are the only remaining
   differences against HDFC's own proposal fixture.
-- **Used Car is not reachable** from the canonical request — the wizard has no
-  used-vehicle journey — so `reqPvtCarUsed`/`policyDetailsUsed` exist and are
-  unit-tested but are only reachable by a caller who sets `businessType`
-  explicitly through code, not through any UI path today. Its `fibertank`
-  addon has no canonical source either and always resolves to `false`.
+- ~~**Used Car is not reachable** from the canonical request.~~ FIXED
+  2026-08-10 — `MotorQuoteRequest.isUsedVehiclePurchase` now selects it (see
+  "Used Car" at the end of this file). What remains: its `fibertank` addon has
+  no canonical source and always resolves to `false`, and HDFC UAT refuses the
+  business type for our channel.
+- **A financed vehicle records the agreement type but not the financier.**
+  `AgreementType` now follows the canonical `VehicleIdentitySchema.financeType`
+  (hypothecation / lease). `FinancierCode` still cannot: HDFC wants a numeric
+  code from its own `GENMST_FINANCIER` master (65k rows in
+  `PrivateCarMasterData.xls`) while the canonical request carries only a
+  financier NAME, and unlike insurers — which have `InsurerMaster` +
+  `ProviderInsurerCode` — there is no canonical financier master to hang a
+  `Provider*Code` cross-walk off. Closing this needs a canonical financier
+  master first; a guessed code is worse than a null. `BranchName` likewise has
+  no canonical source.
 - **TP-only shape mismatch, unverified.** HDFC's own
   `fixtures/collection/liability-premium.json` carries a 28-key
   rollover-shaped `Policy_Details` block (financier fields, full previous-policy
@@ -300,6 +319,21 @@ HDFC wants, so the port sends the same "nothing" value the frozen original did.
    `Policy_Details` that `liability-premium.json` shows (§6), or whether the
    Roll Over shape our resolver currently produces for it is close enough.
 
+Raised 2026-08-10 while closing the pack's BLOCKED rows:
+
+16. **Please enable the Used Car product for our UAT channel.**
+    `BusinessType_Mandatary: "Used Car"` is refused with *"Channel Not Authorized
+    to consume given method..Please contact administrator !"*, isolated to that
+    field alone — see "Used Car" at the end of this file.
+17. **What is cover group `N161521G0020`, and why is "Gold Plan" never
+    eligible?** It is Gold's second mandatory cover and the only group in
+    `addonPlansToCoversMapping` that decodes to no cover on the response.
+18. **What separates EMI Protector plan types "A" and "B"?** They rate at 4% and
+    8% of the instalment; "C" and `NoOfEmi: 6` have no rate at all. Nothing in
+    the kit documents the field.
+19. **Is "Higher Protection and Removal Costs" meant to be sellable?** No
+    `HigherTowingLimit` value gets it rated on UAT.
+
 Raised by the certification-pack run (2026-08-07):
 
 10. **A 2-year OD term is refused.** `POLICY_TENURE: 2` on a New Vehicle
@@ -327,13 +361,17 @@ Raised by the certification-pack run (2026-08-07):
 13. **Is the anti-theft discount live or not?** The sheet says "Anti Theft
     Discount not applicable for all motor product", yet `AntiTheftDiscFlag: true`
     earns an `AntiTheftDisc_Premium` discount on UAT.
-14. **Is `PlanType` inert?** Rows 33-38 of "Long Team" ask for six named plans
-    (Gold / Silver / Diamond / Platinum / Titanium / Menu Card). The New Business
-    `Req_PvtCar` sample carries no `PlanType` key at all; forced onto the Roll
-    Over template, HDFC accepts every value — including a made-up one — and the
-    gross premium never changes. The master workbook's own `PlanTypes` sheet
-    lists a different set again (Silver / Platinum / Titanium / Diamond /
-    Essential ZD / Essential EGP).
+14. ~~**Is `PlanType` inert?**~~ ANSWERED 2026-08-10 — yes, and it does not
+    matter, because a plan is a bundle of covers rather than a rating input. See
+    "Plan types" at the end of this file. What remains open from it:
+    - **What is cover group `N161521G0020`?** It is the second of "Gold Plan"'s
+      two mandatory covers and the only group in `addonPlansToCoversMapping`
+      that decodes to nothing: its `computedRate` matches no `*_Premium_Rate`
+      field on the response, and Gold is absent from the master workbook's own
+      `PlanTypes` sheet. Gold is therefore not offered.
+    - **Why is Gold Plan never eligible?** `isEligibile: false` on every vehicle
+      probed (1-year-old and 6-year-old Swift), on both the plan and the product
+      cover-group lists.
 15. **Is `Effectivedrivinglicense: true` really the CPA opt-OUT?** The data
     dictionary says `CPA_Tenure` applies when "Effectivedrivinglicense tag should
     be false", and UAT agrees: with it `true` (what our mapper always sends)
@@ -486,3 +524,160 @@ whole 731–1095 band at a single premium. Consequences:
 Open question for HDFC: the multi-year OD prices **below** the one-year OD on
 UAT (₹8,070 vs ₹9,775 gross for the same vehicle), which is the wrong direction
 for a longer term. Recorded in §9.
+
+## Plan types — a bundle of covers, not a rating input (2026-08-10)
+
+HDFC's six named plans (Silver / Gold / Diamond / Platinum / Titanium, plus the
+"Menu Card Approach") are **merchandising**: each names a set of add-on covers it
+makes mandatory. `Req_PvtCar.PlanType` is inert — live on UAT, "Gold", "Silver",
+"Diamond", "Platinum", "Titanium", "Menu Card Approach" and an invented
+"NONSENSE-XYZ" all returned the identical gross ₹8,354 — because the premium
+comes from the individual `Is*_Cover` flags.
+
+Three sources agree on which covers each plan carries, and they agree exactly:
+
+1. `PrivateCarMasterData.xls`, sheet **PlanTypes** — plan name, "Mandatory add on
+   cover" rows, and a validity band.
+2. Live `GetCalculateIDV` → `CalculatedIDV.addonPlansToCoversMapping` — the same
+   plans as `coverGroup` codes with `isMandatory` and a per-vehicle
+   `isEligibile`.
+3. The CalculatePremium response on the **same vehicle**, which decodes the
+   groups: each group's `computedRate` is one of the `*_Premium_Rate` fields.
+
+Decoded on a 1-year-old Swift (model 12798, RTO 10406, IDV ₹559,200):
+
+| coverGroup | computedRate | matches | = cover |
+|---|---|---|---|
+| N161521G0034 | 0.004 | `Vehicle_Base_ZD_Premium_Rate` | Zero Depreciation |
+| N161521G0023 | 0.0011 | `Vehicle_Base_NCB_Premium_Rate` | NCB Protection |
+| N161521G0014 | 0.0014 | `Vehicle_Base_ENG_Premium_Rate` | Engine & GearBox |
+| N161521G0007 | 0.001 | `Vehicle_Base_COC_Premium_Rate` | Cost of Consumables |
+| N161521G0033 | 0.0025 | `Vehicle_Base_TySec_Premium_Rate` | Tyre Secure |
+| N161521G0009 | 50 | `EA_premium` = 50 | Emergency Assistance |
+| N161521G0011 | 499 | `EAW_premium` = 499 | Emergency Assistance Wider |
+| N161521G0036 | 0 | — | Loss of Personal Belongings |
+| **N161521G0020** | 0.001 | **nothing** | **unknown — see §9.14** |
+
+Which yields the catalogue in `config.ts` `HDFC_PLANS`, matching the PlanTypes
+sheet row for row: Silver = ZD; Platinum = ZD + NCB + EGP; Titanium = ZD + NCB +
+EGP + COC; Diamond = ZD + COC; Essential ZD = ZD + EA + EAW + LOPB; Essential EGP
+= ZD + EGP + EA + EAW + LOPB.
+
+**`isEligibile` is real.** On a 1-year-old Swift the two "Essential" plans come
+back `false` and the other four `true`; on a 6-year-old Swift the Essentials flip
+to `true` — matching the master's own Validity column ("upto 5 years" vs "5 to 10
+years with NCB %").
+
+**Gold is not offered.** It is absent from the PlanTypes sheet, `isEligibile:
+false` on every vehicle probed, and its second cover group (`N161521G0020`) is
+the one entry that decodes to nothing. Selling a plan containing a cover nobody
+can name would be worse than not selling it.
+
+A plan is chosen through `MotorQuoteRequest.providerAddonCodes` — the existing
+vendor passthrough — e.g. `["Titanium Plan"]`, matched case- and
+spacing-insensitively. The mapper expands it to the canonical cover flags and
+names it in `PlanType` on the Roll Over template (the only one whose sample
+carries the key). "Menu Card Approach" is the pack's name for the ABSENCE of a
+plan and correctly adds nothing.
+
+## Four covers that were hardcoded off (2026-08-10)
+
+| Req_PvtCar flag | Canonical route | Live UAT |
+|---|---|---|
+| `IsEAW_Cover` | new add-on key `rsaWorldwide` | prices — `EAW_premium` ₹499 (1y rollover), ₹720 (3+3 new) |
+| `IsLossofUseDownTimeProt_Cover` | existing `garageCash` | prices — `Loss_of_Use_Premium` ₹559 at rate 0.001 |
+| `IsEMIProtector_Cover` | new `emiProtect` + `emiAmount` | prices — `EMI_PROTECTOR_PREMIUM` ₹600 at rate 0.04 |
+| `IsHighProtection_Cover` | `providerAddonCodes: ["HIGH_PROTECTION"]` | **unrated on UAT** |
+
+- **EAW is a cover in its own right**, not an upgrade of `IsEA_Cover`: a quote
+  with both on returns `EA_premium: 50` AND `EAW_premium: 499`. HDFC's own New
+  Business premium sample ships `IsEAW_Cover: 1`.
+- **"Loss of Use or Down Time Protection" is Garage Cash** — the same benefit
+  (a payout while the vehicle is off the road) under the other market name — so
+  the existing canonical key is reused rather than a new one invented. HDFC's own
+  New Business proposal sample ships the flag on. The earlier note that "HDFC has
+  no garageCash" was wrong.
+- **EMI Protector was NOT unrated — it was under-specified by us.** The earlier
+  conclusion ("add-on system rate is not available, so it is unrated in the
+  sandbox too") came from sending the flag alone. The cover needs *three* things
+  together and HDFC gives the same message when any is missing:
+
+  | payload | UAT |
+  |---|---|
+  | `IsEMIProtector_Cover: 1` only | refused |
+  | `+ NoOfEmi: 3, EMIAmount: 15000` | refused |
+  | `+ EMIPlanType: "A"` | **₹600** (rate 0.04 × 15,000) |
+  | `EMIPlanType: "B"` | ₹1,200 (rate 0.08) |
+  | `EMIPlanType: "C"` | refused |
+  | `NoOfEmi: 6` | refused |
+  | `EMIAmount: 0` | refused |
+
+  `EMIPlanType` is **not in HDFC's New Business sample**, so it is emitted on
+  that template only when the cover is bought — the same conditional-key
+  discipline as `Policy_Details.PolicyEndDate`, and proven necessary: New
+  Business with the cover on and the key absent is refused, and the identical
+  payload with `EMIPlanType: "A"` prices. The Used Car template carries no EMI
+  keys at all, so the cover is not offered there.
+
+  Because the cover is rated ON the amount, a zero amount buys nothing *and*
+  takes the whole payload down — so the mapper drops the cover when the caller
+  named no `emiAmount` rather than sending a request HDFC will refuse. There is
+  no vendor sample to default from: HDFC's collection never turns it on.
+- **Higher Protection and Removal Costs has no rate on UAT.** Sweeping
+  `HigherTowingLimit` (null / 1 / 2 / 3 / 25000 / 50000) on a Roll Over returns
+  "Higher Protection and Removal Costs - Add on system rate is not available"
+  every time, so the limit is not the missing input. On New Business the same
+  request comes back as the generic "Exception while Call Blaze!" instead. It
+  stays on the `providerAddonCodes` passthrough rather than gaining a canonical
+  flag: no other vendor we integrate sells it, and an option nobody can price
+  does not belong on the compare card.
+
+Also fixed while reading real responses: the normalizer read
+`Vehicle_Base_EGP_Premium` for the engine-gearbox cover. The wire carries
+`Vehicle_Base_ENG_Premium`, so that premium never reached the compare card even
+when the customer had been charged for it.
+
+## Used Car — reachable now, refused by HDFC's channel entitlement (2026-08-10)
+
+`MotorQuoteRequest.isUsedVehiclePurchase` (optional, absent = no) selects
+`HDFC_BUSINESS_TYPE.used`, so `reqPvtCarUsed` / `policyDetailsUsed` are live code
+rather than unreachable templates.
+
+It is deliberately a **separate flag, not a fourth `BusinessType` member**:
+`businessType` is required and FG, ICICI and ITGI all branch on it directly
+(ICICI passes it into its own product resolver), so widening that union would
+change what three other vendors are sent for a value they have no concept of.
+Folding it back in is the tidier end state once every provider grows a
+used-vehicle path.
+
+**HDFC UAT then refuses the business type for our channel**:
+
+    Channel Not Authorized to consume given method..Please contact administrator !
+
+Isolated to that one field, live, on a 3-year-old Swift (12798 / 10406):
+
+| payload | UAT |
+|---|---|
+| Roll Over templates, untouched | prices, gross ₹6,242 |
+| Roll Over templates, `BusinessType_Mandatary` → `"Used Car"` | refused |
+| Used Car templates, `BusinessType_Mandatary` → `"Roll Over"` | prices, gross ₹12,863 |
+
+So our Used Car payload is structurally acceptable to HDFC — it is the
+entitlement that is missing. **New open confirmation: please enable the Used Car
+product for our UAT channel.** (The ₹12,863 vs ₹6,242 gap in that third row is
+expected, not alarming: `policyDetailsUsed` nulls the whole previous-policy
+block, so no NCB is granted — which is exactly what HDFC's own pack says for a
+used car, "NCB% not applicable".)
+
+## Corporate policyholder (2026-08-10)
+
+`mapper/customer.ts` no longer hardcodes `Customer_Type: "Individual"`. It
+follows the canonical `MotorFullQuoteRequest.customerType`, with `companyName`
+and `gstin` filling HDFC's existing `Company_Name` and `Customer_GSTIN_Number`
+keys — a VALUE change only, so the golden proposal fixtures' key sets do not
+move.
+
+It cannot be exercised read-only: `Customer_Details` is not part of
+CalculatePremium at all, so HDFC first sees the customer type at CreateProposal.
+The kit also ships a separate **"Pehchaan Integration KIT - Corporate.docx"**, so
+a live corporate proposal needs a corporate e-KYC journey that is not wired.

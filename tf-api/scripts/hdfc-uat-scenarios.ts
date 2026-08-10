@@ -193,12 +193,27 @@ const ADDONS_OFF = {
   ncbProtection: false,
 } as const;
 
-/** Every canonical add-on flag HDFC honours (config.ts PRIVATE_CAR_ADDONS). */
+/**
+ * Every canonical add-on flag HDFC honours (config.ts PRIVATE_CAR_ADDONS).
+ *
+ * `rsaWorldwide` (IsEAW_Cover) and `garageCash` (IsLossofUseDownTimeProt_Cover)
+ * joined this list on 2026-08-10, when they stopped being hardcoded off. Both
+ * belong in an "all cover" request on HDFC's own evidence: its New Business
+ * premium sample sends IsEAW_Cover 1 and its New Business proposal sample sends
+ * IsLossofUseDownTimeProt_Cover 1.
+ *
+ * `emiProtect` is deliberately NOT here even though it is now expressible. HDFC
+ * refuses the WHOLE payload when it cannot rate the cover rather than declining
+ * just that cover, so folding it into the shared "all cover" bundle would let one
+ * unrated combination take down a dozen unrelated rows. It gets its own row.
+ */
 const ADDONS_ALL = {
   ...ADDONS_OFF,
   zeroDep: true,
   engineProtect: true,
   rsa: true,
+  rsaWorldwide: true,
+  garageCash: true,
   tyreProtect: true,
   rti: true,
   consumables: true,
@@ -353,6 +368,20 @@ const VENDOR_DATA_PATTERNS: { test: RegExp; why: string }[] = [
     test: /Invalid Short Term Policy period/i,
     why: "HDFC caps a standalone OD below a full three years — an end date on or past the third anniversary of inception is refused",
   },
+  {
+    /**
+     * Raised ONLY by `BusinessType_Mandatary: "Used Car"`, and isolated to that
+     * one field on live UAT (2026-08-10, model 12798 / RTO 10406, 3-year-old
+     * Swift): the Roll Over payload with nothing changed but that string is
+     * refused, while the Used Car payload with the string flipped back to
+     * "Roll Over" prices normally at ₹12,863. So it is neither our templates nor
+     * our credentials in general — every other row in this very run authenticates
+     * and prices on the same channel — but our channel specifically not being
+     * entitled to HDFC's used-car product on UAT.
+     */
+    test: /Channel Not Authorized to consume given method/i,
+    why: 'HDFC refuses the "Used Car" business type for our UAT channel. Proven to be that field alone: the same payload prices when BusinessType_Mandatary is flipped back to "Roll Over", and the Roll Over payload is refused identically when it is flipped to "Used Car". A vendor entitlement to be requested, not a payload defect',
+  },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -406,6 +435,8 @@ const OD_ADDON_PREMIUM_FIELDS = [
   "Vehicle_Base_COC_Premium",
   "Vehicle_Base_ENG_Premium",
   "EA_premium",
+  "EAW_premium",
+  "Loss_of_Use_Premium",
   "LossOfPersonalBelongings_Premium",
 ] as const;
 
@@ -575,7 +606,7 @@ const NEW_AND_ROLLOVER: Scenario[] = [
     staticVerdict: {
       verdict: "BLOCKED",
       reason:
-        "HDFC's Policy_Details wants a numeric FinancierCode (kit master GENMST_FINANCIER) plus AgreementType and BranchName. The canonical request carries only the financier's NAME (MotorFullQuoteRequest.financierName) and there is no name→code cross-walk, so mapper/policy-details.ts emits all three as null. Financing is also a proposal-time attribute, which this read-only runner does not reach.",
+        "PARTLY FIXED, and irreducible for the rest. AgreementType was ours to fill and now is: the canonical VehicleIdentitySchema.financeType already says whether the loan is a hypothecation or a lease, and mapper/canonical.ts maps it onto HDFC's field (unit-tested). FinancierCode is not ours to fill — HDFC wants a numeric code from its own GENMST_FINANCIER master (65k rows in PrivateCarMasterData.xls) while the canonical request carries only a financier NAME, and unlike insurers (InsurerMaster + ProviderInsurerCode) there is no canonical financier master to hang a cross-walk off; a guessed code is worse than a null. BranchName has no canonical source at all. All three are Policy_Details fields judged at CreateProposal, which this read-only runner must never call, so no part of this row is observable here.",
     },
   },
   {
@@ -697,7 +728,7 @@ const NEW_AND_ROLLOVER: Scenario[] = [
     staticVerdict: {
       verdict: "BLOCKED",
       reason:
-        'mapper/customer.ts hardcodes Customer_Type: "Individual" and the canonical contract has no corporate/entity flag. Customer_Details is not part of CalculatePremium at all, so corporate can only be exercised at CreateProposal — which this runner must not call.',
+        'EXPRESSIBLE NOW, UNOBSERVABLE HERE. mapper/customer.ts no longer hardcodes Customer_Type: "Individual" — it follows the canonical MotorFullQuoteRequest.customerType, with companyName and gstin filling HDFC\'s existing Company_Name and Customer_GSTIN_Number keys, so this is a value change and no golden key set moves (unit-tested in __tests__/plans-and-covers.test.ts). What remains irreducible is that Customer_Details is not part of CalculatePremium AT ALL: HDFC first sees the customer type at CreateProposal, which this read-only runner must never call on a shared sandbox. Note too that the vendor kit ships a separate corporate e-KYC document ("Pehchaan Integration KIT - Corporate.docx"), so a live corporate proposal also needs a corporate Pehchaan journey that is not wired.',
     },
   },
   {
@@ -705,7 +736,8 @@ const NEW_AND_ROLLOVER: Scenario[] = [
     condition: "On Corporate customer check all add-on covers", vehicle: V.swift,
     staticVerdict: {
       verdict: "BLOCKED",
-      reason: "Same as row 34 — Customer_Type is hardcoded 'Individual' and never sent at quote time.",
+      reason:
+        "Same as row 34: the customer type is expressible now but is never sent at quote time, so a corporate quote and an individual one are the identical CalculatePremium payload. Any difference in add-on eligibility for a company can only appear at CreateProposal.",
     },
   },
   {
@@ -713,7 +745,8 @@ const NEW_AND_ROLLOVER: Scenario[] = [
     condition: "On Corporate customer check break-in cases", vehicle: V.swift,
     staticVerdict: {
       verdict: "BLOCKED",
-      reason: "Same as row 34, compounded: break-in inspection is a proposal-time trigger.",
+      reason:
+        "Same as row 34, compounded: break-in inspection is a proposal-time trigger, so this row needs BOTH halves of what CalculatePremium cannot show.",
     },
   },
 ];
@@ -775,110 +808,116 @@ const BREAK_IN: Scenario[] = [
 // Sheet: Used Car (12 conditions)
 // ═══════════════════════════════════════════════════════════════════════════════
 /**
- * Every Used Car row is BLOCKED for one structural reason, restated per row so a
- * reader of the results table never has to hunt for it: the canonical
- * BusinessTypeSchema is `new | rollover | renewal` — there is no `used` member —
- * and mapper/canonical.ts `resolveBusinessType()` has no branch that returns
- * HDFC_BUSINESS_TYPE.used. The Used Car Req_PvtCar / Policy_Details templates
- * therefore exist in the codebase but are unreachable from any request we can build.
+ * Every Used Car row used to be BLOCKED for one structural reason: the canonical
+ * contract could not say "this is a second-hand purchase", so
+ * `resolveBusinessType()` never returned HDFC_BUSINESS_TYPE.used and the Used Car
+ * Req_PvtCar / Policy_Details templates were unreachable dead code.
  *
- * The rows are still EXECUTED — as the closest expressible thing, a Roll Over on a
- * second-hand vehicle — so HDFC's own answer is on record for whoever wires the
- * used-vehicle journey. The verdict stays BLOCKED regardless of that answer.
+ * That is fixed. `MotorQuoteRequest.isUsedVehiclePurchase` — optional and
+ * default-false, so FG, ICICI and ITGI are untouched — now selects them, and
+ * every row below is FIRED FOR REAL against HDFC's Used Car product.
+ *
+ * It is deliberately a separate flag rather than a fourth `businessType` member:
+ * `businessType` is required and FG, ICICI and ITGI all branch on it directly
+ * (ICICI passes it into its own product resolver), so widening that union would
+ * change what three other vendors are sent for a value they have no concept of.
+ *
+ * What the rows now find is a VENDOR entitlement gap rather than a gap in our
+ * code — see the "Channel Not Authorized" pattern above, and the two rows that
+ * remain BLOCKED for the unrelated reason that an RSD is only fixed at
+ * CreateProposal, which this runner must never call.
  */
-const USED_BLOCK =
-  "Canonical BusinessType has no 'used' member and resolveBusinessType() never returns HDFC_BUSINESS_TYPE.used, so HDFC's Used Car template is unreachable from any request we can build. Where a request could still be assembled it was fired anyway — as the nearest expressible thing, a Roll Over on a second-hand car — purely to put HDFC's answer on the record; the verdict does not depend on that answer.";
+const USED_BASE = { isUsedVehiclePurchase: true } as const satisfies Partial<MotorQuoteRequest>;
+const USED_RSD_BLOCK =
+  "The risk start date is only fixed at CreateProposal, which this read-only runner must never call on a shared sandbox. HDFC's Used Car business type is now reachable (MotorQuoteRequest.isUsedVehiclePurchase) and every other row of this sheet is fired for real — this condition alone has no CalculatePremium-visible half to judge.";
 
 const USED_CAR: Scenario[] = [
   {
     sheet: "used-car", no: 1, transactionType: "Used", policyTerm: "1+1",
     condition: "Create policy without any add on cover",
     expected: "Policy should be issue with all valid details and break-in inspection mandatory. NCB% not application",
-    vehicle: V.swift, req: { registrationDate: yearsAgo(3) },
-    staticVerdict: { verdict: "BLOCKED", reason: USED_BLOCK }, probeAnyway: true,
+    vehicle: V.swift, req: { ...USED_BASE, registrationDate: yearsAgo(3) },
+    assert: positive("Total_Premium"),
   },
   {
     sheet: "used-car", no: 2, transactionType: "Used", policyTerm: "1+1",
     condition: "Create policy with all add on cover",
     expected: "Policy should be issue with all valid details and break-in inspection mandatory. NCB% not application",
-    vehicle: V.swift, req: { registrationDate: yearsAgo(3), ...ADDONS_ALL },
-    staticVerdict: { verdict: "BLOCKED", reason: USED_BLOCK }, probeAnyway: true,
+    vehicle: V.swift, req: { ...USED_BASE, registrationDate: yearsAgo(3), ...ADDONS_ALL },
+    assert: positive("Vehicle_Base_ZD_Premium", "Vehicle_Base_RTI_Premium", "Vehicle_Base_COC_Premium"),
   },
   {
     sheet: "used-car", no: 3, transactionType: "Used", policyTerm: "1+1",
     condition: "Verify the vehicle age validation", expected: "Vehicle age should be > 15 years",
-    vehicle: V.swift, req: { registrationDate: yearsAgo(16) },
-    staticVerdict: { verdict: "BLOCKED", reason: USED_BLOCK }, probeAnyway: true,
+    vehicle: V.swift, req: { ...USED_BASE, registrationDate: yearsAgo(16) },
+    expectRejection: { test: /age|decline|not\s+eligible|IDV/i, describe: "a 16-year-old used car must not be quoted either" },
+    inputDeviation: "registrationDate 16 years back — the condition is itself about age.",
   },
   {
     sheet: "used-car", no: 4, transactionType: "Used", policyTerm: "1+1",
     condition: "Verify the RSD of the policy",
     expected: "RSD should be same as transaction or break-in inspection validity",
     vehicle: V.swift,
-    staticVerdict: {
-      verdict: "BLOCKED",
-      reason: `${USED_BLOCK} The RSD is additionally a CreateProposal-time value this read-only runner never reaches.`,
-    },
+    staticVerdict: { verdict: "BLOCKED", reason: USED_RSD_BLOCK },
   },
   {
     sheet: "used-car", no: 5, transactionType: "Used", policyTerm: "1+1",
     condition: "Verify the add on cover age validation", expected: "Add on cover valid up to 5 years.",
-    vehicle: V.swift, req: { registrationDate: yearsAgo(6), ...ADDONS_ALL },
-    staticVerdict: { verdict: "BLOCKED", reason: USED_BLOCK }, probeAnyway: true,
+    vehicle: V.swift, req: { ...USED_BASE, registrationDate: yearsAgo(6), ...ADDONS_ALL },
+    expectRejection: { test: /5 years|decline|not\s+eligible|age/i, describe: "add-ons must be declined on a 6-year-old used car" },
+    inputDeviation: "registrationDate 6 years back — the condition is itself about age.",
   },
   {
     sheet: "used-car", no: 6, transactionType: "Used", policyTerm: "1+1",
     condition: "Verify the MERCEDES-BENZ. Make validation",
     expected: "ZD cover mandatory for MERCEDES-BENZ. Make",
-    vehicle: V.mercedes, req: { registrationDate: yearsAgo(1) },
-    staticVerdict: { verdict: "BLOCKED", reason: USED_BLOCK }, probeAnyway: true,
-    notes: "Independently blocked a second time: every Mercedes-Benz code tried on UAT answers 'Please provide Vehicle IDV' — the make is missing from HDFC's UAT IDV master.",
+    vehicle: V.mercedes, req: { ...USED_BASE, registrationDate: yearsAgo(1) },
+    assert: positive("Vehicle_Base_ZD_Premium"),
+    notes: "Independently blocked a second time by HDFC's own data: every Mercedes-Benz code tried on UAT answers 'Please provide Vehicle IDV' / a bare BUSINESS EXCEPTION — the make is missing from HDFC's UAT IDV master, so the ZD-mandatory rule cannot be reached whatever the business type.",
   },
   {
     sheet: "used-car", no: 7, transactionType: "Used", policyTerm: "0+1",
     condition: "SAOD — Create policy without any add on cover",
     expected: "Policy should be issue with all valid details and break-in inspection mandatory. NCB% not application",
-    vehicle: V.swift, req: { selectedPolicy: "standAloneOD", registrationDate: yearsAgo(3), ...PREV_TP },
-    staticVerdict: { verdict: "BLOCKED", reason: USED_BLOCK }, probeAnyway: true,
+    vehicle: V.swift, req: { ...USED_BASE, selectedPolicy: "standAloneOD", registrationDate: yearsAgo(3), ...PREV_TP },
+    assert: both(positive("Basic_OD_Premium"), zero("Basic_TP_Premium")),
   },
   {
     sheet: "used-car", no: 8, transactionType: "Used", policyTerm: "0+1",
     condition: "SAOD — Create policy with all add on cover",
     expected: "Policy should be issue with all valid details and break-in inspection mandatory. NCB% not application",
-    vehicle: V.swift, req: { selectedPolicy: "standAloneOD", registrationDate: yearsAgo(3), ...PREV_TP, ...ADDONS_ALL },
-    staticVerdict: { verdict: "BLOCKED", reason: USED_BLOCK }, probeAnyway: true,
+    vehicle: V.swift, req: { ...USED_BASE, selectedPolicy: "standAloneOD", registrationDate: yearsAgo(3), ...PREV_TP, ...ADDONS_ALL },
+    assert: positive("Vehicle_Base_ZD_Premium", "Vehicle_Base_RTI_Premium", "Vehicle_Base_COC_Premium"),
   },
   {
     sheet: "used-car", no: 9, transactionType: "Used", policyTerm: "0+1",
     condition: "Liability — Create policy without any add on cover",
     expected: "Policy should be issue with all valid details and RSD should be T+1 day of the transaction. NCB% not application",
-    vehicle: V.swift, req: { selectedPolicy: "thirdParty", registrationDate: yearsAgo(3) },
-    staticVerdict: { verdict: "BLOCKED", reason: USED_BLOCK }, probeAnyway: true,
+    vehicle: V.swift, req: { ...USED_BASE, selectedPolicy: "thirdParty", registrationDate: yearsAgo(3) },
+    assert: both(positive("Basic_TP_Premium"), zero("Basic_OD_Premium")),
   },
   {
     sheet: "used-car", no: 10, transactionType: "Used", policyTerm: "0+1",
     condition: "Liability — Create policy with all add on cover",
     expected: "Policy should be issue with all valid details and RSD should be T+1 day of the transaction. NCB% not application",
-    vehicle: V.swift, req: { selectedPolicy: "thirdParty", registrationDate: yearsAgo(3), ...ADDONS_ALL },
-    staticVerdict: { verdict: "BLOCKED", reason: USED_BLOCK }, probeAnyway: true,
+    vehicle: V.swift, req: { ...USED_BASE, selectedPolicy: "thirdParty", registrationDate: yearsAgo(3), ...ADDONS_ALL },
+    assert: both(positive("Basic_TP_Premium"), zero("Basic_OD_Premium", ...OD_ADDON_PREMIUM_FIELDS)),
+    notes: LIABILITY_ADDON_CONFLICT,
   },
   {
     sheet: "used-car", no: 11, transactionType: "Used", policyTerm: "0+1",
     condition: "SAOD — Verify the RSD of the policy",
     expected: "RSD should be same as transaction or break-in inspection validity",
     vehicle: V.swift,
-    staticVerdict: {
-      verdict: "BLOCKED",
-      reason: `${USED_BLOCK} The RSD is additionally a CreateProposal-time value this read-only runner never reaches.`,
-    },
+    staticVerdict: { verdict: "BLOCKED", reason: USED_RSD_BLOCK },
   },
   {
     sheet: "used-car", no: 12, transactionType: "Used", policyTerm: "0+1",
     condition: "SAOD — Verify the MERCEDES-BENZ. Make validation",
     expected: "ZD cover mandatory for MERCEDES-BENZ. Make",
-    vehicle: V.mercedes, req: { selectedPolicy: "standAloneOD", registrationDate: yearsAgo(1), ...PREV_TP },
-    staticVerdict: { verdict: "BLOCKED", reason: USED_BLOCK }, probeAnyway: true,
-    notes: "As row 6, also blocked by the missing Mercedes-Benz IDV master on UAT.",
+    vehicle: V.mercedes, req: { ...USED_BASE, selectedPolicy: "standAloneOD", registrationDate: yearsAgo(1), ...PREV_TP },
+    assert: positive("Vehicle_Base_ZD_Premium"),
+    notes: "As row 6, also stopped by the missing Mercedes-Benz IDV master on UAT.",
   },
 ];
 
@@ -959,6 +998,114 @@ const NO_TP_LEG = {
     "The condition asks for a third-party premium under a standalone-OD term, which cannot have one — the TP cover is on the separate long-term TP policy. Verified as HDFC returning Basic_TP_Premium=0 with a positive own-damage premium.",
 } as const;
 
+/**
+ * Rows 33–38 of each term: HDFC's six named plan types.
+ *
+ * WHAT A PLAN ACTUALLY IS — settled by three pieces of vendor evidence that
+ * agree exactly, so this is not an interpretation:
+ *
+ *  1. `PrivateCarMasterData.xls` sheet "PlanTypes" lists each plan as a NAME, a
+ *     set of "Mandatory add on cover" rows and a validity band.
+ *  2. Live `GetCalculateIDV` returns `addonPlansToCoversMapping`: the same plans
+ *     as `coverGroup` codes with `isMandatory` and a per-vehicle `isEligibile`.
+ *     The codes decode against the CalculatePremium response's own rate fields on
+ *     the SAME vehicle — on a 1-year Swift, G0034's computedRate 0.004 is
+ *     `Vehicle_Base_ZD_Premium_Rate`, G0023's 0.0011 is the NCB rate, G0014's
+ *     0.0014 the engine-gearbox rate, G0007's 0.001 the consumables rate, G0009
+ *     is `EA_premium` ₹50 and G0011 is `EAW_premium` ₹499 — and every plan's
+ *     decoded cover list then matches its PlanTypes row.
+ *  3. The plan NAME is inert. Live, `PlanType` sent as Gold / Silver / Diamond /
+ *     Platinum / Titanium / Menu Card Approach and an invented "NONSENSE-XYZ"
+ *     all returned the identical gross ₹8,354.
+ *
+ * So a plan is a NAMED BUNDLE OF MANDATORY ADD-ON COVERS — merchandising, not a
+ * rating input — and it is expressible today: pick the plan through the
+ * `providerAddonCodes` passthrough (a plan name is HDFC branding, not an
+ * insurance concept, so it does not belong in the canonical contract) and the
+ * mapper turns on the covers the plan makes mandatory. The BLOCKED reason these
+ * rows used to carry — "the New Business template has no PlanType key" — was
+ * true but beside the point: the key is inert, so its absence costs nothing.
+ *
+ * Each row asserts the thing that actually matters to a customer: every cover
+ * the plan promises is on the policy AND charged for.
+ */
+const PLAN_ROWS: { plan: string; covers?: { flag: keyof MotorQuoteRequest; field: string }[]; blocked?: string; notes?: string }[] = [
+  {
+    plan: "Gold",
+    blocked:
+      'HDFC\'s "Gold Plan" cannot be described. It is absent from the master workbook\'s own PlanTypes sheet (which lists Silver, Platinum, Titanium, Diamond, Essential ZD and Essential EGP), it comes back isEligibile:false in addonPlansToCoversMapping on every vehicle probed on UAT — a 1-year-old and a 6-year-old Swift — and while its first mandatory cover group decodes to Zero Depreciation, the second (N161521G0020) matches no cover in any source we hold: its computedRate appears in no *_Premium_Rate field on the response. Selling a customer a plan containing a cover nobody can name is worse than not selling it, so Gold is deliberately absent from the plan catalogue and a request naming it is ignored. This one needs HDFC to say what N161521G0020 is.',
+  },
+  {
+    plan: "Silver",
+    covers: [{ flag: "zeroDep", field: "Vehicle_Base_ZD_Premium" }],
+  },
+  {
+    plan: "Diamond",
+    covers: [
+      { flag: "zeroDep", field: "Vehicle_Base_ZD_Premium" },
+      { flag: "consumables", field: "Vehicle_Base_COC_Premium" },
+    ],
+  },
+  {
+    plan: "Platinum",
+    covers: [
+      { flag: "zeroDep", field: "Vehicle_Base_ZD_Premium" },
+      { flag: "ncbProtection", field: "Vehicle_Base_NCB_Premium" },
+      { flag: "engineProtect", field: "Vehicle_Base_ENG_Premium" },
+    ],
+  },
+  {
+    plan: "Titanium",
+    covers: [
+      { flag: "zeroDep", field: "Vehicle_Base_ZD_Premium" },
+      { flag: "ncbProtection", field: "Vehicle_Base_NCB_Premium" },
+      { flag: "engineProtect", field: "Vehicle_Base_ENG_Premium" },
+      { flag: "consumables", field: "Vehicle_Base_COC_Premium" },
+    ],
+  },
+  {
+    plan: "Menu Card Approach",
+    covers: [],
+    notes:
+      '"Menu Card Approach" is the pack\'s name for the ABSENCE of a plan — the customer picks covers one at a time, which is what this integration does by default. So the honest test is the converse of the bundled plans: naming it must add nothing. This row selects Zero Dep alone alongside it and asserts that Zero Dep is the only add-on charged — no bundle silently attached itself.',
+  },
+];
+
+const PLAN_CONDITIONS: LongCondition[] = PLAN_ROWS.map(({ plan, covers, blocked, notes }) => {
+  const condition = `…premium for Plan type ${plan} with multiplier factor`;
+  if (blocked) return { condition, blocked };
+  const bundled = covers ?? [];
+  return {
+    condition,
+    req: {
+      providerAddonCodes: [`${plan} Plan`],
+      // Menu Card is the à-la-carte case: one cover asked for by name.
+      ...(bundled.length === 0 ? { zeroDep: true } : {}),
+    },
+    assert:
+      bundled.length === 0
+        ? both(
+            positive("Vehicle_Base_ZD_Premium"),
+            zero("Vehicle_Base_NCB_Premium", "Vehicle_Base_ENG_Premium", "Vehicle_Base_COC_Premium"),
+          )
+        : both(
+            positive(...bundled.map((c) => c.field)),
+            // Nothing outside the bundle may be charged: a plan adds covers, it
+            // does not quietly buy the whole catalogue.
+            zero(
+              ...["Vehicle_Base_ZD_Premium", "Vehicle_Base_NCB_Premium", "Vehicle_Base_ENG_Premium", "Vehicle_Base_COC_Premium", "Vehicle_Base_RTI_Premium", "Vehicle_Base_TySec_Premium"].filter(
+                (f) => !bundled.some((c) => c.field === f),
+              ),
+            ),
+          ),
+    notes:
+      notes ??
+      `The plan is selected through providerAddonCodes ("${plan} Plan") and expands to the covers HDFC's own PlanTypes sheet marks mandatory for it — ${bundled
+        .map((c) => c.flag)
+        .join(", ")} — cross-checked against the live addonPlansToCoversMapping cover groups. The assertion is that every cover the plan promises is actually charged, and that nothing outside it is.`,
+  };
+});
+
 const LONG_CONDITIONS: LongCondition[] = [
   { condition: "Verify Private Car policy.", assert: positive("Total_Premium") },
   {
@@ -1036,8 +1183,10 @@ const LONG_CONDITIONS: LongCondition[] = [
   },
   {
     condition: "…premium for Loss of Use or Down time protection ADD ON Cover with multiplier factor",
-    blocked:
-      "No canonical flag maps to IsLossofUseDownTimeProt_Cover — mapper/req-pvtcar.ts hardcodes it to 0 in all three templates. (Forced to 1 by hand on UAT it prices at ₹559, so the cover exists; only the canonical route is missing.)",
+    req: { garageCash: true },
+    assert: both(positive("Loss_of_Use_Premium"), present("Loss_of_Use_Premium_Rate")),
+    notes:
+      "IsLossofUseDownTimeProt_Cover was hardcoded to 0 in all three templates, so the cover could never be bought. It now follows the canonical garageCash flag — HDFC's 'Loss of Use or Down Time Protection' and the market's 'Garage Cash' are the same benefit, a payout while the vehicle is off the road being repaired, so the existing canonical key is reused rather than an HDFC-shaped one invented. HDFC's own New Business proposal sample ships the flag on.",
   },
   {
     condition: "…premium for Cost of Consumables ADD ON Cover with multiplier factor",
@@ -1056,18 +1205,25 @@ const LONG_CONDITIONS: LongCondition[] = [
   },
   {
     condition: "…premium for Emergency Assistance Wider ADD ON Cover with multiplier factor",
-    blocked:
-      "No canonical flag maps to IsEAW_Cover — mapper/canonical.ts hardcodes roadsideAssistanceWorldwide: false. (Forced to 1 by hand on UAT it prices at ₹499.)",
+    req: { rsaWorldwide: true },
+    assert: positive("EAW_premium"),
+    notes:
+      "IsEAW_Cover was hardcoded false. It now follows a new canonical add-on key, rsaWorldwide — a wider/worldwide roadside-assistance tier is a genuinely provider-agnostic concept, and HDFC treats it as a cover in its own right rather than an upgrade of IsEA_Cover: live on UAT a quote with both on returns EA_premium 50 AND EAW_premium 499. The key is optional and default-off, so FG, ICICI and ITGI are untouched.",
   },
   {
     condition: "…premium for EMI Protector Plus ADD ON Cover with multiplier factor",
-    blocked:
-      "No canonical flag maps to IsEMIProtector_Cover / NoOfEmi / EMIAmount — all hardcoded to 0/null in mapper/req-pvtcar.ts. (Forced on by hand, HDFC UAT answers 'EMI Protector Plus - Add on system rate is not available', so it is unrated in the sandbox too.)",
+    req: { emiProtect: true, emiAmount: 15_000 },
+    assert: both(positive("EMI_PROTECTOR_PREMIUM"), present("EMI_PROTECTOR_PREMIUM_Rate")),
+    notes:
+      "Previously recorded as unrated in HDFC's sandbox. That was wrong, and finding out why is the whole of this row: HDFC refuses the payload for a MISSING INPUT, not a missing rate. The cover needs three things together — NoOfEmi, a non-zero EMIAmount, and EMIPlanType — and 'EMI Protector Plus - Add on system rate is not available' is what it says when any of them is absent. Proven live by adding them one at a time: with NoOfEmi 3 + EMIAmount 15000 it still refuses; the byte-identical payload with EMIPlanType 'A' added prices at EMI_PROTECTOR_PREMIUM 600 (rate 0.04 × 15000). Plan 'B' rates at 8%, 'C' has no rate, and NoOfEmi 6 has no rate. The canonical contract gained emiProtect + emiAmount; the cover is dropped rather than requested when no amount is supplied, because a zero amount is the refusal above.",
+    inputDeviation: "EMI amount ₹15,000 — the cover is rated on it, so a request without one cannot buy it.",
   },
   {
     condition: "…premium for Higher Protection and Removal Costs ADD ON Cover with multiplier factor",
-    blocked:
-      "No canonical flag maps to IsHighProtection_Cover / HigherTowingLimit — hardcoded to 0/null. (Forced on by hand, HDFC UAT answers 'Exception while Call Blaze!'.)",
+    req: { providerAddonCodes: ["HIGH_PROTECTION"] },
+    assert: positive("HighProtection_Premium"),
+    notes:
+      "IsHighProtection_Cover is now expressible, through the providerAddonCodes passthrough rather than a canonical flag: no other vendor we integrate sells 'Higher Protection and Removal Costs', and putting an option nobody can price on the compare card would be worse than leaving it off. HDFC's sandbox genuinely cannot rate it. Earlier probing blamed the refusal on a null HigherTowingLimit; sweeping the limit on a Roll Over (null / 1 / 2 / 3 / 25000 / 50000) returns 'Higher Protection and Removal Costs - Add on system rate is not available' at every single value, so the limit is not the missing input and the rate row is simply absent. On New Business the same request comes back as the generic 'Exception while Call Blaze!' instead — HDFC states the reason on one business type and swallows it on the other, but it is the same missing rate either way. That is why no towing limit is sent: no value is more truthful than none.",
   },
   {
     condition: "…premium for Tyre Secure For Private Car ADD ON Cover with multiplier factor",
@@ -1080,13 +1236,7 @@ const LONG_CONDITIONS: LongCondition[] = [
     assert: positive("LossOfPersonalBelongings_Premium"),
     notes: "The cover is rated ON LossOfPersonalBelonging_SI, which mapper/canonical.ts hardcoded to 0 — so the flag went out and HDFC charged nothing, leaving the customer with a cover worth nothing. The canonical contract now carries an optional lossOfBelongingsSI, and where a caller names none HDFC's own figure is sent: the only request in its Postman collection that turns the cover on sends LossOfPersonalBelonging_SI: 50000. This row deliberately sets no SI, so it proves the default.",
   },
-  ...(["Gold", "Silver", "Diamond", "Platinum", "Titanium", "Menu Card Approach"] as const).map(
-    (plan): LongCondition => ({
-      condition: `…premium for Plan type ${plan} with multiplier factor`,
-      blocked:
-        `The New Business Req_PvtCar template carries no PlanType key — HDFC's own New Business sample does not send one either (only the Roll Over template has "PlanType": null). Nothing in the canonical contract selects a plan. Forced onto the Roll Over template by hand, HDFC accepts every value including a nonsense one and the gross premium never changes, so PlanType appears inert on UAT.`,
-    }),
-  ),
+  ...PLAN_CONDITIONS,
 ];
 
 function longTermScenarios(): Scenario[] {

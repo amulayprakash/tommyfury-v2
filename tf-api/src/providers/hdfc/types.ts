@@ -60,6 +60,26 @@ export interface HdfcAddons {
   roadsideAssistance: boolean;
   roadsideAssistanceWorldwide: boolean;
   roadsideAssistanceAdvance: boolean;
+  /** IsLossofUseDownTimeProt_Cover — canonical `garageCash`. */
+  lossOfUse: boolean;
+  /**
+   * IsEMIProtector_Cover. All three fields travel together: HDFC refuses the
+   * payload when the cover is on and either the amount or the plan type is
+   * missing, so the mapper only ever sets the flag with both populated.
+   */
+  emiProtector: boolean;
+  noOfEmi?: number;
+  emiAmount: number;
+  emiPlanType?: string;
+  /** IsHighProtection_Cover, from the providerAddonCodes passthrough. */
+  highProtection: boolean;
+  higherTowingLimit?: number;
+  /**
+   * Req_PvtCar.PlanType — HDFC's merchandising label for the cover bundle the
+   * customer chose. Inert as a rating input (see HDFC_PLANS); sent because it is
+   * HDFC's own field and the Roll Over template already carries the key.
+   */
+  planType?: string;
   lossOfPersonalBelongings: boolean;
   lossOfPersonalBelongingsSI: number;
   llPaidDriver: number;
@@ -130,6 +150,11 @@ export interface HdfcCustomer {
   permPinCode?: string;
   /** Pehchaan kyc_id → Customer_Pehchaan_id. Issuance is refused without it. */
   pehchaanId?: string;
+  /** Customer_Type. HDFC's vocabulary is "Individual" / "Corporate". */
+  customerType?: "Individual" | "Corporate";
+  /** Company_Name — HDFC wants it populated for a corporate policyholder. */
+  companyName?: string;
+  gstin?: string;
 }
 
 export interface HdfcPayment {

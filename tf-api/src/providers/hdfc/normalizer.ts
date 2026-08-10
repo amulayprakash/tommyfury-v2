@@ -145,8 +145,20 @@ export function normalizeQuote(body: unknown, ctx: HdfcQuoteCtx): CanonicalQuote
     ncbProtection: opt(r.Vehicle_Base_NCB_Premium ?? r.NCBProtection_Premium),
     rti: opt(r.Vehicle_Base_RTI_Premium ?? r.RTI_Premium),
     consumables: opt(r.Vehicle_Base_COC_Premium ?? r.COC_Premium),
-    engineProtect: opt(r.Vehicle_Base_EGP_Premium ?? r.EngGearBox_Premium),
+    // `Vehicle_Base_ENG_Premium` is what the wire actually carries (live UAT:
+    // 783 on a 1-year Swift). The `_EGP_` spelling this used to read was a guess
+    // and matched nothing, so the engine-gearbox premium never reached the
+    // compare card even when the customer had bought and been charged for it.
+    engineProtect: opt(
+      r.Vehicle_Base_ENG_Premium ?? r.Vehicle_Base_EGP_Premium ?? r.EngGearBox_Premium,
+    ),
     rsa: opt(r.EA_premium ?? r.EA_Premium),
+    // Lowercase p, like EA_premium — HDFC spells this pair differently from
+    // every other premium field in Resp_PvtCar.
+    rsaWorldwide: opt(r.EAW_premium ?? r.EAW_Premium),
+    // "Loss of Use / Down Time Protection" is HDFC's name for Garage Cash.
+    garageCash: opt(r.Loss_of_Use_Premium),
+    emiProtect: opt(r.EMI_PROTECTOR_PREMIUM),
     lossOfBelongings: opt(r.LossOfPersonalBelongings_Premium),
     paOwner: opt(r.CPA_Premium),
     paUnnamedPassenger: opt(r.UnnamedPerson_Premium),

@@ -68,6 +68,22 @@ export const AddonKeySchema = z.enum([
   "zeroDep",
   "engineProtect",
   "rsa",
+  /**
+   * The wider/worldwide tier of roadside assistance — a second, dearer RSA
+   * product sold alongside the ordinary one rather than instead of it. Wired for
+   * HDFC ERGO, whose `IsEAW_Cover` ("Emergency Assistance Wider") is a separate
+   * flag from `IsEA_Cover` and prices independently of it: live on UAT a Swift
+   * with both on returns `EA_premium: 50` AND `EAW_premium: 499`. Vendors that
+   * sell only one RSA tier ignore it.
+   */
+  "rsaWorldwide",
+  /**
+   * EMI protector — pays the customer's vehicle-loan instalments while the car
+   * is off the road after a claim. Rated on the instalment AMOUNT, which is why
+   * it has a companion `emiAmount` on the quote request rather than being a bare
+   * boolean.
+   */
+  "emiProtect",
   "tyreProtect",
   "rimProtect",
   "rti",
@@ -95,6 +111,8 @@ export const ADDON_METADATA: readonly AddonMeta[] = [
   { key: "zeroDep", label: "Zero Depreciation" },
   { key: "engineProtect", label: "Engine Protection Cover" },
   { key: "rsa", label: "Road Side Assistance (RSA)" },
+  { key: "rsaWorldwide", label: "Road Side Assistance — Wider/Worldwide" },
+  { key: "emiProtect", label: "EMI Protector" },
   { key: "tyreProtect", label: "Tyre Protect" },
   { key: "rimProtect", label: "Rim Protect" },
   { key: "rti", label: "Return To Invoice" },

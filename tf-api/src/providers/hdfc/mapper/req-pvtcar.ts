@@ -63,15 +63,36 @@ export function reqPvtCarNew(req: HdfcRequestShape): ReqPvtCar {
     RTIPlanType: a.rti ? (a.rtiPlanType ?? "A") : null,
     IsCOC_Cover: bool01(a.consumables),
     IsEngGearBox_Cover: bool01(a.engineProtect),
-    IsLossofUseDownTimeProt_Cover: 0,
+    IsLossofUseDownTimeProt_Cover: bool01(a.lossOfUse),
     IsEA_Cover: bool01(a.roadsideAssistance),
     IsEAW_Cover: bool01(a.roadsideAssistanceWorldwide),
     IsEAAdvance_Cover: bool01(a.roadsideAssistanceAdvance),
     IsTowing_Cover: 0,
     Towing_Limit: null,
-    IsEMIProtector_Cover: 0,
-    NoOfEmi: null,
-    EMIAmount: 0,
+    IsEMIProtector_Cover: bool01(a.emiProtector),
+    NoOfEmi: a.noOfEmi ?? null,
+    EMIAmount: num(a.emiAmount),
+    /**
+     * KEY-SET EXCEPTION, and the only one in this template.
+     *
+     * HDFC's New Business sample does not send `EMIPlanType`, so it is not part
+     * of the proven key set and is NOT emitted on any payload that leaves the
+     * EMI cover off — every request the certification pack has ever passed with
+     * keeps exactly its old shape.
+     *
+     * It is emitted when the cover IS on because without it the cover cannot be
+     * bought at all. Proven live on UAT, New Business, model 12798 / RTO 10406:
+     * `IsEMIProtector_Cover: 1` with `NoOfEmi: 3` and `EMIAmount: 15000` is
+     * refused with "EMI Protector Plus - Add on system rate is not available";
+     * the byte-identical payload with `EMIPlanType: "A"` added prices. So the
+     * key genuinely belongs on an EMI-Protector payload — HDFC's sample simply
+     * never buys the cover. Same conditional-key discipline as
+     * `Policy_Details.PolicyEndDate` for the multi-year standalone OD.
+     *
+     * Position mirrors the Roll Over template, which carries the key
+     * unconditionally: immediately after EMIAmount.
+     */
+    ...(a.emiProtector ? { EMIPlanType: a.emiPlanType ?? null } : {}),
     NoofUnnamedPerson: num(a.unnamedPersons),
     UnnamedPersonSI: num(a.unnamedPersonSI),
     Voluntary_Excess_Discount: num(a.voluntaryExcess),
@@ -87,8 +108,8 @@ export function reqPvtCarNew(req: HdfcRequestShape): ReqPvtCar {
     initialOdometerReading: null,
     initialOdometerReadingDate: null,
     kmsYouExpectToDrive: 0,
-    IsHighProtection_Cover: 0,
-    HigherTowingLimit: null,
+    IsHighProtection_Cover: bool01(a.highProtection),
+    HigherTowingLimit: a.higherTowingLimit ?? null,
     IsLossOfPersonalBelongings_Cover: bool01(a.lossOfPersonalBelongings),
     LossOfPersonalBelonging_SI: num(a.lossOfPersonalBelongingsSI),
     isCoPassengerOptedForLOPB: 0,
@@ -115,7 +136,15 @@ export function reqPvtCarRollover(req: HdfcRequestShape): ReqPvtCar {
   const a = req.addons;
   const ev = req.ev;
   return {
-    PlanType: null,
+    /**
+     * HDFC's merchandising label for the cover bundle. Inert as a rating input —
+     * live on UAT every value including an invented one returned an identical
+     * gross premium — but it is HDFC's own field and this template has always
+     * carried the key, so the plan the customer actually chose is now named on
+     * the payload instead of a flat null. What the plan COSTS is carried by the
+     * Is*_Cover flags the plan expanded to. See HDFC_PLANS.
+     */
+    PlanType: a.planType ?? null,
     POSP_CODE: null,
     POLICY_TYPE: req.policy.policyType,
     POLICY_TENURE: num(req.policy.tenure, 1),
@@ -151,16 +180,16 @@ export function reqPvtCarRollover(req: HdfcRequestShape): ReqPvtCar {
     RTIPlanType: a.rti ? (a.rtiPlanType ?? "A") : "",
     IsCOC_Cover: bool01(a.consumables),
     IsEngGearBox_Cover: bool01(a.engineProtect),
-    IsLossofUseDownTimeProt_Cover: 0,
+    IsLossofUseDownTimeProt_Cover: bool01(a.lossOfUse),
     IsEA_Cover: bool01(a.roadsideAssistance),
     IsEAW_Cover: bool01(a.roadsideAssistanceWorldwide),
     IsEAAdvance_Cover: bool01(a.roadsideAssistanceAdvance),
     IsTowing_Cover: 0,
     Towing_Limit: null,
-    IsEMIProtector_Cover: 0,
-    NoOfEmi: null,
-    EMIAmount: 0,
-    EMIPlanType: null,
+    IsEMIProtector_Cover: bool01(a.emiProtector),
+    NoOfEmi: a.noOfEmi ?? null,
+    EMIAmount: num(a.emiAmount),
+    EMIPlanType: a.emiPlanType ?? null,
     NoofUnnamedPerson: num(a.unnamedPersons),
     UnnamedPersonSI: num(a.unnamedPersonSI),
     Voluntary_Excess_Discount: num(a.voluntaryExcess),
@@ -176,8 +205,8 @@ export function reqPvtCarRollover(req: HdfcRequestShape): ReqPvtCar {
     initialOdometerReading: null,
     initialOdometerReadingDate: null,
     kmsYouExpectToDrive: 0,
-    IsHighProtection_Cover: 0,
-    HigherTowingLimit: null,
+    IsHighProtection_Cover: bool01(a.highProtection),
+    HigherTowingLimit: a.higherTowingLimit ?? null,
     IsLossOfPersonalBelongings_Cover: bool01(a.lossOfPersonalBelongings),
     LossOfPersonalBelonging_SI: num(a.lossOfPersonalBelongingsSI),
     isCoPassengerOptedForLOPB: 0,
@@ -249,14 +278,16 @@ export function reqPvtCarUsed(req: HdfcRequestShape): ReqPvtCar {
     IsRTI_Cover: bool01(a.rti),
     IsCOC_Cover: bool01(a.consumables),
     IsEngGearBox_Cover: bool01(a.engineProtect),
-    IsLossofUseDownTimeProt_Cover: 0,
+    IsLossofUseDownTimeProt_Cover: bool01(a.lossOfUse),
     IsEA_Cover: bool01(a.roadsideAssistance),
     IsEAW_Cover: bool01(a.roadsideAssistanceWorldwide),
     IsFibertank: bool01(a.fibertank),
     NoOfWorkmen: 0,
     NumberOfDrivers: num(a.numberOfDrivers),
-    IsHighProtection_Cover: 0,
-    HigherTowingLimit: 0,
+    IsHighProtection_Cover: bool01(a.highProtection),
+    // The Used Car sample sends 0 here, not null, and carries no EMI keys at
+    // all — so EMI Protector is simply not offered on a used-car policy.
+    HigherTowingLimit: a.higherTowingLimit ?? 0,
     IsLossOfPersonalBelongings_Cover: bool01(a.lossOfPersonalBelongings),
     LossOfPersonalBelonging_SI: num(a.lossOfPersonalBelongingsSI),
   };

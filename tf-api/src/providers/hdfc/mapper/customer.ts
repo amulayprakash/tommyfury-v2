@@ -9,16 +9,28 @@ export interface CustomerDetailsOptions {
 /**
  * Customer_Details, ported verbatim. HDFC wants empty strings rather than
  * missing keys for unset optional fields.
+ *
+ * `Customer_Type` was hardcoded "Individual", which made a corporate
+ * policyholder inexpressible even though HDFC's own block already carries the
+ * three keys a company needs — `Customer_Type`, `Company_Name` and
+ * `Customer_GSTIN_Number`. It now follows the canonical
+ * `MotorFullQuoteRequest.customerType`, so this is a VALUE change only and the
+ * proposal fixtures' key sets are untouched.
+ *
+ * Note the vendor kit ships a SEPARATE corporate e-KYC document
+ * ("Pehchaan Integration KIT - Corporate.docx"), so a corporate proposal also
+ * needs a corporate Pehchaan journey — not wired here.
  */
 export function buildCustomerDetails(
   c: HdfcCustomer,
   opts: CustomerDetailsOptions = {},
 ): Record<string, unknown> {
+  const corporate = c.customerType === "Corporate";
   const cd: Record<string, unknown> = {
     GC_CustomerID: "",
     IsCustomer_modify: null,
-    Company_Name: "",
-    Customer_Type: "Individual",
+    Company_Name: corporate ? (c.companyName ?? "") : "",
+    Customer_Type: corporate ? "Corporate" : "Individual",
     Customer_FirstName: c.firstName ?? "",
     Customer_MiddleName: c.middleName ?? "",
     Customer_LastName: c.lastName ?? "",
@@ -52,7 +64,7 @@ export function buildCustomerDetails(
     Customer_Mailing_State: c.permState ?? "",
     Customer_Mailing_PinCode: c.permPinCode ?? "",
     Customer_Mailing_PinCodeLocality: "",
-    Customer_GSTIN_Number: "",
+    Customer_GSTIN_Number: c.gstin ?? "",
     Customer_GSTIN_State: "",
     Customer_Professtion: null,
     Customer_MaritalStatus: null,

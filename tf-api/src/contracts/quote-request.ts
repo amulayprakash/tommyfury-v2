@@ -47,6 +47,30 @@ export const MotorQuoteRequestSchema = z.object({
   registrationNumber: z.string().optional(),
   vehicleAge: z.coerce.number().int().nonnegative().optional(),
 
+  /**
+   * The customer is buying the vehicle SECOND-HAND and taking fresh cover on it,
+   * rather than renewing or rolling over cover they already hold. A distinct
+   * market transaction: ownership transfers, so the seller's no-claim bonus does
+   * not follow the car and the insurer inspects before putting it on risk.
+   *
+   * Deliberately a separate optional flag rather than a fourth `BusinessType`
+   * member. `businessType` is a REQUIRED field that FG, ICICI and ITGI all branch
+   * on directly (and ICICI passes through to its own product resolver), so
+   * widening that union would change what those three vendors are sent for a
+   * value they have no concept of. An optional, default-false flag they never
+   * read leaves them byte-identical. If every provider ever grows a used-vehicle
+   * path, folding this back into `businessType` is the tidier end state.
+   *
+   * Consumed today only by HDFC ERGO, which has a distinct "Used Car"
+   * BusinessType_Mandatary with its own Req_PvtCar / Policy_Details templates.
+   *
+   * Bare `.optional()`, not `.default(false)`: a default would make the key
+   * required in the inferred type and the generated OpenAPI schema, which is the
+   * opposite of leaving existing callers alone. Absent means "not a used-car
+   * purchase".
+   */
+  isUsedVehiclePurchase: z.boolean().optional(),
+
   // Previous policy (rollover/renewal)
   previousPolicyNumber: z.string().optional(),
   previousInsurerId: z.string().optional(),
@@ -95,6 +119,26 @@ export const MotorQuoteRequestSchema = z.object({
   zeroDep: z.boolean().default(false),
   engineProtect: z.boolean().default(false),
   rsa: z.boolean().default(false),
+  /**
+   * The wider/worldwide roadside-assistance tier (see AddonKeySchema). FG, ICICI
+   * and ITGI sell a single RSA product and ignore it.
+   *
+   * A bare `.optional()` rather than the `.default(false)` the add-ons above
+   * carry, matching `hasAntiTheftDevice` and `previousPolicyHasZdCover` further
+   * down. A default would make the key REQUIRED in the inferred type and in the
+   * generated OpenAPI schema, forcing every existing MotorQuoteRequest literal
+   * across the FG / ICICI / ITGI tests, the probe scripts and tf-web to name it.
+   * Absent means off; read it as `Boolean(req.rsaWorldwide)`.
+   */
+  rsaWorldwide: z.boolean().optional(),
+  /**
+   * EMI protector. Rated on `emiAmount`, not at a flat rate — HDFC UAT refuses
+   * the whole payload ("EMI Protector Plus - Add on system rate is not
+   * available") when the cover is on and the amount is 0, so its mapper drops
+   * the cover rather than sending a request the vendor cannot price.
+   * Optional for the same reason as `rsaWorldwide` above.
+   */
+  emiProtect: z.boolean().optional(),
   tyreProtect: z.boolean().default(false),
   rimProtect: z.boolean().default(false),
   rti: z.boolean().default(false),
@@ -149,6 +193,18 @@ export const MotorQuoteRequestSchema = z.object({
    * so its mapper substitutes the vendor's own sample value when it is absent.
    */
   lossOfBelongingsSI: z.coerce.number().nonnegative().optional(),
+  /**
+   * The monthly loan instalment the `emiProtect` cover is bought against, in
+   * whole rupees. Optional with no default, like every other amount here.
+   *
+   * HDFC rates the cover as a straight percentage of it — live on UAT a Swift
+   * with `EMIAmount: 15000` returns `EMI_PROTECTOR_PREMIUM: 600` at
+   * `EMI_PROTECTOR_PREMIUM_Rate: 0.04` — and refuses the payload outright when
+   * the cover is on with a zero amount, so there is nothing sensible to invent
+   * here and no vendor sample to copy: HDFC's own collection never turns the
+   * cover on. Without an amount the cover simply is not requested.
+   */
+  emiAmount: z.coerce.number().nonnegative().optional(),
   /** Driver / employee counts (commercial-ish; ICICI optional). */
   numberOfDrivers: z.coerce.number().int().nonnegative().optional(),
   numberOfEmployees: z.coerce.number().int().nonnegative().optional(),
@@ -221,6 +277,21 @@ export const MotorFullQuoteRequestSchema = MotorQuoteRequestSchema.extend({
   nomineeAge: z.coerce.number().int().positive().optional(),
   kycRefId: z.string().optional(),
   ckyc: z.string().optional(),
+
+  /**
+   * Whether the policyholder is a natural person or a company. Provider-agnostic:
+   * every motor insurer distinguishes the two (different KYC, different GST
+   * treatment, no owner-driver PA for a company that cannot drive).
+   *
+   * Optional, and absent means "individual", so nothing existing changes.
+   * Consumed today by HDFC ERGO, whose Customer_Details block already carries the
+   * `Customer_Type` and `Company_Name` keys — no key-set change is involved,
+   * only the values. `companyName` is what HDFC wants when the type is
+   * corporate; `gstin` fills its `Customer_GSTIN_Number`.
+   */
+  customerType: z.enum(["individual", "corporate"]).optional(),
+  companyName: z.string().optional(),
+  gstin: z.string().optional(),
 
   // Pre-inspection evidence for break-in scenarios (FG rejects a break-in
   // proposal without it). Populated from the completed LiveChek inspection

@@ -71,6 +71,8 @@ export const ADDON_LABELS: Record<AddonKey, string> = {
   zeroDep: "Zero Depreciation",
   engineProtect: "Engine Protection",
   rsa: "Road Side Assistance",
+  rsaWorldwide: "Road Side Assistance — Wider/Worldwide",
+  emiProtect: "EMI Protector",
   tyreProtect: "Tyre Protect",
   rimProtect: "Rim Protect",
   rti: "Return To Invoice",

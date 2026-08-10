@@ -38,23 +38,23 @@ export interface paths {
                                 motorCapabilities: {
                                     fourWheeler?: {
                                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
-                                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
+                                        addons: ("zeroDep" | "engineProtect" | "rsa" | "rsaWorldwide" | "emiProtect" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
                                     };
                                     twoWheeler?: {
                                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
-                                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
+                                        addons: ("zeroDep" | "engineProtect" | "rsa" | "rsaWorldwide" | "emiProtect" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
                                     };
                                     commercial?: {
                                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
-                                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
+                                        addons: ("zeroDep" | "engineProtect" | "rsa" | "rsaWorldwide" | "emiProtect" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
                                     };
                                     newVehicle?: {
                                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
-                                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
+                                        addons: ("zeroDep" | "engineProtect" | "rsa" | "rsaWorldwide" | "emiProtect" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
                                     };
                                     newCommercial?: {
                                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
-                                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
+                                        addons: ("zeroDep" | "engineProtect" | "rsa" | "rsaWorldwide" | "emiProtect" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
                                     };
                                 };
                             }[];
@@ -120,6 +120,7 @@ export interface paths {
                         registrationDate: string;
                         registrationNumber?: string;
                         vehicleAge?: number | null;
+                        isUsedVehiclePurchase?: boolean;
                         previousPolicyNumber?: string;
                         previousInsurerId?: string;
                         previousInsurerName?: string;
@@ -146,6 +147,8 @@ export interface paths {
                         engineProtect?: boolean;
                         /** @default false */
                         rsa?: boolean;
+                        rsaWorldwide?: boolean;
+                        emiProtect?: boolean;
                         /** @default false */
                         tyreProtect?: boolean;
                         /** @default false */
@@ -191,6 +194,7 @@ export interface paths {
                         drivingAccessoriesSI?: number | null;
                         keyProtectSI?: number | null;
                         lossOfBelongingsSI?: number | null;
+                        emiAmount?: number | null;
                         numberOfDrivers?: number | null;
                         numberOfEmployees?: number | null;
                         pincode?: string;
@@ -234,6 +238,8 @@ export interface paths {
                                         zeroDep?: number;
                                         engineProtect?: number;
                                         rsa?: number;
+                                        rsaWorldwide?: number;
+                                        emiProtect?: number;
                                         tyreProtect?: number;
                                         rimProtect?: number;
                                         rti?: number;
@@ -347,6 +353,7 @@ export interface paths {
                         registrationDate: string;
                         registrationNumber?: string;
                         vehicleAge?: number | null;
+                        isUsedVehiclePurchase?: boolean;
                         previousPolicyNumber?: string;
                         previousInsurerId?: string;
                         previousInsurerName?: string;
@@ -373,6 +380,8 @@ export interface paths {
                         engineProtect?: boolean;
                         /** @default false */
                         rsa?: boolean;
+                        rsaWorldwide?: boolean;
+                        emiProtect?: boolean;
                         /** @default false */
                         tyreProtect?: boolean;
                         /** @default false */
@@ -418,6 +427,7 @@ export interface paths {
                         drivingAccessoriesSI?: number | null;
                         keyProtectSI?: number | null;
                         lossOfBelongingsSI?: number | null;
+                        emiAmount?: number | null;
                         numberOfDrivers?: number | null;
                         numberOfEmployees?: number | null;
                         pincode?: string;
@@ -454,6 +464,8 @@ export interface paths {
                                 zeroDep?: number;
                                 engineProtect?: number;
                                 rsa?: number;
+                                rsaWorldwide?: number;
+                                emiProtect?: number;
                                 tyreProtect?: number;
                                 rimProtect?: number;
                                 rti?: number;
@@ -567,6 +579,8 @@ export interface paths {
                                 zeroDep?: number;
                                 engineProtect?: number;
                                 rsa?: number;
+                                rsaWorldwide?: number;
+                                emiProtect?: number;
                                 tyreProtect?: number;
                                 rimProtect?: number;
                                 rti?: number;
@@ -676,6 +690,7 @@ export interface paths {
                         registrationDate: string;
                         registrationNumber?: string;
                         vehicleAge?: number | null;
+                        isUsedVehiclePurchase?: boolean;
                         previousPolicyNumber?: string;
                         previousInsurerId?: string;
                         previousInsurerName?: string;
@@ -702,6 +717,8 @@ export interface paths {
                         engineProtect?: boolean;
                         /** @default false */
                         rsa?: boolean;
+                        rsaWorldwide?: boolean;
+                        emiProtect?: boolean;
                         /** @default false */
                         tyreProtect?: boolean;
                         /** @default false */
@@ -747,6 +764,7 @@ export interface paths {
                         drivingAccessoriesSI?: number | null;
                         keyProtectSI?: number | null;
                         lossOfBelongingsSI?: number | null;
+                        emiAmount?: number | null;
                         numberOfDrivers?: number | null;
                         numberOfEmployees?: number | null;
                         pincode?: string;
@@ -789,6 +807,10 @@ export interface paths {
                         nomineeAge?: number;
                         kycRefId?: string;
                         ckyc?: string;
+                        /** @enum {string} */
+                        customerType?: "individual" | "corporate";
+                        companyName?: string;
+                        gstin?: string;
                         inspectionReportNumber?: string;
                         inspectionDate?: string;
                         odDiscountPercent?: number | null;
@@ -847,6 +869,8 @@ export interface paths {
                                 zeroDep?: number;
                                 engineProtect?: number;
                                 rsa?: number;
+                                rsaWorldwide?: number;
+                                emiProtect?: number;
                                 tyreProtect?: number;
                                 rimProtect?: number;
                                 rti?: number;
@@ -1314,6 +1338,8 @@ export interface paths {
                                 zeroDep?: number;
                                 engineProtect?: number;
                                 rsa?: number;
+                                rsaWorldwide?: number;
+                                emiProtect?: number;
                                 tyreProtect?: number;
                                 rimProtect?: number;
                                 rti?: number;
@@ -1447,6 +1473,8 @@ export interface paths {
                                 zeroDep?: number;
                                 engineProtect?: number;
                                 rsa?: number;
+                                rsaWorldwide?: number;
+                                emiProtect?: number;
                                 tyreProtect?: number;
                                 rimProtect?: number;
                                 rti?: number;
@@ -2370,6 +2398,7 @@ export interface components {
             registrationDate: string;
             registrationNumber?: string;
             vehicleAge?: number | null;
+            isUsedVehiclePurchase?: boolean;
             previousPolicyNumber?: string;
             previousInsurerId?: string;
             previousInsurerName?: string;
@@ -2396,6 +2425,8 @@ export interface components {
             engineProtect: boolean;
             /** @default false */
             rsa: boolean;
+            rsaWorldwide?: boolean;
+            emiProtect?: boolean;
             /** @default false */
             tyreProtect: boolean;
             /** @default false */
@@ -2441,6 +2472,7 @@ export interface components {
             drivingAccessoriesSI?: number | null;
             keyProtectSI?: number | null;
             lossOfBelongingsSI?: number | null;
+            emiAmount?: number | null;
             numberOfDrivers?: number | null;
             numberOfEmployees?: number | null;
             pincode?: string;
@@ -2476,6 +2508,7 @@ export interface components {
             registrationDate: string;
             registrationNumber?: string;
             vehicleAge?: number | null;
+            isUsedVehiclePurchase?: boolean;
             previousPolicyNumber?: string;
             previousInsurerId?: string;
             previousInsurerName?: string;
@@ -2502,6 +2535,8 @@ export interface components {
             engineProtect: boolean;
             /** @default false */
             rsa: boolean;
+            rsaWorldwide?: boolean;
+            emiProtect?: boolean;
             /** @default false */
             tyreProtect: boolean;
             /** @default false */
@@ -2547,6 +2582,7 @@ export interface components {
             drivingAccessoriesSI?: number | null;
             keyProtectSI?: number | null;
             lossOfBelongingsSI?: number | null;
+            emiAmount?: number | null;
             numberOfDrivers?: number | null;
             numberOfEmployees?: number | null;
             pincode?: string;
@@ -2589,6 +2625,10 @@ export interface components {
             nomineeAge?: number;
             kycRefId?: string;
             ckyc?: string;
+            /** @enum {string} */
+            customerType?: "individual" | "corporate";
+            companyName?: string;
+            gstin?: string;
             inspectionReportNumber?: string;
             inspectionDate?: string;
             odDiscountPercent?: number | null;
@@ -2646,6 +2686,7 @@ export interface components {
             registrationDate: string;
             registrationNumber?: string;
             vehicleAge?: number | null;
+            isUsedVehiclePurchase?: boolean;
             previousPolicyNumber?: string;
             previousInsurerId?: string;
             previousInsurerName?: string;
@@ -2672,6 +2713,8 @@ export interface components {
             engineProtect: boolean;
             /** @default false */
             rsa: boolean;
+            rsaWorldwide?: boolean;
+            emiProtect?: boolean;
             /** @default false */
             tyreProtect: boolean;
             /** @default false */
@@ -2717,6 +2760,7 @@ export interface components {
             drivingAccessoriesSI?: number | null;
             keyProtectSI?: number | null;
             lossOfBelongingsSI?: number | null;
+            emiAmount?: number | null;
             numberOfDrivers?: number | null;
             numberOfEmployees?: number | null;
             pincode?: string;
@@ -2745,6 +2789,8 @@ export interface components {
                 zeroDep?: number;
                 engineProtect?: number;
                 rsa?: number;
+                rsaWorldwide?: number;
+                emiProtect?: number;
                 tyreProtect?: number;
                 rimProtect?: number;
                 rti?: number;
@@ -2795,23 +2841,23 @@ export interface components {
                 motorCapabilities: {
                     fourWheeler?: {
                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
-                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
+                        addons: ("zeroDep" | "engineProtect" | "rsa" | "rsaWorldwide" | "emiProtect" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
                     };
                     twoWheeler?: {
                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
-                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
+                        addons: ("zeroDep" | "engineProtect" | "rsa" | "rsaWorldwide" | "emiProtect" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
                     };
                     commercial?: {
                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
-                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
+                        addons: ("zeroDep" | "engineProtect" | "rsa" | "rsaWorldwide" | "emiProtect" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
                     };
                     newVehicle?: {
                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
-                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
+                        addons: ("zeroDep" | "engineProtect" | "rsa" | "rsaWorldwide" | "emiProtect" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
                     };
                     newCommercial?: {
                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
-                        addons: ("zeroDep" | "engineProtect" | "rsa" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
+                        addons: ("zeroDep" | "engineProtect" | "rsa" | "rsaWorldwide" | "emiProtect" | "tyreProtect" | "rimProtect" | "rti" | "consumables" | "paOwner" | "paUnnamedPassenger" | "legalLiabilityPaidDriver" | "keyProtect" | "garageCash" | "lossOfBelongings" | "batteryProtect" | "drivingAccessories" | "ncbProtection")[];
                     };
                 };
             }[];
@@ -2844,6 +2890,8 @@ export interface components {
                         zeroDep?: number;
                         engineProtect?: number;
                         rsa?: number;
+                        rsaWorldwide?: number;
+                        emiProtect?: number;
                         tyreProtect?: number;
                         rimProtect?: number;
                         rti?: number;

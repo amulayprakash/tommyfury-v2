@@ -36,11 +36,24 @@ describe("HDFC capability surface", () => {
 
   it("excludes add-ons HDFC has no cover field for", () => {
     const addons = HDFC_MOTOR_CAPABILITIES.fourWheeler?.addons ?? [];
-    for (const absent of ["rimProtect", "keyProtect", "garageCash", "drivingAccessories"]) {
+    for (const absent of ["rimProtect", "keyProtect", "drivingAccessories"]) {
       expect(addons).not.toContain(absent);
     }
     expect(addons).toContain("zeroDep");
     expect(addons).toContain("tyreProtect");
+  });
+
+  it("advertises the covers whose Req_PvtCar flags are now wired", () => {
+    const addons = HDFC_MOTOR_CAPABILITIES.fourWheeler?.addons ?? [];
+    // IsEAW_Cover — "Emergency Assistance Wider", a separate cover from
+    // IsEA_Cover that prices independently (live UAT: EA ₹50, EAW ₹499).
+    expect(addons).toContain("rsaWorldwide");
+    // IsLossofUseDownTimeProt_Cover — HDFC's name for Garage Cash. It used to be
+    // listed as a cover HDFC "has no field for", which was wrong: live UAT
+    // returns Loss_of_Use_Premium 559 when the flag is set.
+    expect(addons).toContain("garageCash");
+    // IsEMIProtector_Cover, rated on the instalment amount.
+    expect(addons).toContain("emiProtect");
   });
 });
 

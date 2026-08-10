@@ -10,6 +10,8 @@ export const AddonPremiumSchema = z.object({
   zeroDep: z.number().nonnegative().optional(),
   engineProtect: z.number().nonnegative().optional(),
   rsa: z.number().nonnegative().optional(),
+  rsaWorldwide: z.number().nonnegative().optional(),
+  emiProtect: z.number().nonnegative().optional(),
   tyreProtect: z.number().nonnegative().optional(),
   rimProtect: z.number().nonnegative().optional(),
   rti: z.number().nonnegative().optional(),
