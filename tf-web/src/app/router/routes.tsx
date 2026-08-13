@@ -59,6 +59,9 @@ const FgCategoryPage = lazy(() =>
 const FgVehiclePage = lazy(() =>
   import("@/features/fg-uat/pages/fg-vehicle-page").then((m) => ({ default: m.FgVehiclePage })),
 );
+const FgPlansPage = lazy(() =>
+  import("@/features/fg-uat/pages/fg-plans-page").then((m) => ({ default: m.FgPlansPage })),
+);
 
 /** Shorthand for a legacy route whose flow is rebuilt in a later phase. */
 function placeholder(path: string, title: string, vertical?: string): RouteObject {
@@ -165,6 +168,7 @@ export const routes: RouteObject[] = [
             children: [
               { path: ROUTES.fgUat.start, element: <FgCategoryPage /> },
               { path: ROUTES.fgUat.vehicle, element: <FgVehiclePage /> },
+              { path: ROUTES.fgUat.plans, element: <FgPlansPage /> },
             ],
           },
 
