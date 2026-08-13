@@ -345,7 +345,44 @@ const VENDOR_DATA_PATTERNS: { test: RegExp; why: string }[] = [
   },
   { test: /Rate is not defined in the R\d+ Master/i, why: "missing rate row in HDFC's UAT masters" },
   { test: /Add on system rate is not available/i, why: "add-on has no rate in HDFC's UAT masters" },
-  { test: /SA_OD Policy is only allowed for Short Term Policy period/i, why: "HDFC's rules engine refuses a 2-year OD term its own data dictionary documents (2OD-3TP under PRODUCT_CODE 2311)" },
+  {
+    /**
+     * Raised on a PACKAGE (OD Plus TP) new-business policy whose OD leg is two
+     * years. HDFC's own data dictionary lists the term — "03 CalculatePremium
+     * Request" row 40 gives PRODUCT_CODE 2311 New Policy as "1OD – 3TP, 2OD -
+     * 3TP, 3OD - 3TP" — but its rules engine will not write the middle one.
+     *
+     * Re-proven on 2026-08-13 (scripts/_hdfc-term-probe.ts, model 12798 / RTO
+     * 10406, policy starting 13/08/2026) by exhausting both routes HDFC gives
+     * for stating a term on this product:
+     *
+     *   POLICY_TENURE=1, no end date          priced, OD ₹8,284, no IDV ladder
+     *   POLICY_TENURE=3, no end date          priced, OD ₹12,300, IdvYear1..3
+     *   POLICY_TENURE=2, no end date          THIS refusal
+     *   POLICY_TENURE=2, end 12/08/2028       THIS refusal  (start + 2y − 1d)
+     *   POLICY_TENURE=2, end 12/08/2029       priced — but OD ₹12,300 with
+     *                                         IdvYear3 populated, i.e. the
+     *                                         THREE-year figures exactly
+     *
+     * So the one end date in that region HDFC accepts writes a 3+3 wearing a
+     * 2+3 label; there is no payload that buys the two-year OD the customer
+     * asked for, and quoting the 3-year one would sell a term nobody chose.
+     * Every other end date is refused earlier and for a different reason
+     * ("Kindly pass valid policy start and end dates. Policy should be
+     * year-based"), which also shows the date itself is well-formed. CPA_Tenure
+     * is not involved — the refusal is identical with compulsory PA off, and it
+     * never carries the illegal value 2 (mapper/canonical.ts sends 1 or 0,
+     * matching the dictionary's "PA cover tenure values should be 1 Or 3").
+     * Nor is there a vendor sample to copy: every Req_PvtCar in BOTH Postman
+     * collections sends POLICY_TENURE 1.
+     */
+    test: /SA_OD Policy is only allowed for Short Term Policy period/i,
+    why:
+      "HDFC's rules engine refuses a 2-year OD term its own data dictionary documents (2OD-3TP under PRODUCT_CODE 2311). " +
+      "Both routes for stating the term were exhausted on 2026-08-13: POLICY_TENURE=2 alone is refused, and so is POLICY_TENURE=2 with a year-based PolicyEndDate at start+2y−1d, while the identical payload prices at tenure 1 (OD ₹8,284) and tenure 3 (OD ₹12,300). " +
+      "The only end date in that region HDFC accepts is start+3y−1d, which returns the three-year figures with IdvYear3 populated — a 3+3 wearing a 2+3 label, so no payload buys the term the customer asked for. " +
+      "CPA_Tenure is not involved (identical refusal with compulsory PA off), and every Req_PvtCar sample in both vendor Postman collections sends POLICY_TENURE 1, so there is no working 2OD-3TP example to copy",
+  },
   {
     // Raised when Policy_Details.PolicyEndDate lands 366–730 days after
     // inception — i.e. on a straight two-year standalone OD. Mapped live on
