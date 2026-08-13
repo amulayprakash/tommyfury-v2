@@ -32,6 +32,7 @@
     "db:import:hdfc": "tsx --env-file=.env scripts/import-hdfc-master.ts",
     "hdfc:probe": "tsx --env-file=.env scripts/hdfc-uat-probe.ts",
     "hdfc:scenarios": "tsx --env-file=.env scripts/hdfc-uat-scenarios.ts",
+    "hdfc:issue": "tsx --env-file=.env scripts/hdfc-uat-issuance.ts",
     "db:verify:fg": "tsx --env-file=.env scripts/verify-fg-master-parity.ts",
     "openapi:gen": "tsx scripts/gen-openapi.ts",
     "nivabupa:migrate": "node --env-file=.env scripts/nivabupa-migrate.js",
