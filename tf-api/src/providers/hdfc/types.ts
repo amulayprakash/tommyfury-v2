@@ -97,7 +97,8 @@ export interface HdfcAddons {
   automobileAssociationNo?: string;
   nomineeName?: string;
   nomineeAge?: number;
-  nomineeRelationship?: string;
+  /** Already resolved onto HDFC's RELATION MASTER; null when none was supplied. */
+  nomineeRelationship?: string | null;
   effectiveDrivingLicense: boolean;
   /**
    * Used Car only — the Used template emits IsFibertank / NumberOfDrivers, which

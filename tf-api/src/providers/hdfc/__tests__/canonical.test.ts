@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { MotorQuoteRequest } from "@/contracts/quote-request.ts";
+import type { MotorQuoteRequest, MotorFullQuoteRequest } from "@/contracts/quote-request.ts";
 import {
   toHdfcRequest,
   resolveBusinessType,
@@ -614,5 +614,53 @@ describe("compulsory personal accident (CPA) cover", () => {
     const on = toHdfcRequest(baseRequest({ paOwner: true }), codes, "T");
     expect(on.addons.cpaTenure).toBe(1);
     expect(on.addons.effectiveDrivingLicense).toBe(false);
+  });
+});
+
+describe("nominee relationship", () => {
+  // Live CreateProposal rejection: "Please pass Nominee relationship as per the
+  // shared master!" — sent for a nomineeRelation of "spouse". HDFC matches the
+  // field against its RELATION MASTER (PrivateCarMasterData.xls) case-sensitively
+  // and that master spells the value "Spouse". The canonical contract's
+  // nomineeRelation is deliberately free text and shared with FG/ICICI/ITGI, so
+  // the correction belongs here, in the mapper.
+  function nominee(relation: string | undefined) {
+    return toHdfcRequest(
+      { ...baseRequest(), nomineeRelation: relation } as MotorFullQuoteRequest,
+      codes,
+      "T",
+    );
+  }
+
+  it("title-cases a lower-cased relation to match HDFC's master", () => {
+    expect(nominee("spouse").addons.nomineeRelationship).toBe("Spouse");
+  });
+
+  it("trims and re-cases a mangled multi-word relation", () => {
+    expect(nominee("  FATHER IN LAW ").addons.nomineeRelationship).toBe("Father in law");
+  });
+
+  it("cross-walks 'policy holder' onto the master's own misspelling", () => {
+    expect(nominee("policy holder").addons.nomineeRelationship).toBe("Police Holder");
+  });
+
+  it("passes an unrecognised relation through rather than nominating a guess", () => {
+    expect(nominee("Second Cousin").addons.nomineeRelationship).toBe("Second Cousin");
+  });
+
+  it("sends no relationship when the caller names none", () => {
+    expect(nominee(undefined).addons.nomineeRelationship).toBeNull();
+  });
+
+  it("reaches Owner_Driver_Nominee_Relationship on the rendered Req_PvtCar", () => {
+    expect(reqPvtCarFor(nominee("spouse")).Owner_Driver_Nominee_Relationship).toBe("Spouse");
+    expect(reqPvtCarFor(nominee(undefined)).Owner_Driver_Nominee_Relationship).toBeNull();
+  });
+
+  it("corrects the relation on every business type's template", () => {
+    for (const businessType of ["New Vehicle", "Roll Over", "Used Car"] as const) {
+      const out = reqPvtCarFor({ ...nominee("spouse"), businessType });
+      expect(out.Owner_Driver_Nominee_Relationship).toBe("Spouse");
+    }
   });
 });

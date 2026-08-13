@@ -3,6 +3,7 @@ import type { AddonKey } from "@/contracts/enums.ts";
 import {
   hdfcPolicyType,
   hdfcPlanFor,
+  hdfcNomineeRelation,
   HDFC_BUSINESS_TYPE,
   HDFC_POLICY_TYPE,
   HDFC_EMI_INSTALMENTS,
@@ -409,7 +410,10 @@ export function toHdfcRequest(
       automobileAssociationNo: req.automobileAssociationMembership,
       nomineeName: full.nomineeName,
       nomineeAge: full.nomineeAge,
-      nomineeRelationship: full.nomineeRelation,
+      // HDFC matches this against its own RELATION MASTER case-sensitively and
+      // rejects the whole proposal otherwise — see hdfcNomineeRelation. Applied
+      // here so all three Req_PvtCar templates get the corrected value.
+      nomineeRelationship: hdfcNomineeRelation(full.nomineeRelation),
       /**
        * This flag is the CPA *exemption*, not a statement that the owner drives.
        * HDFC's own warning spells out what it means: "Owner has no valid driving

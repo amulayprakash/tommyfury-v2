@@ -53,6 +53,89 @@ export function hdfcPolicyType(policyType: PolicyType): HdfcPolicyTypeValue {
   return HDFC_POLICY_TYPE[policyType];
 }
 
+/**
+ * HDFC's RELATION MASTER — the only values `Owner_Driver_Nominee_Relationship`
+ * accepts, in the exact casing of `PrivateCarMasterData.xls`, sheet
+ * "RELATION MASTER".
+ *
+ * HDFC matches this field against the master CASE-SENSITIVELY. A live
+ * CreateProposal carrying the canonical `nomineeRelation: "spouse"` was rejected
+ * outright with "Please pass Nominee relationship as per the shared master!",
+ * even though "Spouse" is in the list.
+ *
+ * "Police Holder" is reproduced verbatim: it is evidently HDFC's typo for
+ * "Policy Holder", but it is what their master contains, so it is what the
+ * payload must carry.
+ */
+export const HDFC_RELATION_MASTER = [
+  "Brother",
+  "Child",
+  "Daughter",
+  "Employee",
+  "Father",
+  "Father in law",
+  "Grand Daughter",
+  "Grand Father",
+  "Grand Mother",
+  "Grand Son",
+  "Husband",
+  "Mother",
+  "Mother in law",
+  "Partner",
+  "Police Holder",
+  "Sister",
+  "Son",
+  "Special concession adult",
+  "Special concession child",
+  "Wife",
+  "Nephew",
+  "Niece",
+  "Uncle",
+  "Spouse",
+] as const;
+
+/** Lookup key → the master's own spelling. */
+const HDFC_RELATION_BY_KEY: ReadonlyMap<string, string> = new Map(
+  HDFC_RELATION_MASTER.map((value) => [relationKey(value), value]),
+);
+
+/**
+ * Extra spellings that resolve onto a master value.
+ *
+ * HDFC's master misspells the policyholder as "Police Holder". This cross-walk
+ * exists so a caller who spells it correctly — which any sane UI will — still
+ * resolves to the value HDFC will accept, instead of being rejected for sending
+ * the right word.
+ */
+const HDFC_RELATION_ALIASES: Readonly<Record<string, string>> = {
+  "policy holder": "Police Holder",
+  policyholder: "Police Holder",
+};
+
+/** Case-, spacing- and padding-insensitive lookup key. */
+function relationKey(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * Canonical free-text nominee relation → HDFC's RELATION MASTER value.
+ *
+ * The canonical `nomineeRelation` is deliberately `z.string()` and shared with
+ * FG, ICICI and ITGI, so the correction belongs to this adapter rather than to
+ * the contract.
+ *
+ * An unrecognised relation is passed through UNCHANGED on purpose. We do not
+ * substitute a guess: HDFC's own error message ("Please pass Nominee
+ * relationship as per the shared master!") is clearer than us silently
+ * nominating the wrong relative on a customer's policy.
+ */
+export function hdfcNomineeRelation(relation: string | null | undefined): string | null {
+  if (!relation) return null;
+  const key = relationKey(relation);
+  if (!key) return null;
+  return HDFC_RELATION_BY_KEY.get(key) ?? HDFC_RELATION_ALIASES[key] ?? relation;
+}
+
 /** HDFC business-type vocabulary (BusinessType_Mandatary). */
 export const HDFC_BUSINESS_TYPE = {
   new: "New Vehicle",
