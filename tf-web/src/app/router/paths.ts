@@ -75,6 +75,18 @@ export const ROUTES = {
     newCommercialKyc: "/zuno-new-comm-kyc",
   },
 
+  /** FG UAT certification harness — docs/superpowers/specs/2026-08-07-fg-uat-journey-design.md */
+  fgUat: {
+    start: "/fg",
+    vehicle: "/fg/vehicle",
+    plans: "/fg/plans",
+    proposal: "/fg/proposal",
+    kyc: "/fg/kyc",
+    review: "/fg/review",
+    payment: "/fg/payment",
+    success: "/fg/success",
+  },
+
   health: {
     start: "/Health",
     city: "/HealthCity",

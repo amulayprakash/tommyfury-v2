@@ -52,6 +52,11 @@ const VehiclePolicySuccessPage = lazy(() =>
   })),
 );
 
+// FG UAT certification harness (docs/superpowers/specs/2026-08-07-fg-uat-journey-design.md)
+const FgCategoryPage = lazy(() =>
+  import("@/features/fg-uat/pages/fg-category-page").then((m) => ({ default: m.FgCategoryPage })),
+);
+
 /** Shorthand for a legacy route whose flow is rebuilt in a later phase. */
 function placeholder(path: string, title: string, vertical?: string): RouteObject {
   return { path, element: <PlaceholderPage title={title} vertical={vertical} /> };
@@ -148,6 +153,14 @@ export const routes: RouteObject[] = [
           { path: ROUTES.vehicle.newCommercialQuotes, element: <VehicleComparePage /> },
           { path: ROUTES.vehicle.newCommercialCreateQuote, element: <VehicleProposalPage /> },
           { path: ROUTES.vehicle.newCommercialKyc, element: <VehicleKycPage /> },
+
+          // FG UAT certification harness — GCI testers sign in with real accounts,
+          // so the harness sits behind the same auth guard as the rest of the app.
+          // The remaining /fg steps are mounted in later phases.
+          {
+            element: <ProtectedRoute />,
+            children: [{ path: ROUTES.fgUat.start, element: <FgCategoryPage /> }],
+          },
 
           // Health journey
           placeholder(ROUTES.health.start, "Health Insurance", HEALTH),
