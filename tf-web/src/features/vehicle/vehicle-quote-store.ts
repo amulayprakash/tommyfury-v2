@@ -193,7 +193,10 @@ type QuoteInputs = Pick<
   | "addons"
   | "previousTp"
   | "providerAddonCodes"
->;
+> &
+  // Optional: absent on the base compare call, present once a plan is chosen —
+  // it carries the accepted quote's IDV into the proposal.
+  Partial<Pick<VehicleQuoteState, "selected">>;
 
 /**
  * Assembles the canonical quote request from the current journey state.
@@ -246,7 +249,13 @@ export function buildQuoteRequest(state: QuoteInputs): CompareQuotesRequest | nu
           previousTpExpiryDate: state.previousTp.expiryDate,
         }
       : {}),
-    ...(state.idvValue ? { idvValue: state.idvValue } : {}),
+    // FG requires the IDV on CreateProposal. When the customer never touches the IDV
+    // control, fall back to the IDV of the quote they actually accepted — sending
+    // nothing made the proposal go up with IDV 0 for the insurer to re-derive, the
+    // same failure shape as the un-echoed OD discount below.
+    ...(state.idvValue ?? state.selected?.quote.idvValue
+      ? { idvValue: state.idvValue ?? state.selected?.quote.idvValue }
+      : {}),
     ...(v.seatingCapacity ? { seatingCapacity: v.seatingCapacity } : {}),
     ...(v.commercialSubType ? { commercialSubType: v.commercialSubType } : {}),
     ...(v.grossVehicleWeight ? { grossVehicleWeight: v.grossVehicleWeight } : {}),
