@@ -62,6 +62,12 @@ const FgVehiclePage = lazy(() =>
 const FgPlansPage = lazy(() =>
   import("@/features/fg-uat/pages/fg-plans-page").then((m) => ({ default: m.FgPlansPage })),
 );
+const FgProposalPage = lazy(() =>
+  import("@/features/fg-uat/pages/fg-proposal-page").then((m) => ({ default: m.FgProposalPage })),
+);
+const FgKycPage = lazy(() =>
+  import("@/features/fg-uat/pages/fg-kyc-page").then((m) => ({ default: m.FgKycPage })),
+);
 
 /** Shorthand for a legacy route whose flow is rebuilt in a later phase. */
 function placeholder(path: string, title: string, vertical?: string): RouteObject {
@@ -169,6 +175,8 @@ export const routes: RouteObject[] = [
               { path: ROUTES.fgUat.start, element: <FgCategoryPage /> },
               { path: ROUTES.fgUat.vehicle, element: <FgVehiclePage /> },
               { path: ROUTES.fgUat.plans, element: <FgPlansPage /> },
+              { path: ROUTES.fgUat.proposal, element: <FgProposalPage /> },
+              { path: ROUTES.fgUat.kyc, element: <FgKycPage /> },
             ],
           },
 
