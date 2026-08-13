@@ -159,6 +159,13 @@ export const MotorQuoteRequestSchema = z.object({
   // providers that use the canonical boolean flags above simply ignore this.
   providerAddonCodes: z.array(z.string().min(1)).optional(),
 
+  /**
+   * Echo the raw vendor request/response back on the result. Off by default —
+   * vendor payloads carry agent/branch codes that the customer journey has no
+   * reason to ship to a browser. Set only by the FG UAT certification harness.
+   */
+  includeRawExchange: z.boolean().optional(),
+
   // ── Optional, provider-agnostic cover/discount inputs ───────────────────────
   // All optional + default-off so existing callers and providers that don't honour
   // them are unaffected. Currently consumed by ICICI Lombard (see its mapper).

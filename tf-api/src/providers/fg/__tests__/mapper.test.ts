@@ -650,3 +650,14 @@ describe("remaining kit-sample keys", () => {
     expect(vehicle(p).BancaSegment).toBe("");
   });
 });
+
+describe("includeRawExchange flag", () => {
+  it("is accepted on a motor quote request and defaults to undefined", () => {
+    const withFlag = MotorQuoteRequestSchema.parse({
+      ...baseQuote(),
+      includeRawExchange: true,
+    });
+    expect(withFlag.includeRawExchange).toBe(true);
+    expect(baseQuote().includeRawExchange).toBeUndefined();
+  });
+});
