@@ -105,12 +105,24 @@ const PROPOSER = {
   nomineeAge: 30,
 } as const;
 
+/**
+ * A rollover sold BEFORE the outgoing policy lapses — which is how a renewal is
+ * actually bought, and what these five scenarios are meant to certify.
+ *
+ * The previous policy is deliberately still running. Quoting tolerated a lapsed
+ * one, but CreateProposal does not: a policy that expired yesterday is a
+ * break-in, and HDFC answers "Break-in ID required" (live, 2026-08-13) because a
+ * lapsed vehicle must be inspected before it can be covered again. Scenario 6
+ * carries the break-in case on purpose; the rest must not be break-ins by
+ * accident. mapper/canonical.ts applyRolloverDateSanity() starts the new policy
+ * the day after this expiry, so there is no gap in cover.
+ */
 const ROLLOVER = {
   businessType: "rollover" as const,
   registrationNumber: "MH01QQ7878",
   registrationDate: yearsAgo(1),
-  previousPolicyExpiryDate: isoOffset(-1),
-  isPreviousPolicyExpired: true,
+  previousPolicyExpiryDate: isoOffset(7),
+  isPreviousPolicyExpired: false,
   previousPolicyNumber: "PREVPOL0001",
   ncbPercent: 20,
 };
@@ -123,7 +135,25 @@ const NEW_BUSINESS = {
   ncbPercent: 0,
 };
 
+/**
+ * The still-running third-party policy a standalone OD is written alongside.
+ *
+ * `previousInsurerId` is here, not in ROLLOVER, because only the SA_OD row needs
+ * it and the four rows that already pass must not be perturbed. It matters
+ * because the canonical contract has no separate TP-insurer field, so
+ * mapper/policy-details.ts falls the TP insurer back to the previous insurer;
+ * with neither supplied, PreviousPolicy_TPINSURER went out null and HDFC refused
+ * the proposal with "Valid TP policy is required to book SAOD Policy." — the
+ * data dictionary marks all four PreviousPolicy_TP* fields mandatory when
+ * Req_PvtCar.POLICY_TYPE is "OD Only", and HDFC's own SA_OD proposal samples
+ * fill TPINSURER with an insurer shortname.
+ *
+ * The value is a real shortname from the kit's Insurance_Company master (the
+ * same one HDFC's SA_OD samples use); the runner resolves codes through
+ * passthroughCodeResolver, so it reaches the payload verbatim.
+ */
 const PREV_TP = {
+  previousInsurerId: "TATAAIG",
   previousTpPolicyNumber: "TPPOL0001",
   previousTpStartDate: yearsAgo(1),
   previousTpExpiryDate: isoOffset(700),
@@ -150,7 +180,10 @@ const SCENARIOS: Scenario[] = [
     req: { ...ROLLOVER, selectedPolicy: "thirdParty", tenureYears: 1, ...ADDONS_OFF } },
   { no: 6, label: "Roll Over 1+1 with a >24h break-in", proves: "inspection routing at proposal time",
     req: { ...ROLLOVER, selectedPolicy: "comprehensive", tenureYears: 1,
-           previousPolicyExpiryDate: isoOffset(-3), ...ADDONS_OFF } },
+           // Cover really has lapsed here — this is the one scenario that SHOULD
+           // be a break-in, so it overrides the baseline's still-running policy.
+           previousPolicyExpiryDate: isoOffset(-3), isPreviousPolicyExpired: true,
+           ...ADDONS_OFF } },
 ];
 
 /**
