@@ -56,6 +56,9 @@ const VehiclePolicySuccessPage = lazy(() =>
 const FgCategoryPage = lazy(() =>
   import("@/features/fg-uat/pages/fg-category-page").then((m) => ({ default: m.FgCategoryPage })),
 );
+const FgVehiclePage = lazy(() =>
+  import("@/features/fg-uat/pages/fg-vehicle-page").then((m) => ({ default: m.FgVehiclePage })),
+);
 
 /** Shorthand for a legacy route whose flow is rebuilt in a later phase. */
 function placeholder(path: string, title: string, vertical?: string): RouteObject {
@@ -159,7 +162,10 @@ export const routes: RouteObject[] = [
           // The remaining /fg steps are mounted in later phases.
           {
             element: <ProtectedRoute />,
-            children: [{ path: ROUTES.fgUat.start, element: <FgCategoryPage /> }],
+            children: [
+              { path: ROUTES.fgUat.start, element: <FgCategoryPage /> },
+              { path: ROUTES.fgUat.vehicle, element: <FgVehiclePage /> },
+            ],
           },
 
           // Health journey
