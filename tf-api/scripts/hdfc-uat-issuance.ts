@@ -15,37 +15,135 @@
  * Writes docs/hdfc-uat-issuance-results.md and scripts/_hdfc-issuance-raw.json.
  */
 import { writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { loadHdfcConfig } from "@/providers/hdfc/config.ts";
 import { HdfcProvider } from "@/providers/hdfc/hdfc.provider.ts";
 import { passthroughCodeResolver } from "@/providers/hdfc/db-code-resolver.ts";
 import type { MotorFullQuoteRequest } from "@/contracts/quote-request.ts";
 import type { PolicyIssuanceResult } from "@/contracts/policy.ts";
 
-const arg = (k: string) => process.argv.find((a) => a.startsWith(`--${k}=`))?.split("=")[1];
-const has = (k: string) => process.argv.includes(`--${k}`);
-
-const PHASE = arg("phase") ?? "proposal";
-const ONLY = arg("only") ? Number(arg("only")) : undefined;
-const RPS = Number(arg("rps") ?? 0.5);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const RAW_JSON = `${import.meta.dirname}/_hdfc-issuance-raw.json`;
 const OUT_MD = `${import.meta.dirname}/../docs/hdfc-uat-issuance-results.md`;
 
-// ─── Consent gates ─────────────────────────────────────────────────────────────
-if (PHASE === "proposal" && !has("yes-i-will-create-proposals")) {
-  console.error(
-    "Refusing to run. --phase=proposal creates REAL proposals on HDFC's shared UAT\n" +
-      "sandbox. Re-run with --yes-i-will-create-proposals if that is what you want.",
-  );
-  process.exit(1);
+// ─── Argv parsing & consent gate ───────────────────────────────────────────────
+//
+// Everything below this banner is PURE: it decides, from argv alone, whether this
+// run may proceed. Nothing here exits, reads a file or touches the network, so
+// src/providers/hdfc/__tests__/issuance-runner-consent.test.ts can import and
+// exercise the gate directly. The module's entrypoint block at the bottom of the
+// file is the only thing that calls process.exit.
+
+/** `--k=v` → v (v may be the empty string, which stays distinct from absent). */
+function arg(argv: string[], k: string): string | undefined {
+  const prefix = `--${k}=`;
+  const hit = argv.find((a) => a.startsWith(prefix));
+  return hit === undefined ? undefined : hit.slice(prefix.length);
 }
-if (PHASE === "issue" && !has("yes-i-will-bind-policies")) {
-  console.error(
-    "Refusing to run. --phase=issue BINDS REAL POLICIES on HDFC's shared UAT\n" +
-      "sandbox. Re-run with --yes-i-will-bind-policies if that is what you want.",
+
+const has = (argv: string[], k: string) => argv.includes(`--${k}`);
+
+/** The only two phases this runner knows how to drive. */
+export const ISSUANCE_PHASES = ["proposal", "issue"] as const;
+export type IssuancePhase = (typeof ISSUANCE_PHASES)[number];
+
+/** Deliberately slow: this is a shared vendor sandbox, not our own. */
+const DEFAULT_RPS = 0.5;
+
+/** A refusal: the reason the run may not proceed, ready to print. */
+export interface RunRefusal {
+  error: string;
+}
+
+/** An accepted run: the validated options main() needs. */
+export interface RunPlan {
+  phase: IssuancePhase;
+  only?: number;
+  rps: number;
+}
+
+/**
+ * `--phase` → a known phase, or a refusal.
+ *
+ * Matched EXACTLY against the allowlist. `--phase=ISSUE`, `--phase=` and
+ * `--phase=bind` used to fall past both consent gates into `issuePolicy()`,
+ * because the gates tested for the two good spellings and the runner's only
+ * branch was `if (PHASE === "proposal")`. An unknown phase is now a hard stop.
+ */
+export function parsePhase(argv: string[]): IssuancePhase | RunRefusal {
+  const raw = arg(argv, "phase") ?? "proposal";
+  const phase = ISSUANCE_PHASES.find((p) => p === raw);
+  if (!phase) {
+    return {
+      error:
+        `Refusing to run. --phase=${raw} is not a phase this runner knows.\n` +
+        `Valid phases are: ${ISSUANCE_PHASES.join(", ")} (exact spelling, lower case).`,
+    };
+  }
+  return phase;
+}
+
+/**
+ * The consent gate. THIS GUARDS REAL POLICY BINDING on HDFC's shared UAT sandbox,
+ * so it MUST FAIL CLOSED.
+ *
+ * The binding flag is the DEFAULT requirement and only the one phase known not to
+ * bind — "proposal" — is granted the cheaper flag. Written the other way round
+ * (`if (phase === "issue") require the binding flag`), a phase added later, or a
+ * typo that slipped past validation, would inherit the unguarded path and bind
+ * policies with no consent at all. That is precisely the bug this replaces.
+ */
+export function consentError(phase: string, argv: string[]): string | undefined {
+  if (phase === "proposal") {
+    if (has(argv, "yes-i-will-create-proposals")) return undefined;
+    return (
+      "Refusing to run. --phase=proposal creates REAL proposals on HDFC's shared UAT\n" +
+      "sandbox. Re-run with --yes-i-will-create-proposals if that is what you want."
+    );
+  }
+  if (has(argv, "yes-i-will-bind-policies")) return undefined;
+  return (
+    `Refusing to run. --phase=${phase} BINDS REAL POLICIES on HDFC's shared UAT\n` +
+    "sandbox. Re-run with --yes-i-will-bind-policies if that is what you want."
   );
-  process.exit(1);
+}
+
+/**
+ * `--only=N` → the single scenario to run, or a refusal.
+ *
+ * `Number("abc")` is NaN, which matched no scenario, emptied the queue and then
+ * rewrote the committed evidence table with zero rows. A bad `--only` now stops
+ * the run instead.
+ */
+export function parseOnly(argv: string[]): number | undefined | RunRefusal {
+  const raw = arg(argv, "only");
+  if (raw === undefined) return undefined;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) {
+    return { error: `Refusing to run. --only=${raw} is not a scenario number (expected 1..n).` };
+  }
+  return value;
+}
+
+/** Requests per second. A non-positive or non-finite value falls back to the default. */
+export function parseRps(argv: string[]): number {
+  const value = Number(arg(argv, "rps") ?? DEFAULT_RPS);
+  return Number.isFinite(value) && value > 0 ? value : DEFAULT_RPS;
+}
+
+/** The whole startup decision: phase, consent, then options. */
+export function planRun(argv: string[]): RunPlan | RunRefusal {
+  const phase = parsePhase(argv);
+  if (typeof phase !== "string") return phase;
+
+  const consent = consentError(phase, argv);
+  if (consent) return { error: consent };
+
+  const only = parseOnly(argv);
+  if (only !== undefined && typeof only !== "number") return only;
+
+  return { phase, ...(only === undefined ? {} : { only }), rps: parseRps(argv) };
 }
 
 // ─── Dates & vehicle ───────────────────────────────────────────────────────────
@@ -255,7 +353,7 @@ interface RowResult {
 
 const errMessage = (e: unknown) => (e instanceof Error ? e.message : String(e)).trim();
 
-async function main() {
+async function main({ phase: PHASE, only: ONLY, rps: RPS }: RunPlan) {
   const provider = new HdfcProvider({
     config: loadHdfcConfig(),
     codeResolver: passthroughCodeResolver,
@@ -423,7 +521,20 @@ function writeMarkdown(rows: RowResult[]): void {
   writeFileSync(OUT_MD, L.join("\n"));
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exitCode = 1;
-});
+// ─── Entrypoint ────────────────────────────────────────────────────────────────
+//
+// Only runs when this file IS the process entrypoint, so importing it (from the
+// consent tests) can never start a live run. The guard uses pathToFileURL rather
+// than a hand-built `file://` string: on Windows the hand-built form is missing
+// the drive letter's leading slash and never matches — see import-hdfc-master.ts.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  const plan = planRun(process.argv.slice(2));
+  if ("error" in plan) {
+    console.error(plan.error);
+    process.exit(1);
+  }
+  main(plan).catch((e) => {
+    console.error(e);
+    process.exitCode = 1;
+  });
+}
