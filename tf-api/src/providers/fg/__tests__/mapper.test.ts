@@ -592,3 +592,61 @@ describe("FG CKYC VerifyCKYC body", () => {
     expect(body.dob).toBe("05-08-1979");
   });
 });
+
+/**
+ * FG's JSON gateway validates against a fixed model, and its own kit sample sends
+ * these blocks even when they carry no data. We previously omitted them entirely —
+ * harmless today, but it let the vendor attribute rollover failures to an incomplete
+ * payload, and the gateway has rejected missing nested objects before.
+ * (Field diff vs "CreateProposal - Comprehensive" in the kit's Postman collection.)
+ */
+describe("payload completeness against the FG kit sample", () => {
+  it("sends the Banca block with every key present, even when empty", () => {
+    const p = buildCreateProposalPayload(fullQuote(), codes, meta, "req-kit");
+    const banca = p.payload.Banca as Record<string, unknown>;
+    expect(banca).toBeDefined();
+    for (const key of [
+      "SPCODE", "BankBranchCode", "BranchReferenceID", "FGBankBranchStaffID",
+      "BankStaffID", "BankCustomerID", "BancaChannel", "PartnerRefNo", "PayorID", "PayerName",
+    ]) {
+      expect(banca[key]).toBe("");
+    }
+  });
+
+  it("sends Client.Address3 with the kit's AddressType K", () => {
+    const p = buildCreateProposalPayload(fullQuote(), codes, meta, "req-kit");
+    const client = p.payload.Client as Record<string, unknown>;
+    const addr3 = client.Address3 as Record<string, unknown>;
+    expect(addr3).toBeDefined();
+    expect(addr3.AddressType).toBe("K");
+    expect(addr3.Pincode).toBe("");
+  });
+
+  it("carries the previous policy start date into RollOverList.PreviousPolStartDt", () => {
+    const p = buildCreateProposalPayload(
+      fullQuote({ previousPolicyStartDate: "2025-08-30" }),
+      codes,
+      meta,
+      "req-kit",
+    );
+    const rollover = (risk(p).PreviousInsDtls as Record<string, unknown>)
+      .RollOverList as Record<string, unknown>;
+    expect(rollover.PreviousPolStartDt).toBe("30/08/2025");
+  });
+
+  it("leaves PreviousPolStartDt empty when the previous start date is unknown", () => {
+    const p = buildCreateProposalPayload(fullQuote(), codes, meta, "req-kit");
+    const rollover = (risk(p).PreviousInsDtls as Record<string, unknown>)
+      .RollOverList as Record<string, unknown>;
+    expect(rollover.PreviousPolStartDt).toBe("");
+  });
+});
+
+describe("remaining kit-sample keys", () => {
+  it("sends Receipt.PGType and Vehicle.BancaSegment (empty, as the kit does)", () => {
+    const p = buildCreateProposalPayload(fullQuote(), codes, meta, "req-kit");
+    const receipt = p.payload.Receipt as Record<string, unknown>;
+    expect(receipt.PGType).toBe("");
+    expect(vehicle(p).BancaSegment).toBe("");
+  });
+});
