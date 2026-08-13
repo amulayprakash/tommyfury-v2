@@ -6,7 +6,7 @@ import { FG_TEST_PRESETS, applyPreset } from "../test-presets";
 const base: FgConditions = {
   makeId: "", makeName: "", modelId: "", modelName: "", fuelType: "petrol",
   rtoCode: "", registrationNumber: "", registrationDate: "", engineNumber: "",
-  chassisNumber: "", businessType: "rollover", planType: "comprehensive",
+  chassisNumber: "", businessType: "rollover", planType: "comprehensive", paOwner: true,
   previousInsurerName: "", previousPolicyNumber: "", isPreviousPolicyExpired: false,
   ncbPercent: 0, claimInPreviousPolicy: false,
 };

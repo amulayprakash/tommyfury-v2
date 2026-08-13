@@ -58,9 +58,9 @@ function buildFgQuoteRequest(
 ): CompareQuotesRequest {
   // FG prices add-ons ONLY from its own cover codes (providerAddonCodes), so the
   // canonical flags all stay off — except the compulsory owner PA, which is the
-  // contract's own default and must not be suppressed on a certification quote.
+  // contract's own default and is suppressed only by the stated condition (TC_06).
   const addonFlags = Object.fromEntries(
-    ALL_ADDON_KEYS.map((key) => [key, key === "paOwner"]),
+    ALL_ADDON_KEYS.map((key) => [key, key === "paOwner" && c.paOwner]),
   ) as Record<AddonKey, boolean>;
 
   return {

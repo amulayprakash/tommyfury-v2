@@ -33,7 +33,7 @@ export const FG_TEST_PRESETS: FgTestPreset[] = [
   { id: "TC_03", label: "TC_03 — Comprehensive incl. add-ons",
     patch: { businessType: "rollover", planType: "comprehensive", ncbPercent: 20 } },
   { id: "TC_06", label: "TC_06 — CPA cover exclusion (owner-driver)",
-    patch: { businessType: "rollover", planType: "comprehensive" } },
+    patch: { businessType: "rollover", planType: "comprehensive", paOwner: false } },
   { id: "TC_07", label: "TC_07 — IDV increase / decrease (±20%)",
     patch: { businessType: "new", planType: "comprehensive", ncbPercent: 0 } },
   { id: "TC_13", label: "TC_13 — NCB on standalone OD (next slab)",

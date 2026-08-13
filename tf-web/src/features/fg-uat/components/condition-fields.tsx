@@ -186,6 +186,27 @@ export function BreakInFields({ conditions, onChange }: GroupProps) {
   );
 }
 
+/**
+ * Compulsory personal-accident cover for the owner-driver. It is on by default —
+ * sending it off would suppress a compulsory cover on every certification quote —
+ * so only the exclusion case unticks it.
+ */
+export function CpaFields({ conditions, onChange }: GroupProps) {
+  return (
+    <Group title="Owner-driver PA cover">
+      <CheckField
+        label="Compulsory PA cover for owner-driver"
+        checked={conditions.paOwner}
+        onChange={(paOwner) => onChange({ paOwner })}
+      />
+      <p className="text-xs text-muted-foreground">
+        Untick to exercise the exclusion case — the owner already holds a personal-accident policy
+        elsewhere.
+      </p>
+    </Group>
+  );
+}
+
 export function CommercialFields({ conditions, onChange }: GroupProps) {
   return (
     <Group title="Commercial vehicle">

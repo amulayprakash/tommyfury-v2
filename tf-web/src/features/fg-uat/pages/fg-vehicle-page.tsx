@@ -14,6 +14,7 @@ import type { MmvItem, RtoItem } from "../../vehicle/api/vehicle-api";
 import {
   BreakInFields,
   CommercialFields,
+  CpaFields,
   Field,
   NcbClaimFields,
   PreviousPolicyFields,
@@ -50,7 +51,7 @@ const EMPTY_CONDITIONS: FgConditions = {
   makeId: "", makeName: "", modelId: "", modelName: "",
   fuelType: "", rtoCode: "", registrationNumber: "", registrationDate: today(),
   engineNumber: "", chassisNumber: "",
-  businessType: "rollover", planType: "comprehensive",
+  businessType: "rollover", planType: "comprehensive", paOwner: true,
   previousInsurerName: "", previousPolicyNumber: "", isPreviousPolicyExpired: false,
   ncbPercent: 0, claimInPreviousPolicy: false,
 };
@@ -386,6 +387,7 @@ export function FgVehiclePage() {
         </div>
       </section>
 
+      <CpaFields conditions={conditions} onChange={patch} />
       <PreviousPolicyFields conditions={conditions} onChange={patch} />
       {conditions.planType === "standAloneOD" ? (
         <PreviousTpFields conditions={conditions} onChange={patch} />

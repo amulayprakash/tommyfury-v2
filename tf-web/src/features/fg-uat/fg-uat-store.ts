@@ -15,6 +15,8 @@ export interface FgConditions {
   businessType: "new" | "rollover" | "renewal";
   planType: string;
   idvValue?: number;
+  /** Compulsory PA for the owner-driver. TC_06 turns this off to test the exclusion. */
+  paOwner: boolean;
   // previous policy
   previousInsurerName: string; previousPolicyNumber: string;
   previousPolicyStartDate?: string; previousPolicyExpiryDate?: string;
