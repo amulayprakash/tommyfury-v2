@@ -176,6 +176,7 @@ export interface paths {
                         /** @default false */
                         ncbProtection?: boolean;
                         providerAddonCodes?: string[];
+                        includeRawExchange?: boolean;
                         voluntaryDeductible?: number | null;
                         unnamedPaSumInsured?: number | null;
                         namedPaSumInsured?: number | null;
@@ -409,6 +410,7 @@ export interface paths {
                         /** @default false */
                         ncbProtection?: boolean;
                         providerAddonCodes?: string[];
+                        includeRawExchange?: boolean;
                         voluntaryDeductible?: number | null;
                         unnamedPaSumInsured?: number | null;
                         namedPaSumInsured?: number | null;
@@ -746,6 +748,7 @@ export interface paths {
                         /** @default false */
                         ncbProtection?: boolean;
                         providerAddonCodes?: string[];
+                        includeRawExchange?: boolean;
                         voluntaryDeductible?: number | null;
                         unnamedPaSumInsured?: number | null;
                         namedPaSumInsured?: number | null;
@@ -2454,6 +2457,7 @@ export interface components {
             /** @default false */
             ncbProtection: boolean;
             providerAddonCodes?: string[];
+            includeRawExchange?: boolean;
             voluntaryDeductible?: number | null;
             unnamedPaSumInsured?: number | null;
             namedPaSumInsured?: number | null;
@@ -2564,6 +2568,7 @@ export interface components {
             /** @default false */
             ncbProtection: boolean;
             providerAddonCodes?: string[];
+            includeRawExchange?: boolean;
             voluntaryDeductible?: number | null;
             unnamedPaSumInsured?: number | null;
             namedPaSumInsured?: number | null;
@@ -2742,6 +2747,7 @@ export interface components {
             /** @default false */
             ncbProtection: boolean;
             providerAddonCodes?: string[];
+            includeRawExchange?: boolean;
             voluntaryDeductible?: number | null;
             unnamedPaSumInsured?: number | null;
             namedPaSumInsured?: number | null;
