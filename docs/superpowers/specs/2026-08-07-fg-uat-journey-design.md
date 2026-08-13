@@ -52,10 +52,26 @@ requiring a login makes the harness stricter than production rather than equival
 That was confirmed as the intent after the correction: GCI testers need accounts, and live
 UAT calls stay behind a login.
 
-**The payment callback must be publicly reachable.** `FG_PAYMENT_RESPONSE_URL` currently
-points at `http://localhost:4000/...`. Wherever `/fg` is hosted, it must be set to that
-deployment's callback URL or the redirect back from FG's gateway cannot complete. This is
-a configuration change, not code.
+**Two payment environment variables must be re-pointed, or the journey cannot finish.**
+Both are configuration, not code, and both are stated on screen in the harness so a tester
+who hits a dead end can read why.
+
+1. `FG_PAYMENT_RESPONSE_URL` — defaults to `http://localhost:4000/...`. Must be this
+   deployment's `/api/v1/fg/payment/callback`, or FG's gateway never calls back and no
+   policy is issued.
+2. `FG_PAYMENT_SUCCESS_URL` — defaults to `<ALLOWED_ORIGINS[0]>/insurance_ps`, which is
+   the **customer wizard's** success page. Left as-is, a tester who completes payment is
+   redirected out of the harness into the customer journey and never sees the policy
+   number. Must be this deployment's `/fg/success`.
+
+*Discovered during implementation:* the policy number reaches the browser as a **URL
+query parameter** on that success redirect (`?quoteNo=…&policyNo=…`) after the callback
+issues the policy — not from any API call the frontend makes. The success page reads it
+from the query string, mirroring the customer wizard's own success page.
+
+*Also discovered:* payment initiation returns a checksum-signed **form** (`url` plus
+`fields`) that must be POSTed, not a URL to redirect to. A GET against the URL alone fails
+FG's checksum.
 
 ## Decisions
 
