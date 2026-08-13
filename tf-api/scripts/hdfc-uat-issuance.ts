@@ -86,10 +86,13 @@ const PROPOSER = {
   proposer: {
     firstName: "Test", lastName: "User", dob: "1990-01-01",
     gender: "M", mobile: "9999999999", email: "uat@example.com",
-    maritalStatus: "single",
   },
+  // Field names are AddressSchema's, not the vendor's: addressLine1/2, not
+  // line1/2. buildRequest's `as MotorFullQuoteRequest` is an identity cast that
+  // does NOT deep-check these, so a wrong key here would only surface as an
+  // opaque HDFC rejection at CreateProposal.
   address: {
-    line1: "1 Test Street", line2: "Andheri East", city: "Mumbai",
+    addressLine1: "1 Test Street", addressLine2: "Andheri East", city: "Mumbai",
     state: "Maharashtra", pincode: "400069",
   },
   vehicle: {

@@ -284,11 +284,15 @@ const ADDONS_ALL = {
 const PROPOSER = {
   proposer: {
     firstName: "Test", lastName: "User", dob: "1990-01-01",
-    gender: "male", mobile: "9999999999", email: "uat@example.com",
-    maritalStatus: "single",
+    // ProposerSchema.gender is z.enum(["M","F","O"]) — not "male".
+    gender: "M", mobile: "9999999999", email: "uat@example.com",
   },
+  // Field names are AddressSchema's, not the vendor's: addressLine1/2, not
+  // line1/2. buildRequest's `as MotorFullQuoteRequest` is an identity cast that
+  // does NOT deep-check these, so a wrong key here would only surface as an
+  // opaque HDFC rejection at CreateProposal.
   address: {
-    line1: "1 Test Street", line2: "Andheri East", city: "Mumbai",
+    addressLine1: "1 Test Street", addressLine2: "Andheri East", city: "Mumbai",
     state: "Maharashtra", pincode: "400069",
   },
   vehicle: {
@@ -350,21 +354,53 @@ const SCENARIOS: Scenario[] = [
 ];
 
 /**
- * The Pehchaan id proved in Phase A. Branch (a) leaves it unset and the runner
- * fetches one per scenario; branch (b) supplies the id a human obtained from the
- * hosted journey.
+ * The Pehchaan id proved in Phase A. Phase A found UAT verifies headlessly, so
+ * this is normally left unset and the runner fetches an id per scenario. It
+ * exists for the case where an id must be supplied from outside.
  */
 const KYC_ID = process.env.HDFC_UAT_KYC_ID;
 
-function buildRequest(s: Scenario): MotorFullQuoteRequest {
+/** Pehchaan returns dd/MM/yyyy; the canonical proposer wants ISO. */
+function toIsoDob(d: string | undefined): string | undefined {
+  const m = d?.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : undefined;
+}
+
+/**
+ * The proposer, reconciled against the Pehchaan record.
+ *
+ * Phase A (2026-08-13) found HDFC's UAT e-KYC returns an identity from a fixed
+ * pool rather than one matching the PAN submitted — the same PAN produced
+ * "Rahul Automation" and "Anmol Arora" on consecutive calls. Since the KYC id we
+ * send as Customer_Pehchaan_id is HDFC's OWN record, the proposal's name and DOB
+ * are taken from that record wherever it supplies them, so the two cannot
+ * disagree. Mobile and email always come back empty from Pehchaan, so those keep
+ * the fictional values; the address does too, because normalizePehchaan flattens
+ * it to a single string with no city/pincode to map.
+ *
+ * Whether HDFC actually validates Customer_Pehchaan_id against Customer_Details
+ * is an open question recorded in docs/hdfc-integration-notes.md. This makes them
+ * agree either way, which costs nothing if the validation does not exist.
+ */
+function proposerFrom(kyc: { name?: string; dob?: string }): typeof PROPOSER.proposer {
+  const [first, ...rest] = (kyc.name ?? "").trim().split(/\s+/).filter(Boolean);
+  return {
+    ...PROPOSER.proposer,
+    ...(first ? { firstName: first } : {}),
+    ...(rest.length ? { lastName: rest.join(" ") } : {}),
+    ...(toIsoDob(kyc.dob) ? { dob: toIsoDob(kyc.dob)! } : {}),
+  };
+}
+
+function buildRequest(s: Scenario, kyc: { name?: string; dob?: string }): MotorFullQuoteRequest {
   return {
     vehicleType: "fourWheeler",
     claimInPreviousPolicy: false,
     ...SWIFT,
     ...PROPOSER,
+    proposer: proposerFrom(kyc),
     ...s.req,
     quoteId: `HDFCUAT${s.no}${Date.now()}`,
-    ...(KYC_ID ? { kycRefId: KYC_ID, ckyc: KYC_ID } : {}),
   } as MotorFullQuoteRequest;
 }
 
@@ -406,6 +442,8 @@ async function main() {
 
     // ── KYC ────────────────────────────────────────────────────────────────────
     let kycId = KYC_ID;
+    /** Name and DOB as HDFC's own KYC record has them — see proposerFrom. */
+    let kycIdentity: { name?: string; dob?: string } = {};
     if (!kycId) {
       try {
         const kyc = await provider.completeCkyc(
@@ -422,6 +460,8 @@ async function main() {
           continue;
         }
         kycId = kyc.kycId;
+        kycIdentity = { name: kyc.name, dob: kyc.dob };
+        console.log(`   → kyc ${kycId} (${kyc.name ?? "no name"}, dob ${kyc.dob ?? "—"})`);
       } catch (e) {
         row.vendorMessage = errMessage(e);
         console.log(`   → KYC FAILED: ${row.vendorMessage}`);
@@ -433,7 +473,7 @@ async function main() {
 
     // ── Proposal ───────────────────────────────────────────────────────────────
     row.step = "proposal";
-    const req = { ...buildRequest(s), kycRefId: kycId, ckyc: kycId };
+    const req = { ...buildRequest(s, kycIdentity), kycRefId: kycId, ckyc: kycId };
     let proposalNumber: string | undefined;
     let grossPremium: number | undefined;
     try {
