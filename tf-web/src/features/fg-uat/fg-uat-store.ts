@@ -107,7 +107,10 @@ export const useFgUatStore = create<FgUatState>()(
       setProposal: (proposal) => set({ proposal }),
       setPolicyNo: (policyNo) => set({ policyNo }),
       recordExchange: (e) => set((s) => ({ exchanges: [...s.exchanges, e] })),
-      reset: () => set(initial),
+      // Spread, don't hand back `initial` itself — its arrays are single shared
+      // instances, so a future action that pushed in place would poison the
+      // reset baseline for the life of the page.
+      reset: () => set({ ...initial }),
     }),
     { name: "fg-uat-journey" },
   ),
