@@ -140,8 +140,10 @@ Small — the provider-parameterized lifecycle already exists and the compare
 endpoint already honours a `providers` allow-list.
 
 1. `HDFC_KYC_RETURN_URL` is currently empty in `.env`; set it to
-   `<web origin>/hdfc/kyc/return`.
+   `<web origin>/hdfc/kyc/return`. **Plan 1.**
 2. Add the scenario-preset export flag to `scripts/hdfc-uat-scenarios.ts`.
+   **Plan 2** — it exists only to feed the UI's presets drawer, so it lands with
+   that drawer rather than with the issuance proof.
 
 No canonical contract changes and no provider changes are expected. If one
 proves necessary during implementation it is a finding to raise, not a silent
@@ -180,7 +182,7 @@ Distinguish three cases in the UI:
 
 ### Live (`tf-api`)
 
-`npm run hdfc:e2e` — a scripted end-to-end that issues real UAT policies
+`npm run hdfc:issue` — a scripted end-to-end that issues real UAT policies
 through the same call sequence the route makes (quote → proposal → e-KYC →
 payment → certificate), capturing proposal number, policy number and
 certificate for each scenario it runs.
