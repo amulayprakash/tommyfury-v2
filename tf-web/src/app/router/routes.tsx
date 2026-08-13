@@ -68,6 +68,9 @@ const FgProposalPage = lazy(() =>
 const FgKycPage = lazy(() =>
   import("@/features/fg-uat/pages/fg-kyc-page").then((m) => ({ default: m.FgKycPage })),
 );
+const FgReviewPage = lazy(() =>
+  import("@/features/fg-uat/pages/fg-review-page").then((m) => ({ default: m.FgReviewPage })),
+);
 
 /** Shorthand for a legacy route whose flow is rebuilt in a later phase. */
 function placeholder(path: string, title: string, vertical?: string): RouteObject {
@@ -168,7 +171,7 @@ export const routes: RouteObject[] = [
 
           // FG UAT certification harness — GCI testers sign in with real accounts,
           // so the harness sits behind the same auth guard as the rest of the app.
-          // The remaining /fg steps are mounted in later phases.
+          // Payment and success are mounted with the payment handoff.
           {
             element: <ProtectedRoute />,
             children: [
@@ -177,6 +180,7 @@ export const routes: RouteObject[] = [
               { path: ROUTES.fgUat.plans, element: <FgPlansPage /> },
               { path: ROUTES.fgUat.proposal, element: <FgProposalPage /> },
               { path: ROUTES.fgUat.kyc, element: <FgKycPage /> },
+              { path: ROUTES.fgUat.review, element: <FgReviewPage /> },
             ],
           },
 

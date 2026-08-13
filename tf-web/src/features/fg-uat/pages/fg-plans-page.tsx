@@ -8,11 +8,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatInr } from "@/lib/utils";
 import { isAddonSelectable, toggleAddonSelection } from "../../vehicle/addon-selection";
 import { useCompareQuotesQuery, useProviderAddons } from "../../vehicle/api/hooks";
-import type { AddonKey, CanonicalQuote, CompareQuotesRequest } from "../../vehicle/api/types";
-import { ADDON_LABELS, ALL_ADDON_KEYS } from "../../vehicle/api/types";
+import type { AddonKey, CanonicalQuote } from "../../vehicle/api/types";
+import { ADDON_LABELS } from "../../vehicle/api/types";
+import { buildFgQuoteRequest } from "../build-fg-request";
 import { RawExchange } from "../components/raw-exchange";
 import { CATEGORY_LABELS } from "../fg-capabilities";
-import { useFgUatStore, type FgConditions } from "../fg-uat-store";
+import { useFgUatStore } from "../fg-uat-store";
 
 /**
  * Step 3 of the FG certification harness — price the stated conditions at FG
@@ -41,72 +42,6 @@ function yearsSince(isoDate?: string): number {
   if (!isoDate) return 0;
   const t = Date.parse(isoDate);
   return Number.isNaN(t) ? 0 : (Date.now() - t) / (365.25 * 864e5);
-}
-
-/**
- * The canonical quote request for one set of certification conditions.
- *
- * Mirrors the customer wizard's `buildQuoteRequest`, but pinned to FG and always
- * asking for the raw exchange. Fields the harness captures for LATER steps
- * (engine/chassis number, break-in inspection evidence) have no place on the
- * quote contract and are carried in the store until the proposal needs them.
- */
-function buildFgQuoteRequest(
-  category: string,
-  c: FgConditions,
-  providerAddonCodes: string[],
-): CompareQuotesRequest {
-  // FG prices add-ons ONLY from its own cover codes (providerAddonCodes), so the
-  // canonical flags all stay off — except the compulsory owner PA, which is the
-  // contract's own default and is suppressed only by the stated condition (TC_06).
-  const addonFlags = Object.fromEntries(
-    ALL_ADDON_KEYS.map((key) => [key, key === "paOwner" && c.paOwner]),
-  ) as Record<AddonKey, boolean>;
-
-  return {
-    vehicleType: category as CompareQuotesRequest["vehicleType"],
-    selectedPolicy: c.planType as CompareQuotesRequest["selectedPolicy"],
-    businessType: c.businessType,
-    makeId: c.makeId,
-    makeName: c.makeName,
-    modelId: c.modelId,
-    modelName: c.modelName,
-    variantId: c.variantId,
-    variantName: c.variantName,
-    fuelType: c.fuelType as CompareQuotesRequest["fuelType"],
-    // engineCC 0 (EVs) fails contract validation server-side — send it only when positive.
-    engineCC: c.engineCC || undefined,
-    rtoCode: c.rtoCode,
-    registrationDate: c.registrationDate,
-    registrationNumber: c.registrationNumber || undefined,
-    previousPolicyNumber: c.previousPolicyNumber || undefined,
-    previousInsurerName: c.previousInsurerName || undefined,
-    previousPolicyStartDate: c.previousPolicyStartDate,
-    previousPolicyExpiryDate: c.previousPolicyExpiryDate,
-    isPreviousPolicyExpired: c.isPreviousPolicyExpired,
-    claimInPreviousPolicy: c.claimInPreviousPolicy,
-    ncbPercent: c.ncbPercent,
-    // The harness sells an annual policy, like the wizard — long-term terms have no case.
-    tenureYears: 1,
-    // FG needs an ACTIVE third-party policy for standalone OD.
-    ...(c.planType === "standAloneOD"
-      ? {
-          previousTpPolicyNumber: c.previousTpPolicyNumber,
-          previousTpStartDate: c.previousTpStartDate,
-          previousTpExpiryDate: c.previousTpExpiryDate,
-        }
-      : {}),
-    ...(c.idvValue ? { idvValue: c.idvValue } : {}),
-    ...(c.seatingCapacity ? { seatingCapacity: c.seatingCapacity } : {}),
-    ...(c.commercialSubType ? { commercialSubType: c.commercialSubType } : {}),
-    ...(c.grossVehicleWeight ? { grossVehicleWeight: c.grossVehicleWeight } : {}),
-    ...(c.carryingCapacity ? { carryingCapacity: c.carryingCapacity } : {}),
-    ...(providerAddonCodes.length ? { providerAddonCodes } : {}),
-    // The backend echoes `_rawResponse` only when this is set AND
-    // ENABLE_DEBUG_PAYLOAD is on in its env — an empty drawer means that env var.
-    includeRawExchange: true,
-    ...addonFlags,
-  };
 }
 
 /** One label/amount line in the premium breakdown. */
