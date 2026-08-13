@@ -197,6 +197,57 @@ git commit -m "feat(fg): echo raw vendor exchange when the harness asks for it"
 
 ---
 
+## Task 2b: Let the raw exchange survive the compare path
+
+**Files:**
+- Modify: `tf-api/src/controllers/compare.controller.ts`
+- Test: `tf-api/src/controllers/__tests__/compare.controller.test.ts`
+
+Discovered during Task 2. `stripRaw` deletes `_rawResponse` from every compare result
+unconditionally, so the plans page would receive nothing however the provider behaves.
+Two gates are required — the request flag for intent, `ENABLE_DEBUG_PAYLOAD` for
+deployment permission (the control `quote.controller.ts` already applies to this data).
+
+- [ ] **Step 1: Write the failing test**
+
+Assert three behaviours against `handleCompareQuotes` with a stubbed `compareQuotes`
+returning a result whose `quote._rawResponse` is set:
+
+1. no flag → response results carry no `_rawResponse`
+2. `includeRawExchange: true` **and** `ENABLE_DEBUG_PAYLOAD` on → `_rawResponse` present
+3. `includeRawExchange: true` but `ENABLE_DEBUG_PAYLOAD` off → still stripped
+
+- [ ] **Step 2: Run it and confirm case 2 fails**
+
+Run: `cd tf-api && npx vitest run src/controllers/__tests__/compare.controller.test.ts`
+Expected: case 2 FAILS (`_rawResponse` undefined); cases 1 and 3 already pass.
+
+- [ ] **Step 3: Make the strip conditional**
+
+```typescript
+    const keepRaw = Boolean(quoteReq.includeRawExchange) && env.ENABLE_DEBUG_PAYLOAD;
+    const sanitized = keepRaw
+      ? results
+      : results.map((r) => (r.quote ? { ...r, quote: stripRaw(r.quote) } : r));
+```
+
+Import `env` from `@/config/env.ts`. Update `stripRaw`'s doc comment to say it is skipped
+only when the caller opted in and the deployment permits it.
+
+- [ ] **Step 4: Confirm it passes**
+
+Run: `cd tf-api && npx vitest run src/controllers/ && npm test && npm run typecheck && npx eslint src/controllers/compare.controller.ts`
+Expected: all pass, typecheck and lint clean.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add tf-api/src/controllers/
+git commit -m "feat(fg): let an opted-in caller keep the raw exchange through compare"
+```
+
+---
+
 ## Task 3: Derive FG categories and plan types
 
 **Files:**

@@ -44,6 +44,14 @@ standalone third-party is blocked for the web-aggregator channel, so it was remo
 `FG_MOTOR_CAPABILITIES.fourWheeler`. Deriving plan types from capabilities keeps that
 correct without special-casing.
 
+**The customer wizard is unauthenticated.** *Corrected during implementation — an earlier
+draft assumed it sat behind `ProtectedRoute`. It does not:* the vehicle routes are mounted
+directly under `WizardLayout` in `routes.tsx`, and `ProtectedRoute` guards only the
+account, checkout and post-sale sections. `/fg` therefore needs its own guard wrapper, and
+requiring a login makes the harness stricter than production rather than equivalent to it.
+That was confirmed as the intent after the correction: GCI testers need accounts, and live
+UAT calls stay behind a login.
+
 **The payment callback must be publicly reachable.** `FG_PAYMENT_RESPONSE_URL` currently
 points at `http://localhost:4000/...`. Wherever `/fg` is hosted, it must be set to that
 deployment's callback URL or the redirect back from FG's gateway cannot complete. This is
@@ -54,7 +62,7 @@ a configuration change, not code.
 | Decision | Choice | Reason |
 |---|---|---|
 | Two-wheeler | Omit | FG cannot quote it; showing it invites false defect reports |
-| Access | Behind existing `ProtectedRoute` | GCI testers get real accounts; keeps API auth headers identical to production |
+| Access | Behind `ProtectedRoute` | GCI testers get real accounts. Note this is **stricter** than the customer journey, which is unauthenticated (see Constraints) — a deliberate choice to keep live UAT calls behind a login |
 | Vehicle entry | Manual only | Certification needs exact control of dates, NCB, claims and break-in; also avoids per-call regtech cost and works with FG's fictional kit plates |
 | Journey end | Real policy number | FG UAT does not validate the payment transaction, so the full chain is reachable and the PolicyNo is the certification artifact |
 | Code structure | Separate `src/features/fg-uat/` | Zero regression risk to the live customer journey; free to expose certification-only controls |
@@ -157,16 +165,30 @@ A collapsible panel on every step showing the actual request and response for th
 This is the highest-value element for a vendor: on failure they see their own payload
 immediately instead of requesting logs from us.
 
-**This requires one tf-api change.** `_rawResponse` already exists as an optional field on
-the quote, KYC, policy and inspection contracts, but the motor quote and proposal
-normalizers do not populate it — only CKYC does. The change is to populate it for
-`getQuote` and `getFullQuote`, **gated behind an explicit opt-in on the request** (a
-`includeRawExchange` flag set only by this harness).
+**This requires two tf-api changes.**
 
-Gating matters: vendor payloads carry agent codes, branch codes and internal identifiers,
-and the customer journey has no reason to ship those to a browser. Default behaviour and
-existing responses stay byte-identical; only a request that asks for the raw exchange
-receives it.
+*Corrected during implementation — an earlier draft of this spec claimed the motor
+normalizers do not populate `_rawResponse`. They do:* `normalizer.ts` sets
+`_rawResponse: body` unconditionally on both quote and proposal, and it is load-bearing —
+`quote.repository.ts` persists it as `rawFullQuote`. It must not be stripped.
+
+So the vendor's **response** is already captured. What the harness adds is the **request**
+half — the payload carrying agent code, branch code and vendor code — plus a way for it to
+reach the browser:
+
+1. **`FgProvider` attaches the request** alongside the response as
+   `_rawResponse: { request, response }` when `includeRawExchange` is set on the request.
+   Without the flag the value is unchanged, so persistence and existing responses stay
+   byte-identical.
+2. **The compare path stops discarding it.** `compare.controller.ts` deletes
+   `_rawResponse` from every result unconditionally, so the plans page would otherwise
+   receive nothing. It must keep the field when the request asked for it.
+
+**Two gates, both required.** The request flag signals intent; `ENABLE_DEBUG_PAYLOAD`
+grants deployment permission — the control `quote.controller.ts` already uses for the same
+data. Requiring both means a stray client cannot pull vendor payloads out of production by
+setting a flag, and the harness works by enabling one environment variable where it is
+hosted. If `ENABLE_DEBUG_PAYLOAD` is off, the drawer is simply empty.
 
 ### Test-case presets
 
