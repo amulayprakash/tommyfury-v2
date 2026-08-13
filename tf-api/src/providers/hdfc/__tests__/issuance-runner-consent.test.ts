@@ -5,6 +5,7 @@ import {
   parseRps,
   consentError,
   planRun,
+  boundPolicyClaim,
 } from "../../../../scripts/hdfc-uat-issuance.ts";
 
 /**
@@ -174,6 +175,33 @@ describe("parseRps", () => {
     for (const bad of ["abc", "", "0", "-1", "Infinity"]) {
       expect(parseRps([`--rps=${bad}`])).toBe(0.5);
     }
+  });
+});
+
+describe("boundPolicyClaim", () => {
+  // docs/hdfc-uat-issuance-results.md is partner-facing evidence: its header used
+  // to assert "every policy number is a real bound UAT policy" unconditionally,
+  // including for a proposal-phase run that bound nothing at all.
+  it("claims nothing when no row reached issuance", () => {
+    const claim = boundPolicyClaim([{}, { policyNumber: undefined }]);
+    expect(claim).toBe("No policy was bound in this run.");
+    expect(claim).not.toContain("real bound");
+  });
+
+  it("claims every row only when every row really bound a policy", () => {
+    expect(boundPolicyClaim([{ policyNumber: "P1" }, { policyNumber: "P2" }])).toContain(
+      "Every policy number below is a **real bound UAT policy**",
+    );
+  });
+
+  it("counts the bound rows when only some issued", () => {
+    const claim = boundPolicyClaim([{ policyNumber: "P1" }, {}, {}]);
+    expect(claim).toContain("The 1 policy number below is a **real bound UAT policy**");
+    expect(claim).toContain("the remaining 2 rows did not reach issuance");
+  });
+
+  it("says nothing was bound for an empty run rather than vouching for zero rows", () => {
+    expect(boundPolicyClaim([])).toBe("No policy was bound in this run.");
   });
 });
 

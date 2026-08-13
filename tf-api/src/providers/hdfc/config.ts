@@ -94,23 +94,29 @@ export const HDFC_RELATION_MASTER = [
   "Spouse",
 ] as const;
 
-/** Lookup key → the master's own spelling. */
-const HDFC_RELATION_BY_KEY: ReadonlyMap<string, string> = new Map(
-  HDFC_RELATION_MASTER.map((value) => [relationKey(value), value]),
-);
-
 /**
- * Extra spellings that resolve onto a master value.
+ * Lookup key → the master's own spelling, plus the extra spellings that resolve
+ * onto a master value.
  *
- * HDFC's master misspells the policyholder as "Police Holder". This cross-walk
- * exists so a caller who spells it correctly — which any sane UI will — still
- * resolves to the value HDFC will accept, instead of being rejected for sending
- * the right word.
+ * HDFC's master misspells the policyholder as "Police Holder". The two aliases
+ * below exist so a caller who spells it correctly — which any sane UI will —
+ * still resolves to the value HDFC will accept, instead of being rejected for
+ * sending the right word.
+ *
+ * A Map, not an object literal, and one Map rather than a master table plus an
+ * alias table. `nomineeRelation` is free text off a web form, and an object
+ * literal resolves INHERITED keys: `aliases["constructor"]` returned the `Object`
+ * function — truthy, so the pass-through fallback never fired, and TypeScript
+ * still believed the result was a string. JSON.stringify drops a function value,
+ * which deleted Owner_Driver_Nominee_Relationship from Req_PvtCar altogether —
+ * exactly the key-set change HDFC's Blaze engine rejects. `__proto__` was worse
+ * still: an object where a string is required.
  */
-const HDFC_RELATION_ALIASES: Readonly<Record<string, string>> = {
-  "policy holder": "Police Holder",
-  policyholder: "Police Holder",
-};
+const HDFC_RELATION_BY_KEY: ReadonlyMap<string, string> = new Map<string, string>([
+  ...HDFC_RELATION_MASTER.map((value): [string, string] => [relationKey(value), value]),
+  ["policy holder", "Police Holder"],
+  ["policyholder", "Police Holder"],
+]);
 
 /** Case-, spacing- and padding-insensitive lookup key. */
 function relationKey(value: string): string {
@@ -124,16 +130,17 @@ function relationKey(value: string): string {
  * FG, ICICI and ITGI, so the correction belongs to this adapter rather than to
  * the contract.
  *
- * An unrecognised relation is passed through UNCHANGED on purpose. We do not
- * substitute a guess: HDFC's own error message ("Please pass Nominee
- * relationship as per the shared master!") is clearer than us silently
- * nominating the wrong relative on a customer's policy.
+ * An unrecognised relation is passed through on purpose — trimmed, but otherwise
+ * exactly as the caller spelled it. We do not substitute a guess: HDFC's own
+ * error message ("Please pass Nominee relationship as per the shared master!")
+ * is clearer than us silently nominating the wrong relative on a customer's
+ * policy.
  */
 export function hdfcNomineeRelation(relation: string | null | undefined): string | null {
   if (!relation) return null;
   const key = relationKey(relation);
   if (!key) return null;
-  return HDFC_RELATION_BY_KEY.get(key) ?? HDFC_RELATION_ALIASES[key] ?? relation;
+  return HDFC_RELATION_BY_KEY.get(key) ?? relation.trim();
 }
 
 /** HDFC business-type vocabulary (BusinessType_Mandatary). */

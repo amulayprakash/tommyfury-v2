@@ -632,11 +632,14 @@ describe("nominee relationship", () => {
     );
   }
 
-  it("title-cases a lower-cased relation to match HDFC's master", () => {
+  it("resolves a lower-cased relation onto the master's own spelling", () => {
     expect(nominee("spouse").addons.nomineeRelationship).toBe("Spouse");
   });
 
-  it("trims and re-cases a mangled multi-word relation", () => {
+  // The master's own spelling is "Father in law" — not title case. The lookup is
+  // a master lookup, not a re-casing rule, and the value that goes out is
+  // whatever the master says.
+  it("matches a padded, mis-cased multi-word relation to its master spelling", () => {
     expect(nominee("  FATHER IN LAW ").addons.nomineeRelationship).toBe("Father in law");
   });
 
@@ -655,6 +658,24 @@ describe("nominee relationship", () => {
   it("reaches Owner_Driver_Nominee_Relationship on the rendered Req_PvtCar", () => {
     expect(reqPvtCarFor(nominee("spouse")).Owner_Driver_Nominee_Relationship).toBe("Spouse");
     expect(reqPvtCarFor(nominee(undefined)).Owner_Driver_Nominee_Relationship).toBeNull();
+  });
+
+  // nomineeRelation is free text off a web form, and the relation lookup used to
+  // read inherited Object.prototype keys: "constructor" came back as the `Object`
+  // FUNCTION, which JSON.stringify silently omits. That deleted
+  // Owner_Driver_Nominee_Relationship from the payload — exactly the key-set
+  // change HDFC's Blaze engine rejects — while TypeScript still believed the
+  // value was a string. The damage prevented is the missing KEY, not the value.
+  it("keeps Owner_Driver_Nominee_Relationship in the payload for a prototype-key relation", () => {
+    for (const relation of ["constructor", "__proto__", "toString", "hasOwnProperty"]) {
+      const rendered = reqPvtCarFor(nominee(relation));
+      expect(Object.keys(rendered)).toContain("Owner_Driver_Nominee_Relationship");
+      expect(rendered.Owner_Driver_Nominee_Relationship).toBe(relation);
+      expect(JSON.parse(JSON.stringify(rendered))).toHaveProperty(
+        "Owner_Driver_Nominee_Relationship",
+        relation,
+      );
+    }
   });
 
   it("corrects the relation on every business type's template", () => {

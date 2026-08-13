@@ -96,6 +96,26 @@ describe("hdfcNomineeRelation", () => {
     expect(hdfcNomineeRelation("Second Cousin")).toBe("Second Cousin");
   });
 
+  // The documented lookup is padding-insensitive, so the value that goes out must
+  // be trimmed too — HDFC matches its master exactly and would reject the padding
+  // anyway, but with a message about the relation rather than about whitespace.
+  it("trims an unrecognised relation before passing it through", () => {
+    expect(hdfcNomineeRelation("  Second Cousin  ")).toBe("Second Cousin");
+  });
+
+  // nomineeRelation is free text off a web form. When the lookup table was a
+  // plain object literal, `relation["constructor"]` resolved Object.prototype's
+  // own key and returned the `Object` FUNCTION — truthy, so the pass-through
+  // fallback never fired, and JSON.stringify then dropped
+  // Owner_Driver_Nominee_Relationship out of Req_PvtCar entirely.
+  it("does not resolve inherited Object.prototype keys", () => {
+    expect(hdfcNomineeRelation("constructor")).toBe("constructor");
+    expect(hdfcNomineeRelation("__proto__")).toBe("__proto__");
+    expect(hdfcNomineeRelation("toString")).toBe("toString");
+    expect(hdfcNomineeRelation("valueOf")).toBe("valueOf");
+    expect(hdfcNomineeRelation("hasOwnProperty")).toBe("hasOwnProperty");
+  });
+
   it("returns null when there is no relation to send", () => {
     expect(hdfcNomineeRelation(undefined)).toBeNull();
     expect(hdfcNomineeRelation(null)).toBeNull();

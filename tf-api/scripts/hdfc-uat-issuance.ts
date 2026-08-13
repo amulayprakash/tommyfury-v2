@@ -13,6 +13,9 @@
  * fixed in src/providers/hdfc/ test-first, never patched here.
  *
  * Writes docs/hdfc-uat-issuance-results.md and scripts/_hdfc-issuance-raw.json.
+ * A partial run (--only=N) writes only the raw JSON: the markdown is committed,
+ * partner-facing evidence for the full five-scenario run and rebuilding it from
+ * one row would destroy it.
  */
 import { writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -340,14 +343,13 @@ interface RowResult {
   no: number;
   label: string;
   proves: string;
-  step: "kyc" | "proposal" | "payment" | "certificate" | "done";
+  step: "kyc" | "proposal" | "payment" | "done";
   ok: boolean;
   kycId?: string;
   proposalNumber?: string;
   transactionId?: string;
   grossPremium?: number;
   policyNumber?: string;
-  certificateBytes?: number;
   vendorMessage?: string;
 }
 
@@ -474,7 +476,6 @@ async function main({ phase: PHASE, only: ONLY, rps: RPS }: RunPlan) {
         ctx,
       );
       row.policyNumber = issued.policyNumber;
-      row.step = issued.policyNumber ? "certificate" : "payment";
       row.ok = issued.status === "ISSUED";
       console.log(`   → ${issued.status} policy ${issued.policyNumber ?? "—"}`);
       if (!issued.policyNumber) row.vendorMessage = issued.message;
@@ -489,13 +490,46 @@ async function main({ phase: PHASE, only: ONLY, rps: RPS }: RunPlan) {
   }
 
   writeFileSync(RAW_JSON, JSON.stringify({ generatedAt: new Date().toISOString(), results }, null, 2));
-  writeMarkdown(results);
+
+  // A partial run must NOT rewrite the evidence doc. writeMarkdown rebuilds the
+  // table from `results` alone, so `--only=3` would replace the committed
+  // five-policy table — the evidence docs/hdfc-vendor-blockers.md cites to HDFC —
+  // with a single row. The raw JSON above still records what this run did.
+  if (ONLY !== undefined) {
+    console.log(
+      `\nPartial run (--only=${ONLY}): left ${OUT_MD} untouched so the full-run evidence\n` +
+        `survives. Results for this run are in ${RAW_JSON}.`,
+    );
+  } else {
+    writeMarkdown(results);
+  }
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n═══ ${results.length} scenarios — ${passed} ok, ${results.length - passed} not ═══`);
 }
 
 function cell(s: string | undefined): string {
   return (s ?? "—").replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " ").trim();
+}
+
+/**
+ * What the evidence doc may honestly claim about its policy numbers.
+ *
+ * Derived from the rows, never asserted. The header used to say "every policy
+ * number is a **real bound UAT policy**" unconditionally — true of the committed
+ * five-policy run, but a lie over the empty Policy no. column a proposal-phase
+ * run produces, in a document that goes to HDFC.
+ */
+export function boundPolicyClaim(rows: ReadonlyArray<{ policyNumber?: string }>): string {
+  const bound = rows.filter((r) => r.policyNumber).length;
+  if (bound === 0) return "No policy was bound in this run.";
+  if (bound === rows.length) return "Every policy number below is a **real bound UAT policy**.";
+  const missed = rows.length - bound;
+  return (
+    `The ${bound} policy number${bound === 1 ? "" : "s"} below ` +
+    `${bound === 1 ? "is a" : "are"} **real bound UAT ` +
+    `${bound === 1 ? "policy" : "policies"}**; the remaining ${missed} ` +
+    `row${missed === 1 ? "" : "s"} did not reach issuance.`
+  );
 }
 
 function writeMarkdown(rows: RowResult[]): void {
@@ -505,7 +539,7 @@ function writeMarkdown(rows: RowResult[]): void {
   L.push(
     `Generated ${new Date().toISOString()} by \`npm run hdfc:issue\` ` +
       "(`scripts/hdfc-uat-issuance.ts`). Every row below was fired at **live HDFC UAT** " +
-      "through the production provider, and every policy number is a **real bound UAT policy**.",
+      `through the production provider. ${boundPolicyClaim(rows)}`,
   );
   L.push("");
   L.push("| # | Scenario | Proves | Reached | Proposal no. | Gross | Policy no. | HDFC's message |");
