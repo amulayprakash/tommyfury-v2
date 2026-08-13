@@ -681,3 +681,42 @@ It cannot be exercised read-only: `Customer_Details` is not part of
 CalculatePremium at all, so HDFC first sees the customer type at CreateProposal.
 The kit also ships a separate **"Pehchaan Integration KIT - Corporate.docx"**, so
 a live corporate proposal needs a corporate e-KYC journey that is not wired.
+
+## Pehchaan e-KYC — first live UAT behaviour (2026-08-13)
+
+`scripts/_hdfc-kyc-probe.ts` called `hdfcCompleteCkyc` against
+`https://ekyc-uat.hdfcergo.com/e-kyc`, endpoint `/primary/kyc-verified`, for the
+first time. Two calls, both against PAN `ABCPD1234E`.
+
+- Case 1 (panNumber, dob, mobile, fullName, txn id) returned
+  `isKycSuccess=true kycId=DUT8DKQABF requiresRedirect=false`, status
+  `approved`, `name: "Rahul Automation"`, `pan: "UQSPF3870N"`.
+- Case 2 (panNumber + txn id only) returned
+  `isKycSuccess=true kycId=338D8R5Y8H requiresRedirect=false`, status
+  `approved`, `name: "Anmol Arora"`, `pan: "ABCPD1234E"`.
+
+**The mechanism is headless.** `/primary/kyc-verified` returned a verified KYC
+directly — `iskycVerified: 1`, `status: "approved"`, a real `kyc_id` — with no
+`redirection_link` in either response. So the hosted Pehchaan journey is not
+required to obtain a Pehchaan id on UAT, and a server-side flow can complete
+e-KYC unattended. `normalizePehchaan`'s redirect branch was not exercised and
+remains unproven.
+
+**UAT's identity data does not correspond to the PAN submitted.** The same PAN
+(`ABCPD1234E`) produced two different identities on two consecutive calls
+("Rahul Automation" vs "Anmol Arora", different DOB, different address), and
+case 1's response carried a different PAN (`UQSPF3870N`) than the one sent.
+The only conclusion the evidence supports: UAT appears to return an identity
+from a fixed pool rather than verifying the specific PAN submitted. What
+production does with a real PAN is untested and not asserted here.
+
+**`mobile` and `email` come back empty** in both responses, even though case 1
+supplied a mobile number.
+
+**Consequence for issuance, flagged as an OPEN QUESTION, not a settled fact:**
+because the Pehchaan record carries its own name / dob / address, a proposal's
+`Customer_Details` should arguably be built from the KYC result rather than
+from separately-invented customer data, or the two will disagree. This has not
+been tested — it is not known whether `CreateProposal` validates
+`Customer_Pehchaan_id` against `Customer_Details`, or whether a mismatch is
+accepted, rejected, or silently overwritten. Needs confirmation with HDFC.
