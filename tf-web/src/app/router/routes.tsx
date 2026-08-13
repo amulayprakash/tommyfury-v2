@@ -71,6 +71,12 @@ const FgKycPage = lazy(() =>
 const FgReviewPage = lazy(() =>
   import("@/features/fg-uat/pages/fg-review-page").then((m) => ({ default: m.FgReviewPage })),
 );
+const FgPaymentPage = lazy(() =>
+  import("@/features/fg-uat/pages/fg-payment-page").then((m) => ({ default: m.FgPaymentPage })),
+);
+const FgSuccessPage = lazy(() =>
+  import("@/features/fg-uat/pages/fg-success-page").then((m) => ({ default: m.FgSuccessPage })),
+);
 
 /** Shorthand for a legacy route whose flow is rebuilt in a later phase. */
 function placeholder(path: string, title: string, vertical?: string): RouteObject {
@@ -171,7 +177,6 @@ export const routes: RouteObject[] = [
 
           // FG UAT certification harness — GCI testers sign in with real accounts,
           // so the harness sits behind the same auth guard as the rest of the app.
-          // Payment and success are mounted with the payment handoff.
           {
             element: <ProtectedRoute />,
             children: [
@@ -181,6 +186,10 @@ export const routes: RouteObject[] = [
               { path: ROUTES.fgUat.proposal, element: <FgProposalPage /> },
               { path: ROUTES.fgUat.kyc, element: <FgKycPage /> },
               { path: ROUTES.fgUat.review, element: <FgReviewPage /> },
+              { path: ROUTES.fgUat.payment, element: <FgPaymentPage /> },
+              // FG's payment callback redirects the browser back here with the
+              // issued PolicyNo (tf-api payment.service `successRedirect`).
+              { path: ROUTES.fgUat.success, element: <FgSuccessPage /> },
             ],
           },
 
