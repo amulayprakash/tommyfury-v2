@@ -65,16 +65,12 @@ export class FetchTransport implements FgTransport {
   }): Promise<unknown> {
     const isJson = args.jsonBody !== undefined;
     const headers: Record<string, string> = isJson
-      ? {
-          Authorization: `Bearer ${args.token}`,
-          "Content-Type": "application/json",
-          accept: "*/*",
-        }
-      : {
-          Authorization: `Bearer ${args.token}`,
-          "Content-Type": "text/xml",
-          accept: "application/json",
-        };
+      ? { "Content-Type": "application/json", accept: "*/*" }
+      : { "Content-Type": "text/xml", accept: "application/json" };
+    // No token → send the request unauthenticated rather than a bare "Bearer ".
+    // GCI confirmed the motor endpoints do not require one, and it is verified
+    // live on UAT (see providers/fg/__tests__/auth-optional.test.ts).
+    if (args.token) headers.Authorization = `Bearer ${args.token}`;
     if (args.soapAction) headers["SOAPAction"] = args.soapAction;
 
     const body = isJson ? JSON.stringify(args.jsonBody) : args.xmlBody;

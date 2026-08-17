@@ -182,6 +182,27 @@ export class FgProvider
   }
 
   /**
+   * The bearer, or "" when the vendor will not issue one.
+   *
+   * GCI confirmed the motor endpoints require no token ("Token not required for get
+   * quote and create proposal API"), verified live on UAT — GetQuote answers 200 with
+   * no Authorization header at all. So a token outage must not take the integration
+   * down. We still ask every time, which means calls silently return to being
+   * authenticated the moment the credential is restored; we just don't fail without it.
+   */
+  private async tokenOrNone(tokenHandle: FgTokenHandle): Promise<string> {
+    try {
+      return await tokenHandle.get();
+    } catch (err) {
+      logger.warn(
+        { provider: FG_SLUG, err },
+        "FG token unavailable — proceeding unauthenticated (motor endpoints do not require one)",
+      );
+      return "";
+    }
+  }
+
+  /**
    * FG's gateway invalidates bearer tokens ahead of their advertised TTL
    * (live-observed 2026-07-14: a cached, unexpired token 401s while a fresh
    * mint succeeds; FG's doc says to mint per request). On a 401, drop the
@@ -193,7 +214,7 @@ export class FgProvider
     opts: { retryTransient?: boolean } = {},
   ): Promise<T> {
     const { retryTransient = true } = opts;
-    const token = await tokenHandle.get();
+    const token = await this.tokenOrNone(tokenHandle);
     try {
       return await fn(token);
     } catch (err) {
@@ -201,7 +222,7 @@ export class FgProvider
       if (err.upstreamStatus === 401) {
         tokenHandle.invalidate();
         logger.warn({ provider: FG_SLUG }, "FG rejected cached token (401); retrying with a fresh token");
-        return fn(await tokenHandle.get());
+        return fn(await this.tokenOrNone(tokenHandle));
       }
       // FG's UAT BANCS backend is intermittently flaky (transient IIS 5xx /
       // reinsurance system exceptions). Give one retry before surfacing it —

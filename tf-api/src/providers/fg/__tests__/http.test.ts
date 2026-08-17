@@ -188,3 +188,48 @@ describe("parseSoapResponse — retained health SOAP path", () => {
     expect(root.Client.QuotationNo).toBe("0000925782");
   });
 });
+
+/**
+ * GCI confirmed the motor endpoints require no bearer, and it is verified live:
+ * GetQuote returns 200 with no Authorization header at all. So when no token is
+ * available we send the request unauthenticated rather than an empty "Bearer ".
+ */
+describe("FetchTransport — no token available", () => {
+  it("omits the Authorization header entirely when the token is empty", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ Root: { Client: { QuotationNo: "1" } } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new FetchTransport().request({
+      method: "POST",
+      url: "https://gw.example.com/MotorAPI/1.0.0/GetQuote",
+      token: "",
+      jsonBody: { Uid: "req-1" },
+    });
+
+    const [, init] = fetchMock.mock.calls[0]! as [string, RequestInit & { headers: Record<string, string> }];
+    expect(init.headers.Authorization).toBeUndefined();
+    expect(init.headers["Content-Type"]).toBe("application/json");
+  });
+
+  it("still sends the bearer when a token is present", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ Root: {} }), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new FetchTransport().request({
+      method: "POST",
+      url: "https://gw.example.com/MotorAPI/1.0.0/GetQuote",
+      token: "tok-abc",
+      jsonBody: { Uid: "req-2" },
+    });
+
+    const [, init] = fetchMock.mock.calls[0]! as [string, RequestInit & { headers: Record<string, string> }];
+    expect(init.headers.Authorization).toBe("Bearer tok-abc");
+  });
+});
