@@ -12,6 +12,7 @@ import {
   getProviders,
   initiateOvd,
   initiatePayment,
+  issuePolicy,
   listInsurers,
   searchMmv,
   searchRto,
@@ -23,6 +24,7 @@ import type {
   CompareQuotesRequest,
   InspectionRequest,
   MotorFullQuoteRequest,
+  PolicyIssuanceRequest,
 } from "./types";
 
 export function useProviders() {
@@ -133,6 +135,14 @@ export function usePolicyStatus() {
   return useMutation({
     mutationFn: ({ provider, transactionId }: { provider: string; transactionId: string }) =>
       getPolicyStatus(provider, transactionId),
+  });
+}
+
+/** Records the collected payment and issues the policy (HDFC's final step). */
+export function useIssuePolicy() {
+  return useMutation({
+    mutationFn: ({ provider, req }: { provider: string; req: PolicyIssuanceRequest }) =>
+      issuePolicy(provider, req),
   });
 }
 

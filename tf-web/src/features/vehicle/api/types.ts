@@ -26,6 +26,11 @@ export const OVD_DOC_TYPES = ["AADHAAR", "PAN", "VOTER", "PASSPORT", "DL"] as co
 export type OvdDocType = (typeof OVD_DOC_TYPES)[number];
 export type PolicyStatusRequest = components["schemas"]["PolicyStatusRequest"];
 export type PolicyStatusResult = components["schemas"]["PolicyStatusResult"];
+
+/** Issuance: binds an already-created proposal to a collected payment receipt. */
+export type PolicyIssuanceRequest = components["schemas"]["PolicyIssuanceRequest"];
+export type PolicyIssuanceResult = components["schemas"]["PolicyIssuanceResult"];
+export type PaymentReceipt = PolicyIssuanceRequest["receipt"];
 export type InspectionRequest = components["schemas"]["InspectionRequest"];
 export type InspectionResult = components["schemas"]["InspectionResult"];
 

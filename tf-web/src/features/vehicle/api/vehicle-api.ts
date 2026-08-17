@@ -12,6 +12,8 @@ import type {
   MotorFullQuoteRequest,
   OvdDocType,
   OvdResult,
+  PolicyIssuanceRequest,
+  PolicyIssuanceResult,
   PolicyStatusResult,
   ProviderInfo,
   ProvidersResponse,
@@ -201,6 +203,27 @@ export async function getPolicyStatus(
   const { data } = await vendorClient.post<ApiEnvelope<PolicyStatusResult>>(
     `/${providerSlug}/policy/status`,
     { transactionId },
+  );
+  return data.response;
+}
+
+/**
+ * Binds a created proposal to a collected payment and returns the issued policy.
+ *
+ * Not every provider reaches this the same way. FG sends the customer through a
+ * hosted gateway and its callback issues on the way back, so FG's journey rarely
+ * calls this directly. HDFC has no gateway at all: `submitpaymentdetails`
+ * RECORDS a payment taken elsewhere, so this call IS the issuance step, and
+ * `receipt.amount` must equal the proposal's premium — HDFC re-rates here and
+ * refuses a mismatch.
+ */
+export async function issuePolicy(
+  provider: string,
+  req: PolicyIssuanceRequest,
+): Promise<PolicyIssuanceResult> {
+  const { data } = await vendorClient.post<ApiEnvelope<PolicyIssuanceResult>>(
+    `/${provider}/policy/issue`,
+    req,
   );
   return data.response;
 }
