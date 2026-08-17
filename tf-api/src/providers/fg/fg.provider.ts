@@ -245,11 +245,15 @@ export class FgProvider
     );
     assertFgSuccess(extractRoot(body), "get-quote");
 
-    return normalizeQuote(body, {
+    const result = normalizeQuote(body, {
       requestId: ctx.requestId,
       policyType: req.selectedPolicy,
       vehicleCategory: req.vehicleType,
     });
+    // Certification harness only — see includeRawExchange in contracts/quote-request.ts.
+    return req.includeRawExchange
+      ? { ...result, _rawResponse: { request: payload, response: body } }
+      : result;
   }
 
   async getFullQuote(
@@ -288,13 +292,17 @@ export class FgProvider
     // payload carried: IssueProposal has to replay them and the payment callback
     // (which fires with only the PG result) can't re-derive them.
     const { start, end } = effectivePolicyDates(req);
-    return normalizeProposal(body, {
+    const result = normalizeProposal(body, {
       requestId: ctx.requestId,
       policyType: req.selectedPolicy,
       vehicleCategory: req.vehicleType,
       policyStartDate: start,
       policyEndDate: end,
     });
+    // Certification harness only — see includeRawExchange in contracts/quote-request.ts.
+    return req.includeRawExchange
+      ? { ...result, _rawResponse: { request: payload, response: body } }
+      : result;
   }
 
   async issuePolicy(

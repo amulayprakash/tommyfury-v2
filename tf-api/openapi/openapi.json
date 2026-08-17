@@ -283,6 +283,9 @@
               "minLength": 1
             }
           },
+          "includeRawExchange": {
+            "type": "boolean"
+          },
           "voluntaryDeductible": {
             "type": "integer",
             "nullable": true,
@@ -668,6 +671,9 @@
               "type": "string",
               "minLength": 1
             }
+          },
+          "includeRawExchange": {
+            "type": "boolean"
           },
           "voluntaryDeductible": {
             "type": "integer",
@@ -1290,6 +1296,9 @@
               "type": "string",
               "minLength": 1
             }
+          },
+          "includeRawExchange": {
+            "type": "boolean"
           },
           "voluntaryDeductible": {
             "type": "integer",
@@ -5246,6 +5255,9 @@
                       "minLength": 1
                     }
                   },
+                  "includeRawExchange": {
+                    "type": "boolean"
+                  },
                   "voluntaryDeductible": {
                     "type": "integer",
                     "nullable": true,
@@ -5958,6 +5970,9 @@
                       "type": "string",
                       "minLength": 1
                     }
+                  },
+                  "includeRawExchange": {
+                    "type": "boolean"
                   },
                   "voluntaryDeductible": {
                     "type": "integer",
@@ -6898,6 +6913,9 @@
                       "type": "string",
                       "minLength": 1
                     }
+                  },
+                  "includeRawExchange": {
+                    "type": "boolean"
                   },
                   "voluntaryDeductible": {
                     "type": "integer",

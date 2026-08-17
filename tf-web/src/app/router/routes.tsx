@@ -88,6 +88,32 @@ const HdfcSuccessPage = lazy(() =>
   })),
 );
 
+// FG UAT certification harness (docs/superpowers/specs/2026-08-07-fg-uat-journey-design.md)
+const FgCategoryPage = lazy(() =>
+  import("@/features/fg-uat/pages/fg-category-page").then((m) => ({ default: m.FgCategoryPage })),
+);
+const FgVehiclePage = lazy(() =>
+  import("@/features/fg-uat/pages/fg-vehicle-page").then((m) => ({ default: m.FgVehiclePage })),
+);
+const FgPlansPage = lazy(() =>
+  import("@/features/fg-uat/pages/fg-plans-page").then((m) => ({ default: m.FgPlansPage })),
+);
+const FgProposalPage = lazy(() =>
+  import("@/features/fg-uat/pages/fg-proposal-page").then((m) => ({ default: m.FgProposalPage })),
+);
+const FgKycPage = lazy(() =>
+  import("@/features/fg-uat/pages/fg-kyc-page").then((m) => ({ default: m.FgKycPage })),
+);
+const FgReviewPage = lazy(() =>
+  import("@/features/fg-uat/pages/fg-review-page").then((m) => ({ default: m.FgReviewPage })),
+);
+const FgPaymentPage = lazy(() =>
+  import("@/features/fg-uat/pages/fg-payment-page").then((m) => ({ default: m.FgPaymentPage })),
+);
+const FgSuccessPage = lazy(() =>
+  import("@/features/fg-uat/pages/fg-success-page").then((m) => ({ default: m.FgSuccessPage })),
+);
+
 /** Shorthand for a legacy route whose flow is rebuilt in a later phase. */
 function placeholder(path: string, title: string, vertical?: string): RouteObject {
   return { path, element: <PlaceholderPage title={title} vertical={vertical} /> };
@@ -185,8 +211,8 @@ export const routes: RouteObject[] = [
           { path: ROUTES.vehicle.newCommercialCreateQuote, element: <VehicleProposalPage /> },
           { path: ROUTES.vehicle.newCommercialKyc, element: <VehicleKycPage /> },
 
-          // HDFC UAT certification harness — HDFC testers sign in with real
-          // accounts, so the harness sits behind the same auth guard as the app.
+          // Vendor UAT certification harnesses. Insurer testers sign in with real
+          // accounts, so both sit behind the same auth guard as the rest of the app.
           {
             element: <ProtectedRoute />,
             children: [
@@ -200,6 +226,17 @@ export const routes: RouteObject[] = [
               // already-collected receipt and issues the policy inline.
               { path: ROUTES.hdfcUat.payment, element: <HdfcPaymentPage /> },
               { path: ROUTES.hdfcUat.success, element: <HdfcSuccessPage /> },
+
+              { path: ROUTES.fgUat.start, element: <FgCategoryPage /> },
+              { path: ROUTES.fgUat.vehicle, element: <FgVehiclePage /> },
+              { path: ROUTES.fgUat.plans, element: <FgPlansPage /> },
+              { path: ROUTES.fgUat.proposal, element: <FgProposalPage /> },
+              { path: ROUTES.fgUat.kyc, element: <FgKycPage /> },
+              { path: ROUTES.fgUat.review, element: <FgReviewPage /> },
+              { path: ROUTES.fgUat.payment, element: <FgPaymentPage /> },
+              // FG's payment callback redirects the browser back here with the
+              // issued PolicyNo (tf-api payment.service `successRedirect`).
+              { path: ROUTES.fgUat.success, element: <FgSuccessPage /> },
             ],
           },
 

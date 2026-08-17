@@ -214,8 +214,29 @@ const EMPTY_CLIENT = {
   CKYCRefNo: "",
   Address1: EMPTY_ADDRESS,
   Address2: { ...EMPTY_ADDRESS, AddressType: "K" },
+  // FG's kit CRT sample carries a third (empty) address alongside the two we fill.
+  // The gateway validates against a fixed model, so send the block rather than let
+  // its absence become a talking point when a proposal is rejected for other reasons.
+  Address3: { ...EMPTY_ADDRESS, AddressType: "K" },
   VIPFlag: "N",
   VIPCategory: "",
+};
+
+/**
+ * Bancassurance block — not applicable to the web-aggregator channel, but present
+ * with every key in FG's own kit sample. Same reasoning as Client.Address3.
+ */
+const EMPTY_BANCA = {
+  SPCODE: "",
+  BankBranchCode: "",
+  BranchReferenceID: "",
+  FGBankBranchStaffID: "",
+  BankStaffID: "",
+  BankCustomerID: "",
+  BancaChannel: "",
+  PartnerRefNo: "",
+  PayorID: "",
+  PayerName: "",
 };
 
 /**
@@ -314,7 +335,9 @@ function buildPreviousInsDtls(req: MotorQuoteRequest, codes: FgResolvedCodes): R
       NCBDeclartion: req.ncbPercent > 0 ? "Y" : "N",
       ClaimInExpiringPolicy: req.claimInPreviousPolicy ? "Y" : "N",
       NCBInExpiringPolicy: String(req.ncbPercent ?? 0),
-      PreviousPolStartDt: "",
+      // The expiring policy's inception date. FG's kit sample populates it; we send it
+      // whenever the journey captured one (it is optional in our contract).
+      PreviousPolStartDt: req.previousPolicyStartDate ? toFgDate(req.previousPolicyStartDate) : "",
       TypeOfDoc: "",
       NoOfClaims: "",
     },
@@ -370,6 +393,9 @@ const EMPTY_RECEIPT = {
   TCSAmount: "",
   TranRefNo: "",
   TranRefNoDate: "",
+  // Payment-gateway type: only meaningful at IssueProposal, but the kit sample sends
+  // the key on CRT too, so keep the block shape identical to theirs.
+  PGType: "",
 };
 
 function buildVehicle(
@@ -398,6 +424,8 @@ function buildVehicle(
     SeatingCapacity: String(codes.seatingCapacity ?? req.seatingCapacity ?? ""),
     IDV: opts.idv,
     GrossWeigh: String(codes.gvw ?? req.grossVehicleWeight ?? ""),
+    // Bancassurance segment — not applicable to this channel, but present in the kit sample.
+    BancaSegment: "",
     CarriageCapacityFlag: "",
     ValidPUC: "Y",
     TrailerTowedBy: "",
@@ -635,6 +663,7 @@ export function buildCreateProposalPayload(
     VendorUserId: meta.vendorCode,
     PolicyHeader: policyHeader(req, meta, "CRT", { quoteNo: req.quoteId }),
     POS_MISP: { Type: "", PanNo: "" },
+    Banca: EMPTY_BANCA,
     Client: {
       ...EMPTY_CLIENT,
       Salutation: fgSalutation(proposer.gender),

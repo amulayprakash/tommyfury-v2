@@ -47,3 +47,37 @@ describe("buildQuoteRequest — provider add-on codes", () => {
     expect(req?.providerAddonCodes).toBeUndefined();
   });
 });
+
+/**
+ * FG requires the IDV on CreateProposal. When the customer never touches the IDV
+ * control the store's idvValue stays null, and we previously sent nothing — so the
+ * proposal went up with IDV 0 and the insurer re-derived it, exactly the way the
+ * missing OD-discount echo let FG re-rate the premium. Carry the IDV the customer
+ * was actually quoted.
+ */
+describe("IDV carried into the proposal", () => {
+  it("falls back to the selected quote's IDV when the customer did not override it", () => {
+    const req = buildQuoteRequest({
+      ...base,
+      providerAddonCodes: [],
+      idvValue: null,
+      selected: { providerSlug: "fg", quote: { idvValue: 562360 } },
+    } as unknown as Inputs);
+    expect(req?.idvValue).toBe(562360);
+  });
+
+  it("prefers the customer's own IDV over the quoted one", () => {
+    const req = buildQuoteRequest({
+      ...base,
+      providerAddonCodes: [],
+      idvValue: 600000,
+      selected: { providerSlug: "fg", quote: { idvValue: 562360 } },
+    } as unknown as Inputs);
+    expect(req?.idvValue).toBe(600000);
+  });
+
+  it("omits IDV when neither is available", () => {
+    const req = buildQuoteRequest({ ...base, providerAddonCodes: [], idvValue: null } as unknown as Inputs);
+    expect(req?.idvValue).toBeUndefined();
+  });
+});
