@@ -52,6 +52,42 @@ const VehiclePolicySuccessPage = lazy(() =>
   })),
 );
 
+// HDFC UAT certification harness (docs/superpowers/specs/2026-08-13-hdfc-uat-route-design.md)
+const HdfcCategoryPage = lazy(() =>
+  import("@/features/hdfc-uat/pages/hdfc-category-page").then((m) => ({
+    default: m.HdfcCategoryPage,
+  })),
+);
+const HdfcVehiclePage = lazy(() =>
+  import("@/features/hdfc-uat/pages/hdfc-vehicle-page").then((m) => ({
+    default: m.HdfcVehiclePage,
+  })),
+);
+const HdfcPlansPage = lazy(() =>
+  import("@/features/hdfc-uat/pages/hdfc-plans-page").then((m) => ({ default: m.HdfcPlansPage })),
+);
+const HdfcProposalPage = lazy(() =>
+  import("@/features/hdfc-uat/pages/hdfc-proposal-page").then((m) => ({
+    default: m.HdfcProposalPage,
+  })),
+);
+const HdfcKycPage = lazy(() =>
+  import("@/features/hdfc-uat/pages/hdfc-kyc-page").then((m) => ({ default: m.HdfcKycPage })),
+);
+const HdfcReviewPage = lazy(() =>
+  import("@/features/hdfc-uat/pages/hdfc-review-page").then((m) => ({ default: m.HdfcReviewPage })),
+);
+const HdfcPaymentPage = lazy(() =>
+  import("@/features/hdfc-uat/pages/hdfc-payment-page").then((m) => ({
+    default: m.HdfcPaymentPage,
+  })),
+);
+const HdfcSuccessPage = lazy(() =>
+  import("@/features/hdfc-uat/pages/hdfc-success-page").then((m) => ({
+    default: m.HdfcSuccessPage,
+  })),
+);
+
 /** Shorthand for a legacy route whose flow is rebuilt in a later phase. */
 function placeholder(path: string, title: string, vertical?: string): RouteObject {
   return { path, element: <PlaceholderPage title={title} vertical={vertical} /> };
@@ -148,6 +184,24 @@ export const routes: RouteObject[] = [
           { path: ROUTES.vehicle.newCommercialQuotes, element: <VehicleComparePage /> },
           { path: ROUTES.vehicle.newCommercialCreateQuote, element: <VehicleProposalPage /> },
           { path: ROUTES.vehicle.newCommercialKyc, element: <VehicleKycPage /> },
+
+          // HDFC UAT certification harness — HDFC testers sign in with real
+          // accounts, so the harness sits behind the same auth guard as the app.
+          {
+            element: <ProtectedRoute />,
+            children: [
+              { path: ROUTES.hdfcUat.start, element: <HdfcCategoryPage /> },
+              { path: ROUTES.hdfcUat.vehicle, element: <HdfcVehiclePage /> },
+              { path: ROUTES.hdfcUat.plans, element: <HdfcPlansPage /> },
+              { path: ROUTES.hdfcUat.proposal, element: <HdfcProposalPage /> },
+              { path: ROUTES.hdfcUat.kyc, element: <HdfcKycPage /> },
+              { path: ROUTES.hdfcUat.review, element: <HdfcReviewPage /> },
+              // HDFC has no payment gateway: the payment step records an
+              // already-collected receipt and issues the policy inline.
+              { path: ROUTES.hdfcUat.payment, element: <HdfcPaymentPage /> },
+              { path: ROUTES.hdfcUat.success, element: <HdfcSuccessPage /> },
+            ],
+          },
 
           // Health journey
           placeholder(ROUTES.health.start, "Health Insurance", HEALTH),

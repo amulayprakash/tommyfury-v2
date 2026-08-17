@@ -75,6 +75,18 @@ export const ROUTES = {
     newCommercialKyc: "/zuno-new-comm-kyc",
   },
 
+  /** HDFC UAT certification harness — docs/superpowers/specs/2026-08-13-hdfc-uat-route-design.md */
+  hdfcUat: {
+    start: "/hdfc",
+    vehicle: "/hdfc/vehicle",
+    plans: "/hdfc/plans",
+    proposal: "/hdfc/proposal",
+    kyc: "/hdfc/kyc",
+    review: "/hdfc/review",
+    payment: "/hdfc/payment",
+    success: "/hdfc/success",
+  },
+
   health: {
     start: "/Health",
     city: "/HealthCity",
