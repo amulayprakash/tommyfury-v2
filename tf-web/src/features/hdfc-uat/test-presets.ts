@@ -46,15 +46,35 @@ function isoOffset(days: number): string {
 const yearsAgo = (y: number): string => isoOffset(-365 * y);
 
 /**
- * The Swift every bound scenario is built on — same make, model, RTO, engine and
- * chassis as `SWIFT`/`PROPOSER.vehicle` in the issuance script. HDFC's UAT prices
- * only vehicles roughly a year old or newer, so the registration date is a year
- * back rather than a fixed calendar date.
+ * The vehicle every preset is built on.
+ *
+ * THESE ARE CANONICAL IDS, NOT HDFC'S OWN CODES, and the difference is the whole
+ * point. `scripts/hdfc-uat-issuance.ts` runs through `passthroughCodeResolver`,
+ * where the canonical id IS the vendor code, so it can say `modelId: "12798"`
+ * and mean HDFC's Swift directly. The browser journey goes through the real
+ * `dbCodeResolver`, which looks a canonical MmvMaster row up in ProviderMmvCode
+ * and cross-walks it. Feeding it "12798" produced exactly the error a tester saw
+ * on 2026-08-13:
+ *
+ *     NOT_FOUND — HDFC vehicle-code mapping for MARUTI SWIFT ZXI not found
+ *
+ * The vehicle also had to change, not just its id format: NO Maruti Swift row in
+ * MmvMaster carries an hdfc ProviderMmvCode at all (nor does any Maruti, Tata or
+ * Toyota petrol row), so a Swift cannot be quoted through this path whatever it
+ * is called. Hyundai Aura is used instead — canonical HY1509, which cross-walks
+ * to HDFC model 42644, verified against the live DB and the live IDV call.
+ *
+ * RTO `MH47` (Mumbai-North Borivali) cross-walks to HDFC's `10406`, which is the
+ * RTO every priced scenario in the certification pack used.
+ *
+ * A tester picking a vehicle through the search box always gets canonical ids,
+ * so only these hard-coded presets were ever wrong.
  */
-const SWIFT = {
-  makeId: "12798", makeName: "MARUTI", modelId: "12798", modelName: "SWIFT ZXI",
+const VEHICLE = {
+  makeId: "HYUNDAI", makeName: "HYUNDAI",
+  modelId: "HY1509", modelName: "AURA 1.2 MT KAPPA S BSVI",
   fuelType: "petrol",
-  rtoCode: "10406",
+  rtoCode: "MH47",
   engineNumber: "ENG1234567890123",
   // 17 characters — the quoting pack's chassis rule.
   chassisNumber: "MA3EWDE1S00123456",
@@ -77,7 +97,8 @@ const rollover = (): Pick<
   | "ncbPercent"
 > => ({
   businessType: "rollover",
-  registrationNumber: "MH01QQ7878",
+  // Series matches the RTO above (MH47, Mumbai-North Borivali).
+  registrationNumber: "MH47AA1234",
   registrationDate: yearsAgo(1),
   previousPolicyNumber: "PREVPOL0001",
   previousPolicyExpiryDate: isoOffset(7),
@@ -87,7 +108,7 @@ const rollover = (): Pick<
 
 /** Fields every preset shares and none of the six varies. */
 const COMMON = {
-  ...SWIFT,
+  ...VEHICLE,
   isUsedVehiclePurchase: false,
   tenureYears: 1,
   paOwner: true,

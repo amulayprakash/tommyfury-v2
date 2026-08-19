@@ -12,7 +12,17 @@
 
 ## Context for the implementer
 
-**Read `tf-web/src/features/fg-uat/` before writing anything.** This plan builds the HDFC equivalent of that module, and the strong expectation is that the two look like siblings. Where this plan does not specify a detail (JSX structure, class names, loading and error states, spacing), copy how the FG page for the same step does it.
+**Read the FG harness before writing anything.** This plan builds the HDFC equivalent of that module, and the strong expectation is that the two look like siblings. Where this plan does not specify a detail (JSX structure, class names, loading and error states, spacing), copy how the FG page for the same step does it.
+
+> **Branch note.** The FG harness lives on `feat/fg-uat-journey`, NOT on `feat/hdfc-uat-route` where this work happens — that branch came off `main`, so `tf-web/src/features/fg-uat/` is absent here. Read it read-only without switching branches:
+>
+> ```bash
+> git show feat/fg-uat-journey:tf-web/src/features/fg-uat/fg-uat-store.ts
+> git show feat/fg-uat-journey:tf-web/src/features/fg-uat/pages/fg-plans-page.tsx
+> git ls-tree -r --name-only feat/fg-uat-journey -- tf-web/src/features/fg-uat
+> ```
+>
+> Do NOT run `git checkout`, `git switch`, `git stash` or `git reset` — a branch switch already cost this session an incident. The two harnesses both add a block to `paths.ts` and a `ProtectedRoute` wrapper to `routes.tsx`, so expect a small conflict in those two files when the branches merge; that is acceptable and cheap to resolve.
 
 Predecessors:
 - Spec: `docs/superpowers/specs/2026-08-13-hdfc-uat-route-design.md`
