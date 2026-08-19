@@ -10,12 +10,7 @@ export default defineConfig({
   shims: true,
   splitting: false,
   treeshake: true,
-  // mysql2 (used by the NivaBupa module's own pool) resolves its optional
-  // auth plugins and the Node crypto/net bindings through dynamic requires that
-  // esbuild cannot statically follow, so it stays a runtime dependency like
-  // @prisma/client. axios is external alongside it to keep the two NivaBupa
-  // runtime deps consistent.
-  external: ["@prisma/client", "mysql2", "axios"],
+  external: ["@prisma/client"],
   esbuildOptions(options) {
     options.alias = {
       "@": "./src",
