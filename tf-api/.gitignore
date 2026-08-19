@@ -22,3 +22,8 @@ scripts/rc-mock-server.ts
 scripts/find-frontend-test-vehicles.ts
 scripts/verify-test-vehicles.ts
 scripts/_hdfc-unmatched.json
+
+# Captured NivaBupa payment callback ciphertexts (see captureCiphertext in
+# src/nivabupa/controllers/payment.controller.js). Debugging evidence written
+# on the server — never commit it, and a stray copy must not block a git pull.
+returnmessage*.txt
