@@ -27,6 +27,11 @@ export const ProviderOperationSchema = z.enum([
   "retrieveQuote",
   "proposal",
   "ckyc",
+  // Corporate (non-individual) CKYC — HDFC Pehchaan's separate
+  // /partner/corporate/kyc kit. Declared by HDFC only; FG/ICICI/ITGI do
+  // individuals only, so a corporate request at them 422s at the gate in
+  // kyc.service.ts rather than silently losing every entity field.
+  "corporateCkyc",
   "ovd",
   "issuance",
   "renewal",

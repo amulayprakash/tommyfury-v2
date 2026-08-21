@@ -1699,6 +1699,7 @@
                       "retrieveQuote",
                       "proposal",
                       "ckyc",
+                      "corporateCkyc",
                       "ovd",
                       "issuance",
                       "renewal",
@@ -2302,6 +2303,42 @@
           "redirectUrl": {
             "type": "string",
             "format": "uri"
+          },
+          "customerType": {
+            "type": "string",
+            "enum": [
+              "individual",
+              "corporate"
+            ]
+          },
+          "entityPan": {
+            "type": "string",
+            "pattern": "^[A-Z]{5}\\d{4}[A-Z]$"
+          },
+          "entityCin": {
+            "type": "string"
+          },
+          "entityCkycNumber": {
+            "type": "string"
+          },
+          "dateOfIncorporation": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "entityType": {
+            "type": "string",
+            "enum": [
+              "company",
+              "partnershipFirm",
+              "trust",
+              "unincorporatedInstitution",
+              "properietor",
+              "huf",
+              "llp",
+              "societyOrEducationalInstitute",
+              "governmentEntity",
+              "foreignEmbassy"
+            ]
           }
         },
         "required": [
@@ -4708,6 +4745,7 @@
                                 "retrieveQuote",
                                 "proposal",
                                 "ckyc",
+                                "corporateCkyc",
                                 "ovd",
                                 "issuance",
                                 "renewal",
@@ -7588,6 +7626,42 @@
                   "redirectUrl": {
                     "type": "string",
                     "format": "uri"
+                  },
+                  "customerType": {
+                    "type": "string",
+                    "enum": [
+                      "individual",
+                      "corporate"
+                    ]
+                  },
+                  "entityPan": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{5}\\d{4}[A-Z]$"
+                  },
+                  "entityCin": {
+                    "type": "string"
+                  },
+                  "entityCkycNumber": {
+                    "type": "string"
+                  },
+                  "dateOfIncorporation": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "entityType": {
+                    "type": "string",
+                    "enum": [
+                      "company",
+                      "partnershipFirm",
+                      "trust",
+                      "unincorporatedInstitution",
+                      "properietor",
+                      "huf",
+                      "llp",
+                      "societyOrEducationalInstitute",
+                      "governmentEntity",
+                      "foreignEmbassy"
+                    ]
                   }
                 },
                 "required": [

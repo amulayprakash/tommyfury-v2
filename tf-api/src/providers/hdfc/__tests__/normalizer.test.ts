@@ -210,6 +210,116 @@ describe("normalizeCertificate", () => {
   it("reads the base64 policy document", () => {
     const c = normalizeCertificate(policyDocFixture);
     expect(c.coiBase64).toBe("JVBERi0xLjQKJVBPTElDWQ==");
-    expect(c.policyNumber).toBe("2311202600012345");
+  });
+
+  it("reports no policy number, because the response does not carry one", () => {
+    // This asserted "2311202600012345" until 21/08/2026, on the strength of an
+    // invented fixture. The kit's response sheet lists StatusCode, Message,
+    // Error, Warning, TransactionID and PDF_BYTES — no policy number. The
+    // caller gets it from SubmitPaymentDetails instead (normalizePayment).
+    expect(normalizeCertificate(policyDocFixture).policyNumber).toBeUndefined();
+  });
+});
+
+/**
+ * GetPolicyDocument returns the COI in `Resp_Policy_Document.PDF_BYTES`.
+ *
+ * `normalizeCertificate` read `Req_Policy_Document.Document` — the REQUEST
+ * container, and a field name that exists nowhere. Both came from
+ * `fixtures/responses/policy-document.json`, which was invented rather than
+ * captured, so the whole path was green against a fiction while live UAT
+ * returned an empty `coiBase64` on a real issued policy.
+ *
+ * The kit is unambiguous (`PrivateCarDataDictionary.xlsx`, "07
+ * GetPolicyDocument"): the request carries `Policy_Number` in
+ * `Req_Policy_Document`; the response carries `PDF_BYTES` in
+ * `Resp_Policy_Document`. HDFC uses the same Req_/Resp_ split for `Req_PvtCar` /
+ * `Resp_PvtCar`, so reading the request container back was always wrong.
+ *
+ * Captured live 21/08/2026 against policy 2302201225707100000.
+ */
+describe("normalizeCertificate — reads the response container, not the request one", () => {
+  const live = {
+    StatusCode: 200,
+    Message: "Pdf generated",
+    Resp_Policy_Document: { PDF_BYTES: "JVBERi0xLjQKJeLjz9MK" },
+  };
+
+  it("extracts PDF_BYTES from Resp_Policy_Document", () => {
+    expect(normalizeCertificate(live).coiBase64).toBe("JVBERi0xLjQKJeLjz9MK");
+  });
+
+  it("returns a base64 PDF, not an empty string", () => {
+    // JVBERi0 is base64 for "%PDF-", so this also guards against returning
+    // some other field that happens to be a non-empty string.
+    expect(normalizeCertificate(live).coiBase64.startsWith("JVBERi0")).toBe(true);
+  });
+
+  it("still reads the older Req_Policy_Document/Document shape", () => {
+    // Kept as tolerance only — no live response has ever carried it.
+    expect(
+      normalizeCertificate({
+        Req_Policy_Document: { Document: "JVBERi0xLjQKJVBPTElDWQ==", Policy_Number: "2311202600012345" },
+      }).coiBase64,
+    ).toBe("JVBERi0xLjQKJVBPTElDWQ==");
+  });
+
+  it("carries the policy number when the response echoes one", () => {
+    expect(
+      normalizeCertificate({ Resp_Policy_Document: { PDF_BYTES: "x", Policy_Number: "2302201225707100000" } })
+        .policyNumber,
+    ).toBe("2302201225707100000");
+  });
+
+  it("returns an empty string rather than undefined when HDFC sends no document", () => {
+    expect(normalizeCertificate({ StatusCode: 200, Resp_Policy_Document: {} }).coiBase64).toBe("");
+  });
+});
+
+/**
+ * The COI is ~477 KB of base64. Echoing HDFC's body verbatim into `_rawResponse`
+ * shipped it TWICE — once in `coiBase64` and once in
+ * `_rawResponse.Resp_Policy_Document.PDF_BYTES` — so a single certificate fetch
+ * moved about a megabyte of JSON, half of it redundant. Measured live on
+ * 21/08/2026: 477,488 chars in each.
+ *
+ * `_rawResponse` still earns its place — the `/hdfc` harness renders it as
+ * certification evidence, and StatusCode / Message / the container name are
+ * exactly what a tester reads back to HDFC. The PDF bytes are not evidence, so
+ * they are replaced by a marker that records what was there.
+ */
+describe("normalizeCertificate — does not ship the PDF twice", () => {
+  const live = {
+    StatusCode: 200,
+    Message: "Pdf generated",
+    Resp_Policy_Document: { PDF_BYTES: "JVBERi0xLjQ" + "A".repeat(5000) },
+  };
+
+  it("keeps the full document in coiBase64", () => {
+    expect(normalizeCertificate(live).coiBase64).toHaveLength(5011);
+  });
+
+  it("elides the PDF bytes from _rawResponse", () => {
+    const raw = normalizeCertificate(live)._rawResponse as Record<string, unknown>;
+    const doc = raw.Resp_Policy_Document as Record<string, unknown>;
+    expect(doc.PDF_BYTES).not.toContain("AAAA");
+    expect(String(doc.PDF_BYTES)).toMatch(/5011/);
+  });
+
+  it("keeps the envelope, which is the part that is actually evidence", () => {
+    const raw = normalizeCertificate(live)._rawResponse as Record<string, unknown>;
+    expect(raw.StatusCode).toBe(200);
+    expect(raw.Message).toBe("Pdf generated");
+  });
+
+  it("leaves a body carrying no document untouched", () => {
+    const body = { StatusCode: 200, Error: "BUSINESS EXCEPTION: no such policy" };
+    expect(normalizeCertificate(body)._rawResponse).toEqual(body);
+  });
+
+  it("does not mutate the caller's object", () => {
+    const body = { StatusCode: 200, Resp_Policy_Document: { PDF_BYTES: "JVBERi0xLjQ" } };
+    normalizeCertificate(body);
+    expect(body.Resp_Policy_Document.PDF_BYTES).toBe("JVBERi0xLjQ");
   });
 });

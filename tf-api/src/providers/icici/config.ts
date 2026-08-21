@@ -12,6 +12,18 @@ import type {
 export const ICICI_SLUG = "icici";
 export const ICICI_DISPLAY_NAME = "ICICI Lombard";
 
+// ─── Vendor settings (was .env — only the credentials stayed there) ───────────
+
+/** Registers the ICICI provider at startup. */
+export const ICICI_ENABLED = true;
+
+export const ICICI_GATEWAY = {
+  /** ⚠️ UAT gateway. Confirm the production host with ICICI before go-live. */
+  baseUrl: "https://ilesbapigee.insurancearticlez.com",
+  /** node:crypto cipher name for the login password; scheme confirmed on UAT. */
+  aesMode: "aes-256-ecb",
+} as const;
+
 // Only categories ICICI can ACTUALLY quote (i.e. has master data for). Commercial
 // (PCV/GCV) is intentionally excluded until ICICI delivers the CV make/model/RTO master
 // CSVs — the product codes + CV mapper scaffolding below are ready, but advertising a
@@ -54,9 +66,10 @@ export interface IciciConfig {
 }
 
 /**
- * Reads ICICI config from env. Throws only when ICICI is enabled but
- * misconfigured — fixtures-based tests run without these set. ICICI_AES_KEY is
- * optional: omit it when ICICI_PASSWORD is already an encrypted value.
+ * Builds the ICICI config from the constants above plus the credentials in env.
+ * Throws only when ICICI is enabled but its credentials are missing —
+ * fixtures-based tests run without these set. ICICI_AES_KEY is optional: omit it
+ * when ICICI_PASSWORD is already an encrypted value.
  */
 export function loadIciciConfig(): IciciConfig {
   const missing: string[] = [];
@@ -66,11 +79,11 @@ export function loadIciciConfig(): IciciConfig {
     throw new Error(`ICICI provider enabled but missing env: ${missing.join(", ")}`);
   }
   return {
-    baseUrl: env.ICICI_BASE_URL.replace(/\/$/, ""),
+    baseUrl: ICICI_GATEWAY.baseUrl.replace(/\/$/, ""),
     login: env.ICICI_LOGIN!,
     password: env.ICICI_PASSWORD!,
     aesKey: env.ICICI_AES_KEY || undefined,
-    aesMode: env.ICICI_AES_MODE,
+    aesMode: ICICI_GATEWAY.aesMode,
     credentialSetId: "default",
   };
 }

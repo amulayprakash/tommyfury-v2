@@ -2,16 +2,27 @@
 
 **From:** NovaCred / Tommy & Furry integration team
 **Product:** Private Car, HEI API (UAT channel `SOURCE = NOVACRED`, `CHANNEL_ID = NOVA0001`)
-**Date:** 13/08/2026
+**Date:** 13/08/2026 (last updated 21/08/2026)
 
 ## Where the integration stands
 
 HDFC ERGO is live on our UAT as a Private Car motor provider. We run HDFC's own
 certification pack, `PVTcarTestScenarios.xls` (205 conditions across the sheets
 *New and Rollover* 36, *Long Team* 152, *Used Car* 12 and *Break In* 5), against
-live UAT through the production adapter. Current standing:
+live UAT through the production adapter.
 
-| Verdict | Count |
+> ### Current standing, 21/08/2026
+>
+> **PASS 96 · FAIL (our defect) 0 · could not be priced by UAT 96 · not
+> expressible read-only 11 · manual 2.** Eight conditions moved out of PASS
+> between 13/08 and 21/08, every one of them because UAT's own behaviour changed
+> — see items 11 and 12. **There are still no open defects on our side.** The
+> full before/after table is a few paragraphs below.
+
+**Standing as measured 13/08/2026** — the baseline the numbered items below were
+written against, kept so the deltas can be read. It is NOT the current standing:
+
+| Verdict | Count (13/08/2026) |
 | --- | ---: |
 | PASS | 104 |
 | FAIL (our defect) | 0 |
@@ -20,8 +31,8 @@ live UAT through the production adapter. Current standing:
 | Manual / UI-only conditions | 2 |
 | **Total** | **205** |
 
-192 of the 205 conditions produced a live HDFC response. There are no open
-defects on our side.
+On that date 192 of the 205 conditions produced a live HDFC response, and there
+were no open defects on our side.
 
 On 13/08/2026 we also bound **five real UAT policies end to end** — quote,
 Pehchaan e-KYC, CreateProposal, SubmitPaymentDetails, GetPolicyDocument:
@@ -37,6 +48,33 @@ Pehchaan e-KYC, CreateProposal, SubmitPaymentDetails, GetPolicyDocument:
 The items below are the ones we cannot close from our side. Each states what we
 observe, HDFC's verbatim message, how we isolated it, and what we need.
 
+**Update, 21/08/2026 — four UAT behaviour changes since this table was measured,
+all now isolated.** The counts above are the 13/08/2026 standing. Between roughly
+17/08 and 21/08, UAT began refusing `Policy_Details.Registration_No: null` at
+CalculatePremium (we have adapted; see the observation after item 12); behind it,
+began refusing `POLICY_TENURE = 1` on New Business, withdrawing the ordinary 1+3
+new-car term (**item 11**); stopped computing any break-in loading premium
+(**item 12**); and stopped enforcing the 25%-of-sum-insured accessory cap, which
+we have taken over ourselves (the last is not a blocker — see the observation
+after item 12).
+
+Re-running the *New and Rollover* and *Break In* sheets on 21/08 moves the table
+above as follows. The other two sheets have not been re-measured since 19/08 and
+are carried forward unchanged.
+
+| Verdict | 13/08/2026 | 21/08/2026 |
+| --- | ---: | ---: |
+| PASS | 104 | 96 |
+| FAIL (our defect) | 0 | 0 |
+| Could not be priced by UAT | 88 | 96 |
+| Not expressible / not observable read-only | 11 | 11 |
+| Manual / UI-only conditions | 2 | 2 |
+| **Total** | **205** | **205** |
+
+Every one of the eight conditions that moved from PASS is accounted for by items
+11 and 12 above: three by the withdrawn 1+3 term, five by the withdrawn break-in
+loading. **There are still no open defects on our side.**
+
 ## Summary
 
 | # | Blocker | Pack conditions blocked | What we need from HDFC |
@@ -51,6 +89,8 @@ observe, HDFC's verbatim message, how we isolated it, and what we need.
 | 8 | Financier master has no cross-walk | 1 | A name → `FinancierCode` lookup, or confirmation that null is acceptable |
 | 9 | Pehchaan e-KYC returns identities unrelated to the PAN | 0 | Confirm UAT test-pool behaviour and the proposal/KYC consistency rule |
 | 10 | Previous-insurer shortname master incomplete on our side | 0 | The authoritative `Insurance_Company` shortname list you accept |
+| **11** | **`POLICY_TENURE = 1` refused on New Business — the ordinary 1+3 new-car term** | **3** (the whole New Business 1+3 block; every new-car sale in practice) | **A payload that prices a 1OD-3TP New Business car today, or confirmation the term is withdrawn** |
+| **12** | **Break-in loading premium is no longer computed at any lapse window** | **5** (Break In rows 2–4, New and Rollover rows 9 and 12) | **Confirmation of whether break-in loading is switched off on UAT, and which of your two documents states the real threshold** |
 
 ---
 
@@ -209,10 +249,12 @@ but cannot be turned into a proposal.
 **What we proved.** Quoting behaves exactly as your pack describes. The
 `Break In` sheet of `PVTcarTestScenarios.xls` states, verbatim, for a break-in
 over 24 hours: *"Proposal should be triggered for Inspection & Break-in loading
-premium will be charged."* Live UAT does charge it — a rollover with a 45-day
-lapse returns `BreakInLoadingPercent` 15 and `BreakIN_Premium` 220, and all five
-*Break In* sheet conditions PASS at quote time, including the >90-day row where
-the NCB is correctly voided.
+premium will be charged."* Live UAT **did** charge it when this was written — a
+rollover with a 45-day lapse returned `BreakInLoadingPercent` 15 and
+`BreakIN_Premium` 220, and all five *Break In* sheet conditions passed at quote
+time, including the >90-day row where the NCB is correctly voided. As of
+21/08/2026 it no longer charges any loading at any lapse window; that is
+**item 12**, and it does not change what this item asks for.
 
 The proposal step is where it stops. `PrivateCarDataDictionary.xlsx` documents
 `Req_PvtCar.BreakIN_ID` (field 43, description *"Enter break-in Id"*), but
@@ -407,10 +449,39 @@ confirmation.
 
 **The good one: verification is headless.** Both calls returned a verified KYC
 directly — `iskycVerified: 1`, `status: "approved"`, a real `kyc_id` — with no
-`redirection_link` in either response. A server-side flow can therefore complete
-e-KYC unattended, without sending the customer through the hosted Pehchaan
-journey. Our redirect-handling branch consequently remains unexercised and
-unproven.
+hosted-journey link in either response. A server-side flow can therefore
+complete e-KYC unattended, without sending the customer through the hosted
+Pehchaan journey.
+
+**Correction, 21/08/2026 — the redirect path IS proven, and the defect was
+ours.** This paragraph originally continued "our redirect-handling branch
+consequently remains unexercised and unproven", and named the field
+`redirection_link`. Both statements were wrong and are withdrawn. Running the
+corporate endpoint `/partner/corporate/kyc` against your kit's own negative test
+entity (`ent_pan=BMZPA6536P&doi=29/01/1996`) returned `iskycVerified: 0`,
+`kyc_id: null` and a hosted-journey URL under the key **`redirect_link`** — the
+spelling both Pehchaan kits use in all nine of their negative samples (six in
+*1.2*, three in *1.2.1*). `redirection_link` and `redirectionLink` appear
+**zero** times in either document. Our reader was keyed on a spelling Pehchaan
+never emits, so the branch could not have fired at all; it is fixed and the
+redirect path is now exercised end to end on live UAT. Nothing is asked of you
+here — it is recorded because the earlier wording in your copy of this document
+was incorrect.
+
+**New evidence on this item, 21/08/2026 — the CORPORATE endpoint does not show
+the behaviour below.** The same probe's two positive cases
+(`ent_cin=U74999DL2021PTC388965&doi=26/10/2021` and
+`ent_pan=AADCC2489H&doi=20/11/2007`, both from your kit's own "Test data on
+UAT") each echoed the submitted identifier and DOI back verbatim, and case 2
+returned the kit's own documented `ckycNumber` `80047842325885` for the PAN we
+sent. Two runs 24 seconds apart returned identical `kyc_id`, `name` and
+`ckycNumber`. So whatever produces the individual endpoint's behaviour below
+appears to be specific to `/primary/kyc-verified`. Two caveats we will not hide:
+case 1's name came back "AEROTRUST AVIATION PVT LTD" where the kit documents
+"ADANI POWER (JHARKHAND) LIMITED" (your kit's case-1 sample is internally
+inconsistent — its CURL uses a different CIN — so the likeliest reading is a
+pasted sample, not a substituted entity), and both corporate cases returned
+empty `mobile` and `email` exactly as the individual ones did.
 
 **The one that needs confirmation.** The same PAN, `ABCPD1234E`, returned two
 different identities on two consecutive calls:
@@ -482,9 +553,306 @@ inferring it from the workbook.
 
 ---
 
+## 11. `POLICY_TENURE = 1` is refused on New Business — the ordinary 1+3 new-car term cannot be priced
+
+**Raised 21/08/2026. This is a regression: the same payloads priced on
+13/08/2026, and one of them was bound as a real UAT policy.**
+
+**What we observe.** A New Business package
+(`BusinessType_Mandatary: "New Vehicle"`, `POLICY_TYPE: "OD Plus TP"`) sent with
+`POLICY_TENURE = 1` — a one-year own-damage leg beside the statutory three-year
+third-party leg — is refused outright at CalculatePremium. The identical payload
+at `POLICY_TENURE = 3` prices normally.
+
+This is 1+3: the standard term on a new private car in the Indian market, the
+term your own certification pack specifies for *New and Rollover* rows 1, 2 and
+3, and the term every `Req_PvtCar` sample in **both** Postman collections sends.
+Items 1 and 2 above block exotic terms (2+3, 2+0) that no aggregator sells in
+volume. This one blocks the common case, which makes it materially more serious:
+as it stands we cannot quote HDFC on a new car at all.
+
+**HDFC's verbatim message.**
+
+`Policy period cannot be less than 3 years`
+
+returned as `{"StatusCode":0,"Message":"Policy period cannot be less than 3
+years","Error":"Policy period cannot be less than 3 years","Warning":" Zero
+Premium calculated for opted cover : Basic - OD | Risk : Vehicle Base Value !!!
+Zero Premium calculated for opted cover : Basic - TP | Risk : Vehicle Base Value
+…"}`.
+
+**What we proved.** On 21/08/2026, against live UAT, model `12798` (Maruti Swift
+ZXI), RTO `10406`, policy starting 21/08/2026, IDV pinned at ₹6,64,050 so all six
+calls quote the same sum insured. Each row varies **one** input from
+certification row *New and Rollover* #1:
+
+| `POLICY_TENURE` | Add-ons | Delivery/registration date | `CPA_Tenure` | HDFC UAT |
+| ---: | --- | --- | ---: | --- |
+| 1 | off | 21/08/2026 (today) | 1 | refused — row #1 verbatim |
+| 1 | **all** | 21/08/2026 | 1 | refused — row #2 verbatim |
+| 1 | off | 13/08/2026 | 1 | refused |
+| 1 | off | 13/05/2026 (−100 days) | 1 | refused — row #3 shape |
+| 1 | off | 21/08/2026 | **3** | refused |
+| **3** | off | 21/08/2026 | 1 | **prices** — gross ₹27,453 |
+
+All five refusals carry the same message. So the cause is not the add-on set
+(row #2 fails with every cover switched on), not vehicle age (three different
+delivery dates all refuse), and not `CPA_Tenure` (patching it 1 → 3 changes
+nothing). `POLICY_TENURE` is the only input whose value changes the outcome.
+
+**Why we are sure it is new.** These three rows PASSED on 13/08/2026 at these
+exact shapes — row 1 gross ₹22,714, row 2 ₹35,782, row 3 ₹21,685 — and the 1+3
+New Business scenario was bound end to end that day as UAT policy
+`2302201225648800000` (proposal `202608130000205`, gross ₹22,714), listed in the
+issuance table at the top of this document. Nothing changed on our side between
+those runs in how the term is expressed.
+
+**Why the 19/08 run did not surface it.** Your API validates
+`Policy_Details.Registration_No` **before** the policy term, so while that field
+was null the run stopped at the plate message and never reached the term wall.
+See the observation below.
+
+**We are not routing around it.** Sending `POLICY_TENURE = 3` would price a
+three-year own-damage leg the customer never asked for, and we will not sell a
+term nobody chose — the same position we took on the 2+3 rows in item 1. These
+rows are therefore recorded unpriced.
+
+**Conditions blocked.** 3 of the 36 *New and Rollover* conditions (rows 1, 2 and
+3 — the whole New Business 1+3 block). The commercial impact is larger than that
+count suggests: it is every new private car sale.
+
+**What we need.** Either a CalculatePremium payload that prices a 1OD-3TP New
+Business private car on UAT today, or written confirmation that the term has been
+withdrawn on `PRODUCT_CODE 2311` and what replaces it. If this was an
+unannounced rules change, we would also like to know whether it is intended to
+reach production.
+
+---
+
+## 12. Break-in loading premium is no longer computed at any lapse window
+
+**What we observe.** `Resp_PvtCar.BreakInLoadingPercent` and
+`Resp_PvtCar.BreakIN_Premium` come back **0 on every rollover we can construct**,
+however long the cover has been lapsed. There is no error — the quote prices
+normally, it simply carries no break-in loading.
+
+**What it used to do.** The same shapes returned a loading eight days earlier:
+
+| Lapse at inception | 10/08 and 13/08/2026 | 21/08/2026 |
+| --- | --- | --- |
+| 3 days | `BreakInLoadingPercent` 15, `BreakIN_Premium` ₹220 | 0 / 0 |
+| 60 days | 15, ₹220 | 0 / 0 |
+| 120 days | 15, ₹1,000 | 0 / 0 |
+
+**What we proved,** on live UAT on 21/08/2026 with a Maruti Swift ZXI (`12798`)
+at RTO `10406`, sweeping the previous policy's expiry one window at a time and
+changing nothing else:
+
+| Lapse (days) | 1 | 3 | 30 | 44 | 45 | 46 | 60 | 90 | 120 | 200 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `BreakInLoadingPercent` | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| `BreakIN_Premium` | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| `Current_NCB_Per` | 25 | 25 | 25 | 25 | 25 | 25 | 25 | 0 | 0 | 0 |
+
+So the threshold has not moved — the loading is absent everywhere.
+
+**The premium moved by exactly the loading, and by nothing else.** This is the
+clearest evidence, because it needs no assumption about payloads at all — it is
+your own two responses, subtracted:
+
+| Row | 13/08 gross | 21/08 gross | Difference | Reconciles to |
+| --- | ---: | ---: | ---: | --- |
+| *Break In* #4, 120-day lapse | ₹15,342 | ₹14,162 | ₹1,180 | 1,000 × 1.18 GST — the withdrawn loading exactly (NCB already 0 on both dates) |
+| *Break In* #3, 60-day lapse | ₹5,909 | ₹5,715 | ₹194 | 220 × 0.75 (25% NCB) × 1.18 GST — likewise exact |
+
+The 13/08 column is our certification run of that date, recorded in this
+repository at commit `a098827` (`docs/hdfc-uat-scenario-results.md`, *Break In*
+rows 3 and 4); the 21/08 column is the sweep above.
+
+Both differences reconcile to the withdrawn loading alone, to the rupee. That
+residual of zero is the whole of the argument, and we would rather state its
+limit than overstate it: the 13/08 run recorded each row's gross and its
+break-in fields, not the complete `Resp_PvtCar`, so "nothing else moved" is an
+inference from the residual and not a field-by-field comparison. On that
+residual, a change to how a break-in is DETECTED could produce this; a change to
+how anything is rated could not. The loading is simply not being computed.
+
+**On our own payload — what we can and cannot rule out.** The only change to our
+CalculatePremium payload in this window was `Registration_No` (see the
+observation below). We cannot rule it out completely, and we would rather say so
+than overstate: the pre-change value was `null`, and since UAT now refuses `null`
+outright the exact payload that used to earn the loading is no longer
+reproducible. What we can state is that **no payload we are able to send produces
+a loading.** Holding a 60-day break fixed and varying that field alone, the two
+reachable values — the dashed plate `"MH-01-QQ-7878"` and the literal `"New"` —
+returned **byte-identical** responses: IDV ₹5,59,200, OD ₹1,469, TP ₹3,416, gross
+₹5,715, loading 0 / 0.
+
+**The lapse itself still reaches your rules engine.** In those very same responses
+the NCB is granted at 25% up to 60 days and voided from 90 (own-damage premium
+₹1,469 → ₹8,261). `Policy_Details.PreviousPolicy_PolicyEndDate` is therefore being
+read and rated on; only the break-in loading is missing from it.
+
+**A contradiction in your own documentation, which we would also like settled.**
+`Channel_Integration_Details.pptx`, slide *"Private Car Break-In"*, states:
+
+```
+1) Break-in premium will be calculated only if there is a break-in of more than
+45 days, other wise break-in loading premium will be calculate as 0.
+```
+
+`PVTcarTestScenarios.xls`, sheet *Break In* row 2, states the opposite: a break-in
+of **more than 24 hours** should attract a loading and an inspection. Live UAT
+sided with the test pack for as long as it charged the loading at all — a 3-day
+lapse returned 15% / ₹220 on both 10/08 and 13/08. We have left our test asserting
+the pack's reading rather than the deck's, because flipping it would turn the row
+green for the wrong reason while the loading is silent everywhere.
+
+**Conditions blocked.** 5 — *Break In* rows 2, 3 and 4, and *New and Rollover*
+rows 9 and 12. The commercial impact is that every lapsed-cover renewal is being
+quoted without the loading you intend to charge, so an HDFC quote a customer
+accepts today would be re-rated at issuance.
+
+**There is a second, customer-facing consequence, and it is live now.** Our
+adapter derives the canonical "this proposal needs an inspection" flag from your
+own numbers — `isInspectionRequired` is set when `BreakIN_Premium` is greater
+than zero, because that is the only break-in signal `CalculatePremium` returns.
+With the loading at 0 the flag is false, so **a genuine break-in HDFC quote now
+reaches our compare page indistinguishable from a clean one**: the customer is
+shown no inspection requirement, and nothing warns them that the price will move.
+We have not papered over this by inferring the break-in from our own lapse
+arithmetic instead — that would invent an inspection requirement you have not
+asserted, on a proposal we cannot create anyway (item 4). It is recorded here
+because it is a real exposure that lasts as long as the loading is absent.
+
+**What we need.**
+
+1. Whether break-in loading is deliberately switched off on UAT, and when it
+   returns.
+2. Which of the two documents above states the real threshold — more than
+   45 days, or more than 24 hours.
+3. Whether the loading also depends on the break-in tags your channel deck
+   describes (`BreakIN_ID`, `BreakInStatus`, `BreakinInspectionDate`). We cannot
+   send those — see item 4 — and we did not send them on 13/08 either, when the
+   loading was charged; but if the rating now requires them, item 4 becomes
+   blocking at quote time and not only at proposal time.
+
+---
+
+## Observation — the 25% accessory cap is no longer enforced, and we have taken it over
+
+Not a blocker: we have adapted, and it is recorded only because it is a fourth
+undocumented change in the same few days.
+
+**What changed.** *New and Rollover* row 25 asks for ₹2,00,000 of electrical plus
+₹2,00,000 of non-electrical accessories on a Swift whose IDV is ₹5,59,200 — four
+lakh of accessories against a cap of ₹1,39,800. On 13/08/2026 you refused it:
+
+`Total optional covers SI should not be more than 25% of Vehicle Base Value!`
+
+On 21/08/2026 the identical request prices, at gross ₹13,258 — IDV ₹5,59,200,
+`Electical_Acc_Premium` ₹8,000, `NonElectical_Acc_Premium` ₹525, net ₹11,236.
+Re-fired and captured on 21/08/2026 to make sure the figure is a response and
+not a memory (`scripts/_hdfc-row25-recapture-2026-08-21T08-06-20-700Z.json`).
+
+**What we have done.** Our adapter now enforces the rule itself and refuses such
+a request before CalculatePremium is called, reading "the vehicle SI" as
+`Policy_Details.Vehicle_IDV` — the vehicle's base value alone, on your own
+wording above.
+
+**How far the cap is unenforced, and one question it leaves open.** We swept the
+accessory fields on 21/08/2026 against a Maruti Alto LXI (`12763`) at RTO
+`10406`, IDV ₹3,04,000, so the 25% ceiling is ₹76,000
+(`scripts/_hdfc-accessory-cap-probe.json`). UAT priced **every** breach we sent,
+on both legs:
+
+| Field | ₹72,960 (24%) | ₹79,040 (26%) | ₹1,52,000 (50%) | ₹3,64,800 (120%) |
+| --- | --- | --- | --- | --- |
+| `BiFuel_Kit_Value` | priced | priced | priced | priced |
+| `ElecticalAccessoryIDV` | priced | priced | priced | priced |
+
+Both legs are rated — the kit at a flat 4% of its declared value
+(`BiFuel_Kit_OD_Premium` ₹1,216 on ₹30,400, ₹14,592 on ₹3,64,800) — so the values
+reach the rating engine; nothing is being ignored, it simply is not capped.
+
+That leaves us unable to settle **whether the LPG-CNG kit belongs inside the 25%
+total.** Your test pack names it (*"Total of Accessories(Electrical/Non
+Electrical/LPG-CNG KIT)"*), but the only live refusal we ever saw was raised by an
+electrical + non-electrical breach and its wording — *"Total optional covers SI"*
+— does not enumerate the kit. With UAT refusing nothing today, its behaviour
+cannot arbitrate. **We have followed your pack and counted the kit**, which is the
+stricter reading; the consequence is that a retro-fitted CNG kit worth more than a
+quarter of a small car's IDV now gets no HDFC quote from us.
+
+**One exclusion we did make, on evidence.** On a `TP Only` policy the kit value is
+inert: at 26% and at 50% of the IDV the response was identical to the rupee —
+gross ₹2,925, `BiFuel_Kit_OD_Premium` 0, `BiFuel_Kit_TP_Premium` a flat ₹60 either
+way. Capping an own-damage sum insured on a policy with no own-damage section
+would deny a customer a policy over a number you do not rate, so the kit is left
+out of the total there. (The electrical and non-electrical IDVs need no such
+exclusion — we already force both to 0 on a liability policy.)
+
+**What we would like.**
+
+1. Confirmation that the 25% cap is still an underwriting rule, in which case the
+   UAT change is a regression.
+2. Whether the denominator is the vehicle's base value or the value including
+   accessories. We have assumed the base value, on your *"Vehicle Base Value"*
+   wording.
+3. **Whether the LPG-CNG kit counts towards the 25%.** If it does not, tell us and
+   we will stop counting it — today we are declining ordinary bi-fuel small cars
+   that you may well be happy to write.
+
+---
+
+## Observation — `Registration_No` at CalculatePremium changed in the same window
+
+Not a blocker: we have already adapted. It is recorded because it is a second
+undocumented change to UAT behaviour inside the same few days, and because it is
+what hid item 11 from our 19/08 run.
+
+**What changed.** `Policy_Details.Registration_No: null` used to be accepted at
+CalculatePremium on every business type — it is what your own collection's
+premium sample sends, and it is what we sent from the start, because supplying a
+real plate at premium time once made the schema demand the
+`registrationNumberSection*` fields. Since approximately 17/08/2026 the null is
+refused:
+
+`Vehicle Registration number is mandatory`
+
+**What we proved,** on live UAT on 21/08/2026 by varying that one field and
+holding the rest of the payload constant (IDV pinned, only `TransactionID`
+otherwise differing):
+
+| `Registration_No` | Roll Over — Nexon EV `42774`, IDV ₹12,44,800 | New Business 3+3 — Swift ZXI `12798`, IDV ₹6,64,050 |
+| --- | --- | --- |
+| `null` | refused: `Vehicle Registration number is mandatory` | refused, same message |
+| `"MH-01-QQ-7878"` | prices — OD ₹2,861, TP ₹6,712, gross ₹15,977 | prices — OD ₹12,300, TP ₹10,640, gross ₹27,453 |
+| `"New"` | prices — **identical to the rupee** | prices — **identical to the rupee** |
+
+So the field is now validated but still not rated. We have changed our mapper to
+send the dashed plate where the vehicle has one and the literal `"New"` where it
+does not — `"New"` being what your own GetCalculateIDV sample sends and what
+CreateProposal already accepted as a fallback.
+
+**What we would like.** Confirmation that `"New"` is the correct value for a
+vehicle with no plate yet, and that this change is intentional and will be
+reflected in the data dictionary. More generally: a note to integration partners
+when CalculatePremium validation changes, since both this and item 11 landed
+without one and between them took our New Business journey down.
+
+---
+
 ## Sources
 
-Everything above is reproducible from this repository:
+The artifacts marked † below are raw probe output. They are deliberately
+not committed — `scripts/_*` is gitignored, because these are large regenerable
+captures rather than source — so they will NOT be present in a fresh clone of
+the repository. **They are available on request and we will attach them to any
+reply on the item they support;** the script that produces each one is committed
+and named beside it, so any of them can also be re-earned by running it. Every
+other row of the table is committed and reproducible from the repository as it
+stands:
 
 | Evidence | Where |
 | --- | --- |
@@ -492,7 +860,13 @@ Everything above is reproducible from this repository:
 | Live issuance run and policy numbers | `tf-api/docs/hdfc-uat-issuance-results.md` (`npm run hdfc:issue`) |
 | Isolation probes and integration behaviour notes | `tf-api/docs/hdfc-integration-notes.md` |
 | Scenario definitions and per-limitation reasoning | `tf-api/scripts/hdfc-uat-scenarios.ts` |
+| Item 11 and the `Registration_No` observation — 12 calls, each with the full CalculatePremium payload sent and the verbatim response | † `tf-api/scripts/_hdfc-regno-sweep.json` (probe: `scripts/_hdfc-regno-sweep.ts`) |
+| The accessory cap's composition — 12 calls sweeping the kit and the electrical IDV across the 25% ceiling on both a package and a liability policy | † `tf-api/scripts/_hdfc-accessory-cap-probe.json` (probe: `scripts/_hdfc-accessory-cap-probe.ts`) |
+| The accessory cap no longer being enforced on *New and Rollover* row 25 itself — the ₹4,00,000 declaration on the ₹5,59,200 Swift, re-fired on 21/08/2026, payload sent and full response | † `tf-api/scripts/_hdfc-row25-recapture-2026-08-21T08-06-20-700Z.json` (probe: `scripts/_hdfc-row25-recapture.ts`) |
+| Item 12 — 12 calls (the plate-vs-`"New"` pair at a fixed 60-day break, then the ten-window lapse sweep), each with the full CalculatePremium payload sent and the verbatim response | † `tf-api/scripts/_hdfc-breakin-sweep.json` (probe: `scripts/_hdfc-breakin-sweep.ts`) |
+| Item 12's 13/08/2026 baseline grosses (*Break In* rows 3 and 4, ₹5,909 and ₹15,342) | committed in this repository at git commit `a098827`, `tf-api/docs/hdfc-uat-scenario-results.md` |
+| Item 9 — the corporate Pehchaan probe, three cases including the `redirect_link` negative, run twice | † `tf-api/scripts/_hdfc-corporate-kyc-probe-2026-08-21T07-44-06-909Z.json` and `…T07-44-30-325Z.json` (probe: `scripts/_hdfc-corporate-kyc-probe.ts`) |
 
 Vendor artefacts referenced: `PVTcarTestScenarios.xls`,
-`PrivateCarDataDictionary.xlsx`, `PrivateCarMasterData.xls`,
+`Channel_Integration_Details.pptx`, `PrivateCarDataDictionary.xlsx`, `PrivateCarMasterData.xls`,
 `Private Car.postman_collection.json`, `Private Car_New.postman_collection`.

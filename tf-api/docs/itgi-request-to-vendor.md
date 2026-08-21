@@ -1,60 +1,50 @@
-# Email to IFFCO-Tokio — short version
+# Email to IFFCO-Tokio — remaining items
 
-Fill the **[brackets]** and send. (A longer, more detailed version of this mail is in git history,
-commit `5f7f6fe`, if they ask for specifics.)
+Written 21/08/2026, after the Novacred UAT credentials were verified live. Fill the **[brackets]** and send.
+(The earlier, pre-credentials version is in git history.)
 
 ---
 
-**Subject:** Motor API integration — pending items to start UAT
+**Subject:** Motor UAT — credentials working, 4 items pending
 
 Hi [Name],
 
-Our development for the Motor integration (private car and two-wheeler, Partner PG option) is
-complete. To start UAT testing, we need the following from your side:
+Thank you for the UAT credentials. We have tested them and they work — IDV and premium return live
+quotes for both private car and two-wheeler using partner code ITGIMOT321, and the KYC, master-data
+and policy-download services accept the Basic auth credentials.
 
-**1. Whitelist our IP addresses**
-Our requests to `staging.iffcotokio.co.in` currently time out with no response, while your public
-website opens normally from the same machine — so it appears our IP is not whitelisted yet.
-Please allow:
-- [dev/office public IP]
-- [server IP]
+Four items are pending to complete UAT:
 
-**2. Partner details**
-- Partner Code
-- Partner Branch
-- Partner Sub Branch
-(Please confirm if these differ for PCP and TWP.)
+**1. RTO master**
+`rtoCity` is mandatory in IDV, premium and proposal, and must match your master data. The RTO sheet is
+missing from the kit (`ITGI_Motor Data_Updated_01032024.xlsx` says "Shared in another Excel"). Please
+send either:
+- the RTO / city master sheet, or
+- the request format for `partner-services/master/data` — it accepts our credentials, but every payload
+  we try returns "Your request can not be processed due to technical fault".
 
-**3. CKYC API access**
-The CKYC documents show no API key, token or password. Please confirm access is by IP whitelisting
-only — or share the credentials if not.
+Also, is the plain city name (DELHI) acceptable, or must we send your code (e.g. CHHDHAMT)?
 
-**4. RTO master file**
-The RTO sheet in `ITGI_Motor Data_Updated_01032024.xlsx` says "Shared in another Excel", which was
-not in the kit. We need it as `rtoCity` is mandatory in the IDV, premium and proposal requests.
-*Quick question:* can we simply send the city name (e.g. DELHI) or the standard RTO code (e.g.
-DL01) instead? Your samples use both `DELHI` and `CHHDHAMT`, so if the plain city name is accepted
-we may not need the file at all.
+**2. Approval + test data for proposal and payment**
+We have not called `PartnerProposalRequest`, `PaymentUpdateWS` or `CheckPolicyStatus` yet, as they create
+real records at your end. Please confirm we may run them on UAT, and share:
+- one private-car and one two-wheeler make/model + RTO combination that goes through end-to-end
+- a test PAN/Aadhaar with mobile number that returns a valid CKYC record
 
-**5. Policy download credentials**
-Username and password for the basic-auth on `/partner-services/policy/download`.
+**3. Payment update fields**
+For `updatePaymentDetails`, what values should `authorizationCode`, `authorizationStatus` and
+`authorizationDecision` carry from our payment gateway? A list of your error codes would also help.
 
-**6. UAT test data**
-- A make/model + RTO combination that returns a premium successfully (one PCP, one TWP)
-- A test PAN/Aadhaar with matching mobile number that returns a valid CKYC record on UAT
+**4. `portaltest/MotorServiceReq`**
+This URL returns the "ITGI Partner Web Portal" web page, not a web service. Please confirm what it is
+used for — is it the browser redirect for the Partner PG flow?
 
-**7. Clarifications**
-- `updatePaymentDetails` — expected values/format for `authorizationCode`, `authorizationStatus`
-  and `authorizationDecision`
-- List of error codes/messages returned by your services
-- Break-in cases — is there an API or callback for inspection approval, or is it only by email?
-- WSDLs for `PaymentUpdateWS`, `CheckPolicyStatus` and `PartnerDownloadPolicyCopy` (not in the kit)
+Not blocking, but useful when convenient: WSDLs for `PaymentUpdateWS`, `CheckPolicyStatus` and
+`PartnerDownloadPolicyCopy` (the kit has samples only), and the production URLs closer to go-live.
 
-**Also for your information:** the sample file `Two Wheeler_EngineTyreRimTWP_curl.xml` in the kit
-contains another partner's live partner code and branch. We have not used it. You may want to
-remove it before sharing the kit further.
-
-Items 1 and 2 are blocking — we can begin testing as soon as those are done.
+One more thing for your attention: the kit file `Two Wheeler_EngineTyreRimTWP_curl.xml` contains another
+partner's live partner code and branch (ITGIMOT216 / PHONEPE_INSURANCE). We have not used it — you may
+want to remove it before sharing the kit further.
 
 Thanks and regards,
 [Your name]

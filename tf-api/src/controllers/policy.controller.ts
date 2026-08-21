@@ -25,7 +25,11 @@ export async function handleCertificate(
   try {
     const { provider, transactionId } = req.params as { provider: string; transactionId: string };
     const result = await getCertificate(provider, transactionId);
-    res.status(200).json(successEnvelope(result, req.requestId));
+    // successEnvelope defaults to "Quote fetched successfully", which is wrong
+    // on every endpoint that is not a quote.
+    res
+      .status(200)
+      .json(successEnvelope(result, req.requestId, undefined, false, "Certificate fetched successfully"));
   } catch (err) {
     next(err);
   }

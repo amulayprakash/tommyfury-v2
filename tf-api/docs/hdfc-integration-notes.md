@@ -5,7 +5,8 @@ Provider: `src/providers/hdfc/`. Design spec:
 Frozen predecessor: `docs/reference/hdfc-ergo-standalone/`.
 
 HDFC is fully wired — quote, proposal, Pehchaan CKYC, issuance, renewal and
-COI — behind `HDFC_ENABLED` (default `false`). 270 unit tests, fixture-driven
+COI — behind `HDFC_ENABLED` (default `false`). 367 unit tests under
+`src/providers/hdfc/__tests__/`, fixture-driven
 against JSON extracted from HDFC's own Postman collection and, for the response
 side, against real captures from live UAT.
 
@@ -56,7 +57,53 @@ Pehchaan e-KYC is a separate service: own host, `api_key` → ~10-minute JWT.
     on a multi-year standalone OD, and `Req_PvtCar.EMIPlanType` on New Business
     when the EMI Protector cover is bought. Neither ships on a payload that does
     not need it, so every proven request keeps its proven shape.
-12. Several covers are rated ON a sum insured we must send, and HDFC does not say
+12. **A successful CreateProposal answers `StatusCode: 0`.** Not 1, not 200 —
+    zero, with `Message: "Proposal Generated"` and a real `ProposalNumber`.
+    CalculatePremium on the same connection answers `200` /
+    `"Premium Calculated"`, so the success code is **per endpoint** and the kit's
+    own collection sample (`fixtures/responses/proposal.json`, `StatusCode: "1"`)
+    does not match live UAT. Proven 21/08/2026 on proposals 202608210000216 and
+    …219.
+
+    Until it was fixed, `assertHdfcSuccess` reported this as
+    *"HDFC createProposal failed: status 0"* — a **false negative on a write**.
+    HDFC had already created the proposal; the exception threw the number away
+    before the code that reads it, and every retry created another. `http.ts`
+    now treats a returned proposal or policy number as proof the write landed,
+    outranking an unrecognised status code, rather than widening
+    `isHdfcSuccess` to accept `0` everywhere (where it does mean failure).
+
+13. **`Message` is HDFC's other diagnostic channel, and the kit documents it
+    inconsistently.** The `03 CalculatePremium Response` and `04 CreateProposal
+    Response` sheets list only `StatusCode` / `Error` / `Warning` — but `07
+    GetPolicyDocument`'s response sheet *does* list `Message` (row 7,
+    *"It Describle the Message"*), and the wire carries it on every endpoint, on
+    success and failure alike. A failure populating only `Message` used to
+    surface as a bare `status <n>`; `normalizeHdfcResponse` now reads it, after
+    `Error`.
+
+    **Do not trust a response sheet's field list to be complete.** Three
+    separate bugs this month came from believing one: `Message` here,
+    `redirect_link` in Pehchaan, and `PDF_BYTES` below.
+
+14. **GetPolicyDocument answers in `Resp_Policy_Document.PDF_BYTES`.** Not
+    `Req_Policy_Document.Document`, which is what `normalizeCertificate` read
+    until 21/08/2026 — the REQUEST container plus a field name that exists
+    nowhere in the kit. Both came from
+    `fixtures/responses/policy-document.json`, which was **invented rather than
+    captured**, so the whole path tested green against a fiction while a real
+    issued policy returned an empty `coiBase64`.
+
+    The kit is unambiguous (`PrivateCarDataDictionary.xlsx`, "07
+    GetPolicyDocument"): request carries `Policy_Number` in
+    `Req_Policy_Document`; response carries `PDF_BYTES` in
+    `Resp_Policy_Document`. HDFC uses the same Req_/Resp_ split for
+    `Req_PvtCar` / `Resp_PvtCar`, so reading the request container back was
+    always wrong. The response carries **no policy number** — that comes from
+    SubmitPaymentDetails. Fixture replaced with the documented shape, verified
+    live against policy 2302201225707100000.
+
+15. Several covers are rated ON a sum insured we must send, and HDFC does not say
     so — it either charges ₹0 (Loss of Personal Belongings) or refuses the whole
     payload with an unrelated-sounding message (EMI Protector's "add on system
     rate is not available"). Treat a newly-enabled cover priced at ₹0 as a bug.
@@ -215,6 +262,21 @@ HDFC wants, so the port sends the same "nothing" value the frozen original did.
   `Provider*Code` cross-walk off. Closing this needs a canonical financier
   master first; a guessed code is worse than a null. `BranchName` likewise has
   no canonical source.
+- **A REJECTED Pehchaan verification cannot reach a customer.** `ckyc.ts`
+  implements both Pehchaan status endpoints — `hdfcKycStatusByKycId` (kit doc
+  1.3) and `hdfcKycStatusByTxnId` (kit doc 1.4) — and both are unit-tested, but
+  they are **provider-level only**: nothing calls them. There is no route, no
+  controller path, no entry in `HDFC_OPERATIONS`, and no canonical capability
+  that reaches them. That matters because of what those endpoints are for. The
+  fetch endpoint `/primary/kyc-verified` (and its corporate twin) answers either
+  "verified" or "go to the hosted journey"; it does not report a verification
+  that was **rejected**. Polling by `kyc_id` or `txn_id` is the documented way to
+  learn that, so today a rejection is not observable end to end at all — a
+  customer sent through the hosted journey who is then rejected has no path back
+  into our flow that says so. Wiring it is a scoped change of its own (a status
+  route plus a `kycStatus` operation), deliberately not made here; until it
+  exists, treat the rejection path as implemented at the provider and unproven
+  above it.
 - **TP-only shape mismatch, unverified.** HDFC's own
   `fixtures/collection/liability-premium.json` carries a 28-key
   rollover-shaped `Policy_Details` block (financier fields, full previous-policy
@@ -463,24 +525,87 @@ disproved all three claims** (see the next section). What is actually true:
   whole **Mercedes-Benz** make behaves this way (8 codes tried, all refused), as
   does every **HYBRID** code tried (`48622`, `53024`, `47921`).
 
-### Certification pack — 205 conditions run live (2026-08-07)
+### Certification pack — 205 conditions run live (last full run 2026-08-21)
 
 `npm run hdfc:scenarios` (`scripts/hdfc-uat-scenarios.ts`) encodes every
 condition of HDFC's `PVTcarTestScenarios.xls` and fires it read-only at UAT
 through the production provider. Results, per-row and verbatim, live in
 [`hdfc-uat-scenario-results.md`](./hdfc-uat-scenario-results.md).
 
-Rules HDFC **enforces server-side**, so we need not: the 15-year vehicle-age
-ceiling; add-ons declined by vehicle age; accessories capped at 25% of the
-vehicle's base value; NCB voided by a declared claim; NCB voided by a >90-day
-break; NCB never granted on a liability policy; CPA never charged on a
-standalone-OD policy; a 3-year CPA tenure only on a new vehicle; the NCB ladder
-itself (it computes the next slab from `PreviousPolicy_NCBPercentage`).
+**Four UAT rating behaviours changed between 13/08 and 21/08/2026** and the lists
+below are stated as of the later date: `Registration_No: null` is now refused at
+CalculatePremium, `POLICY_TENURE = 1` is now refused on New Business, break-in
+loading is no longer computed at any lapse window, and the accessory cap is no
+longer enforced. All four are isolated and raised in
+[`hdfc-vendor-blockers.md`](./hdfc-vendor-blockers.md) (items 11 and 12 and the
+two observations after them); the probes are `scripts/_hdfc-regno-sweep.ts` and
+`scripts/_hdfc-breakin-sweep.ts`. Only the last of the four was ours to absorb.
 
-Rules HDFC **silently accepts**, so they are ours to enforce: the RTI ≤3-year
-ceiling (HDFC prices RTI at 4 years); "anti-theft discount not applicable" (HDFC
-grants one); own-damage add-ons on a `TP Only` policy (HDFC bills a zero-dep
-premium against a zero own-damage premium).
+Rules HDFC **enforces server-side**, so we need not: the 15-year vehicle-age
+ceiling; add-ons declined by vehicle age; NCB voided by a declared claim; NCB
+voided by a >90-day break; NCB never granted on a liability policy; CPA never
+charged on a standalone-OD policy; a 3-year CPA tenure only on a new vehicle;
+the NCB ladder itself (it computes the next slab from
+`PreviousPolicy_NCBPercentage`).
+
+Rules HDFC **silently accepts**, so they are ours to enforce:
+
+- the RTI ≤3-year ceiling (HDFC prices RTI at 4 years) — the cover is dropped
+  in `mapper/canonical.ts`;
+- "anti-theft discount not applicable" (HDFC grants one) — `AntiTheftDiscFlag`
+  is hardcoded false there too;
+- own-damage add-ons on a `TP Only` policy (HDFC bills a zero-dep premium
+  against a zero own-damage premium) — every OD cover, accessory IDV and the
+  voluntary excess is forced off for that policy type;
+- **the 25%-of-sum-insured accessory cap, since 21/08/2026.** This one used to
+  belong to the list above: asked for ₹4,00,000 of accessories on a ₹5,59,200
+  Swift, HDFC refused the whole payload — *"Total optional covers SI should not
+  be more than 25% of Vehicle Base Value!"* — on 13/08/2026, and prices the
+  identical request (gross ₹13,258) on 21/08 — re-captured and persisted at
+  `scripts/_hdfc-row25-recapture-2026-08-21T08-06-20-700Z.json` (IDV ₹5,59,200,
+  ceiling ₹1,39,800, `Electical_Acc_Premium` 8000, `NonElectical_Acc_Premium`
+  525, `Total_Premium` 13258). `mapper/canonical.ts`
+  `assertAccessorySiWithinCap()` now enforces it, and it is the one
+  ours-to-enforce rule that **refuses** rather than silently dropping: an
+  accessory sum insured is a value the customer declared and expects to be
+  insured for, so clamping it to the cap would quote materially less cover than
+  was asked for without saying so. The denominator is the vehicle's **base**
+  value — `Policy_Details.Vehicle_IDV`, not the vehicle plus its accessories —
+  on HDFC's own wording, "Vehicle Base Value", which is also the stricter
+  reading. The check runs in `hdfc.provider.ts` between GetCalculateIDV and
+  CalculatePremium, because HDFC's recommended IDV is the first moment there is
+  a vehicle sum insured to measure against (a `MotorQuoteRequest` usually
+  carries none, and HDFC rejects any deviation from its recommendation anyway).
+
+  **The bi-fuel/LPG-CNG kit counts, except on a liability-only policy.** Two
+  things about this entry rest on different footings, and the difference matters:
+
+  - *That the kit counts at all is the PACK's word, not HDFC's behaviour.* On
+    21/08/2026 UAT priced a kit-only breach at 10/24/26/30/50/120 % of IDV, and
+    priced an **electrical** accessory breach at 120 % too — the very leg the
+    13/08 refusal came from. HDFC is refusing no accessory breach of any kind
+    today, so live behaviour cannot arbitrate; if it could, it would argue for
+    dropping the whole cap rather than just the kit. Pack row 25's wording is
+    the only evidence, and it names the kit explicitly:
+    *"Total of Accessories(Electrical/Non Electrical/LPG-CNG KIT) cannot be
+    greater than 25% of the vehicle SI"*.
+  - *That it is excluded on `TP Only` is PROVEN.* On a liability-only policy the
+    kit value is inert: 26 % and 50 % of IDV return an identical response to the
+    rupee (gross ₹2,925), `BiFuel_Kit_OD_Premium` 0 and `BiFuel_Kit_TP_Premium` a
+    flat ₹60 either way. Capping an own-damage sum insured where there is no
+    own-damage section, over a figure HDFC does not rate, would decline a policy
+    for no reason. `odAmount()` already forces the electrical and non-electrical
+    IDVs off for that policy type; the kit now follows. Standalone OD keeps the
+    kit in the numerator — it does have an own-damage section.
+
+  Evidence: `scripts/_hdfc-accessory-cap-probe.{ts,json,log}` (gitignored).
+
+  **Known consequence, raised with HDFC.** Because the kit counts on a
+  comprehensive policy, an ordinary CNG retrofit can now lose its HDFC quote: a
+  ₹60,000 kit breaches 25 % below roughly ₹2,40,000 IDV. The cheapest car in
+  HDFC's own pack values at ₹3,04,000, so this is narrower than it first looks,
+  but it is real and it is question 3 under blocker item 12 — *we may be
+  declining ordinary bi-fuel small cars HDFC would be happy to write.*
 
 ### Multi-year standalone OD — the term is a date, not a tenure (2026-08-10)
 
@@ -680,7 +805,11 @@ move.
 It cannot be exercised read-only: `Customer_Details` is not part of
 CalculatePremium at all, so HDFC first sees the customer type at CreateProposal.
 The kit also ships a separate **"Pehchaan Integration KIT - Corporate.docx"**, so
-a live corporate proposal needs a corporate e-KYC journey that is not wired.
+a live corporate proposal needs a corporate e-KYC journey. That journey **is**
+wired as of 2026-08-21 — `hdfcCompleteCkyc` routes a `customerType: "corporate"`
+request to `/partner/corporate/kyc` with entity-shaped parameters, and it is
+live-proven on UAT; see "Corporate Pehchaan e-KYC — first live UAT behaviour
+(2026-08-21)" below.
 
 ## Pehchaan e-KYC — first live UAT behaviour (2026-08-13)
 
@@ -697,10 +826,16 @@ first time. Two calls, both against PAN `ABCPD1234E`.
 
 **The mechanism is headless.** `/primary/kyc-verified` returned a verified KYC
 directly — `iskycVerified: 1`, `status: "approved"`, a real `kyc_id` — with no
-`redirection_link` in either response. So the hosted Pehchaan journey is not
+hosted-journey link in either response. So the hosted Pehchaan journey is not
 required to obtain a Pehchaan id on UAT, and a server-side flow can complete
-e-KYC unattended. `normalizePehchaan`'s redirect branch was not exercised and
-remains unproven.
+e-KYC unattended. `normalizePehchaan`'s redirect branch was not exercised here.
+
+> **Correction (2026-08-21):** this originally read "remains unproven", which
+> implied it might work. It could not have. The branch keyed on
+> `redirection_link` — a spelling Pehchaan never emits, on the individual path
+> as much as the corporate one. The real field is `redirect_link`. Fixed and
+> live-proven; see "Corporate Pehchaan e-KYC — first live UAT behaviour
+> (2026-08-21)" below.
 
 **UAT's identity data does not correspond to the PAN submitted.** The same PAN
 (`ABCPD1234E`) produced two different identities on two consecutive calls
@@ -720,3 +855,176 @@ from separately-invented customer data, or the two will disagree. This has not
 been tested — it is not known whether `CreateProposal` validates
 `Customer_Pehchaan_id` against `Customer_Details`, or whether a mismatch is
 accepted, rejected, or silently overwritten. Needs confirmation with HDFC.
+
+## Corporate Pehchaan e-KYC — first live UAT behaviour (2026-08-21)
+
+`scripts/_hdfc-corporate-kyc-probe.ts` called `hdfcCompleteCkyc` with
+`customerType: "corporate"` against `https://ekyc-uat.hdfcergo.com/e-kyc`,
+endpoint `/partner/corporate/kyc`, for the first time. Three cases, all taken
+from the kit's own "Test data on UAT" in *1.2 Pehchaan Integration KIT -
+Corporate.docx* — its two positive entities and one of its negative ones. Raw
+bodies in `scripts/_hdfc-corporate-kyc-probe.json` (gitignored).
+
+**The corporate endpoint works, and it is headless like the individual one.**
+Both positive cases returned `iskycVerified: 1`, `status: "approved"` and a real
+`kyc_id` directly, with no hosted journey:
+
+| case | sent | got |
+|---|---|---|
+| 1 | `ent_cin=U74999DL2021PTC388965&doi=26/10/2021&ent_type=company` | `kyc_id COMZEY2M1Z`, `name "AEROTRUST AVIATION PVT LTD"`, `cin` echoed verbatim, `doi 26/10/2021`, `ckycNumber 70025099099179` |
+| 2 | `ent_pan=AADCC2489H&doi=20/11/2007&ent_type=company` | `kyc_id COF95V8WJA`, `name "CPP ASSISTANCE SERVICES PRIVATE LIMITED"`, `pan` echoed verbatim, `doi 20/11/2007`, `ckycNumber 80047842325885` |
+
+**Unlike the individual endpoint, the corporate one does appear to key off the
+entity submitted.** This is the sharpest contrast with the 2026-08-13 finding
+above, and two pieces of persisted evidence carry it:
+
+- **Case 2 reproduces the kit's documented identity exactly** — same `name`,
+  same `pan`, same `doi`, and critically the same `ckycNumber`
+  `80047842325885`. A 14-digit CKYC number matching HDFC's own published sample
+  for the PAN we submitted is not something a fixed pool would produce.
+- **Both cases echo the submitted identifier and DOI back verbatim** — `cin` in
+  case 1, `pan` in case 2, `doi` in both. The individual endpoint did the
+  opposite: it returned a *different* PAN than the one sent.
+
+Where `/primary/kyc-verified` handed back two unrelated people for one PAN on
+consecutive calls, nothing of that kind appears here. So the fixed-pool
+behaviour recorded above does **not** reproduce on the corporate endpoint.
+
+Run-to-run stability corroborates this, and is now persisted rather than
+asserted: two probe runs at `07:44:06Z` and `07:44:30Z`
+(`scripts/_hdfc-corporate-kyc-probe-2026-08-21T07-44-06-909Z.json` and
+`…T07-44-30-325Z.json`) returned identical `kyc_id`, `name` and `ckycNumber`
+for both positive cases. Treat this as the weaker of the three signals — a
+fixed pool could also be stable; it is the `ckycNumber` match and the echoed
+identifiers that carry the conclusion.
+
+(An earlier draft asserted that stability from memory. The probe overwrote a
+fixed output filename at the time, so only one run survived on disk and nothing
+supported it. The probe now writes timestamped files, which is why the claim
+can be made at all.)
+
+Two caveats, so this is not read as stronger than it is:
+
+- Case 1's name is **not** the kit's documented one. The kit says CIN
+  `U74999DL2021PTC388965` returns "ADANI POWER (JHARKHAND) LIMITED"; UAT
+  returned "AEROTRUST AVIATION PVT LTD". The kit's own case-1 sample is
+  internally inconsistent — its request says `doi=26/10/2021` but the sample
+  response says `doi: "18/12/2015"`, and its CURL uses a different CIN
+  (`U40100GJ2015PLC085448`, which is the Adani one) — so the likeliest reading
+  is that the kit pasted the wrong sample, not that UAT substituted an entity.
+  Our response is self-consistent: the CIN and DOI we sent both come back
+  unchanged. Not proven either way; recorded as observed.
+- Case 2's addresses are internally contradictory. `permanentAddress` reads
+  "…Marine Lines, Mumbai, Maharashtra 400020" while `permanentCity` is `"DELHI"`
+  and `permanentPincode` is `110019`, and `correspondenceAddress` is a Gurugram
+  address whose `correspondenceCity`/`correspondencePincode` are also
+  `DELHI`/`110019`. Do not trust UAT's city/pincode fields to agree with its own
+  address strings. Note `permanentPincode` arrives as a **number**, not a string.
+
+**`mobile` and `email` come back empty** on both corporate cases, exactly as on
+the individual endpoint — even though the kit's samples show both populated
+(`7738184161` / `GAGAN.CHAWLA@CPPINDIA.COM` for case 2). Any flow that needs
+contact details must collect them itself; Pehchaan UAT will not supply them.
+
+### The redirect branch was dead code, and the negative case proved it
+
+The third case (`ent_pan=BMZPA6536P&doi=29/01/1996`, the kit's own negative
+entity) returned `iskycVerified: 0`, `kyc_id: null` and a hosted-journey link —
+**under the key `redirect_link`**:
+
+```json
+{ "success": true, "data": {
+  "iskycVerified": 0, "kyc_id": null, "txn_id": "12365",
+  "redirect_link": "https://ekyc-uat.hdfcergo.com/e-kyc/verified-partner?txnId=12365&redirectUrl=…&token=…&entity_type=company&customerType=C&channel=NOVACRED%2520INSURANCE%2520BROKING",
+  "isRpt": false } }
+```
+
+`normalizePehchaan` read `redirection_link` / `redirectionLink` / `link` — and
+**neither kit ever spells it that way.** Counted across both documents,
+`redirection_link` and `redirectionLink` occur **zero** times; `redirect_link`
+carries the hosted-journey URL in **all nine** negative samples — six in doc 1.2
+and three in doc 1.2.1.
+
+The kits do also use `redirect_url` (24 occurrences), but that is the
+**request** query parameter we send — "Page where the user needs to be
+redirected back from Pehchaan" — not a response field. `redirect_link` is the
+**response** field. They are not two spellings of one thing, so `redirect_url`
+must **not** be added to the read chain. (The `redirectUrl=` seen inside the
+returned link is a query parameter of that URL string — our own value echoed
+back — not a JSON key either.)
+So the redirect branch had never fired against the real service on *either*
+path: the first live redirect Pehchaan ever handed us was normalized to a bare
+`isKycSuccess: false` with `requiresRedirect` unset and the link discarded,
+leaving the customer with a failed KYC and nowhere to go.
+
+Fixed: `redirect_link` is now the first key read, with the `redirection_link`
+spellings kept as tolerant fallbacks. Re-running the probe then produced
+`requiresRedirect=true` with the full hosted-journey URL and `ckycRefId=12365`,
+so **`normalizePehchaan`'s redirect branch is now live-proven** — it was
+unproven at the time of the 2026-08-13 note above, and the reason it was
+unproven is that it could not have worked.
+
+Note the link Pehchaan builds is on `ekyc-uat.hdfcergo.com/e-kyc/verified-partner`,
+not the `pehchaanuat.hdfcergo.com/login` or CloudFront hosts the kit's samples
+show, and it carries our own `channel=NOVACRED INSURANCE BROKING` plus a
+short-lived `token` query param (~30 min from `iat`/`exp` in the JWT). The
+redirect URL is therefore **not durable** — it must be handed to the customer
+promptly, not stored and replayed.
+
+### Further observations from the live corporate responses
+
+None of these were fixed in this task — they are recorded while the evidence is
+fresh, and each needs its own decision.
+
+**The real CKYC numbers are being discarded.** Both live corporate responses
+carry a genuine 14-digit `ckycNumber` (`70025099099179` for case 1,
+`80047842325885` for case 2), but `normalizePehchaan` sets
+`ckycNumber: str(d.kyc_id)` — so the canonical field *named* `ckycNumber` holds
+the **Pehchaan id**, and the actual CKYC number is dropped on the floor. The
+table above lists both real numbers; they do not survive into `KycResult`.
+
+This is pre-existing and deliberately **not** a drive-by fix: `toPehchaanParams`
+round-trips `kyc_id: req.ckycNumber` so a post-redirect lookup can re-enter the
+same call, and `Customer_Pehchaan_id` reads from that slot. Changing the
+meaning of the field would break both. Recorded as a known mislabelling that
+will bite the moment `KycResult.ckycNumber` is surfaced to a customer or
+consumed cross-provider — FG's `ckycNumber` genuinely is a CKYC number, so the
+same field means two different things depending on which vendor filled it.
+
+**The live response carries fields the kit does not document:**
+`proprietorName`, `gst`, `cin`, `isEdd`, `isRpt` and `ent_type`. None are read
+today. `gst` and `proprietorName` may matter for corporate proposals —
+`Customer_GSTIN_Number` is already a HEI key we fill from canonical input, so a
+Pehchaan-supplied `gst` is a candidate source, and `proprietorName` is likely
+required for `ent_type: "properietor"`, which we have never exercised.
+
+**`permanentAddress` came back empty on live case 1**, with only
+`correspondenceAddress` populated — the reverse of what the kit's samples show.
+`normalizePehchaan` falls back correspondence → permanent for
+`correspondenceAddress`, but there is **no** fallback in the other direction, so
+`permanentAddress` stays empty. If corporate issuance requires a permanent
+address, that response shape breaks it. Untested: no corporate CreateProposal
+has been attempted.
+
+**The probe artifacts contain secrets.** `scripts/_hdfc-corporate-kyc-probe-*.json`
+and any console log embed a live Pehchaan bearer JWT (in the returned
+`redirect_link`) and the broker identity `NOVACRED INSURANCE BROKING`. They are
+gitignored, so this is not a repo leak — but **redact both before pasting a
+probe log into a vendor ticket, email or issue tracker.** The probe now prints
+this warning itself.
+
+### Still open
+
+- The hosted journey behind that link has not been walked, so what actually
+  comes back to `redirect_url` on completion is still untested; doc 1.2.2's
+  `kyc_id` re-fetch (`/partner/corporate/kyc?kyc_id=…`) is not wired.
+- **No rejection can reach a customer, on either journey.** `hdfcKycStatusByKycId`
+  and `hdfcKycStatusByTxnId` exist and are tested but are unreachable from the
+  application — no route, no controller, no `HDFC_OPERATIONS` entry. They are the
+  documented way to learn a verification was REJECTED (the fetch endpoints only
+  ever say "verified" or "go to the hosted journey"), so an end-to-end rejection
+  path is not observable today. See §6.
+- The 2026-08-13 open question stands unchanged for corporates: it is still
+  unknown whether `CreateProposal` validates `Customer_Pehchaan_id` against
+  `Customer_Details`, so whether a corporate proposal must take its
+  `Company_Name` from the Pehchaan record is unconfirmed.

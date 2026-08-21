@@ -1,4 +1,5 @@
 import { env } from "@/config/env.ts";
+import { WEB_BASE_URL } from "@/config/app-urls.ts";
 import type {
   VehicleCategory,
   ProviderOperation,
@@ -9,6 +10,37 @@ import type {
 
 export const HDFC_SLUG = "hdfc";
 export const HDFC_DISPLAY_NAME = "HDFC ERGO";
+
+// ─── Vendor settings (was .env — only the credentials stayed there) ───────────
+
+/** Registers the HDFC provider at startup. */
+export const HDFC_ENABLED = true;
+
+/**
+ * HEI motor service (JSON) + Pehchaan e-KYC (separate host, separate JWT).
+ * ⚠️ UAT hosts — confirm the production HEI and Pehchaan bases with HDFC ERGO
+ * before go-live.
+ */
+export const HDFC_GATEWAY = {
+  baseUrl: "https://accessuat.hdfcergo.com/cp/integration/heiintegrationservice/integration/",
+  /** Channel identity issued to us by HDFC. */
+  source: "NOVACRED",
+  channelId: "NOVA0001",
+  /** Private Car product code; the kit ships no other line. */
+  productPvtCar: "2311",
+  /** Token lifetime in seconds. HDFC returns no expiry — value unconfirmed. */
+  tokenTtlSeconds: 1500,
+  kycBaseUrl: "https://ekyc-uat.hdfcergo.com/e-kyc",
+  kycTokenTtlSeconds: 480,
+  /**
+   * Absolute URL Pehchaan returns the browser to after its hosted journey. It
+   * arrives with ?kycId=<id>, which the client feeds back as
+   * CkycRequest.ckycNumber to complete the lookup. Only needed for the hosted
+   * fallback: on UAT, /primary/kyc-verified verifies headlessly and returns no
+   * redirect (2026-08-13).
+   */
+  kycReturnUrl: `${WEB_BASE_URL}/hdfc/kyc/return`,
+} as const;
 
 /**
  * Private Car only (PRODUCT_CODE 2311). The vendor kit ships no two-wheeler or
@@ -35,6 +67,10 @@ export const HDFC_OPERATIONS: ReadonlySet<ProviderOperation> = new Set<ProviderO
   "quote",
   "proposal",
   "ckyc",
+  // Pehchaan ships a separate corporate kit (/partner/corporate/kyc), so HDFC is
+  // the one provider that can take an entity-shaped CKYC request. FG/ICICI/ITGI
+  // do individuals only and deliberately stay off this list.
+  "corporateCkyc",
   "issuance",
   "renewal",
   "coi",
@@ -355,29 +391,26 @@ export interface HdfcConfig {
 }
 
 /**
- * Reads HDFC config from env. Throws only when HDFC is enabled but misconfigured;
- * fixture-driven tests construct a config literal and never call this.
+ * Builds the HDFC config from the constants above plus the credentials in env.
+ * Throws only when HDFC is enabled but its credential is missing; fixture-driven
+ * tests construct a config literal and never call this.
  */
 export function loadHdfcConfig(): HdfcConfig {
-  const missing: string[] = [];
-  if (!env.HDFC_CREDENTIAL) missing.push("HDFC_CREDENTIAL");
-  if (!env.HDFC_SOURCE) missing.push("HDFC_SOURCE");
-  if (!env.HDFC_CHANNEL_ID) missing.push("HDFC_CHANNEL_ID");
-  if (missing.length > 0) {
-    throw new Error(`HDFC provider enabled but missing env: ${missing.join(", ")}`);
+  if (!env.HDFC_CREDENTIAL) {
+    throw new Error("HDFC provider enabled but missing env: HDFC_CREDENTIAL");
   }
   return {
-    baseUrl: env.HDFC_BASE_URL.replace(/\/?$/, "/"),
-    source: env.HDFC_SOURCE,
-    channelId: env.HDFC_CHANNEL_ID,
-    credential: env.HDFC_CREDENTIAL!,
-    productCode: env.HDFC_PRODUCT_PVTCAR,
-    tokenTtlSeconds: env.HDFC_TOKEN_TTL,
+    baseUrl: HDFC_GATEWAY.baseUrl.replace(/\/?$/, "/"),
+    source: HDFC_GATEWAY.source,
+    channelId: HDFC_GATEWAY.channelId,
+    credential: env.HDFC_CREDENTIAL,
+    productCode: HDFC_GATEWAY.productPvtCar,
+    tokenTtlSeconds: HDFC_GATEWAY.tokenTtlSeconds,
     kyc: {
-      baseUrl: env.HDFC_KYC_BASE_URL.replace(/\/$/, ""),
+      baseUrl: HDFC_GATEWAY.kycBaseUrl.replace(/\/$/, ""),
       apiKey: env.HDFC_KYC_API_KEY ?? "",
-      tokenTtlSeconds: env.HDFC_KYC_TOKEN_TTL,
-      returnUrl: env.HDFC_KYC_RETURN_URL,
+      tokenTtlSeconds: HDFC_GATEWAY.kycTokenTtlSeconds,
+      returnUrl: HDFC_GATEWAY.kycReturnUrl,
     },
   };
 }

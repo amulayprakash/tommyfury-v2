@@ -1,5 +1,17 @@
 import { z } from "zod";
 
+/**
+ * Environment = server wiring + SECRETS ONLY.
+ *
+ * Everything else a vendor needs — gateway hosts, product/agent/partner codes,
+ * token TTLs, payment options, capability toggles — is provider DATA, not
+ * deployment configuration, and lives in code beside the adapter that uses it
+ * (`src/providers/<slug>/config.ts`, plus `src/config/app-urls.ts` for our own
+ * origins). Nothing there is env-overridable: config is authoritative.
+ *
+ * So the rule for this file: if leaking the value would be a security incident,
+ * it belongs here; otherwise it belongs in the provider's config.ts.
+ */
 const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -16,220 +28,64 @@ const envSchema = z.object({
     .default("false")
     .transform((v) => v === "true"),
 
-  // ── ICICI Lombard (credentials env-only, never in DB/code) ──
-  ICICI_ENABLED: z
-    .string()
-    .default("false")
-    .transform((v) => v === "true"),
-  ICICI_BASE_URL: z.string().default("https://ilesbapigee.insurancearticlez.com"),
+  // ── ICICI Lombard credentials ──
+  // Non-secret ICICI settings: src/providers/icici/config.ts
   ICICI_LOGIN: z.string().optional(),
   ICICI_PASSWORD: z.string().optional(),
-  /** Base64 AES key shared by ICICI for password encryption. */
+  /**
+   * Base64 AES key shared by ICICI, used to encrypt the plaintext password. When
+   * unset, ICICI_PASSWORD is treated as ALREADY encrypted and sent verbatim.
+   */
   ICICI_AES_KEY: z.string().optional(),
-  /** node:crypto cipher name; exact scheme to be confirmed with ICICI. */
-  ICICI_AES_MODE: z.string().default("aes-256-ecb"),
 
-  // ── IFFCO-Tokio (ITGI) — credentials env-only, never in DB/code ──
-  // Hybrid vendor: SOAP/XML for motor, REST/JSON for CKYC + policy download.
-  // There is no OAuth/token — SOAP auth is the partner code in the request body,
-  // plus (presumed) IP whitelisting, so there is no token manager for ITGI.
-  ITGI_ENABLED: z
-    .string()
-    .default("false")
-    .transform((v) => v === "true"),
-  ITGI_SOAP_BASE_URL: z.string().default("https://staging.iffcotokio.co.in/portaltest/services"),
-  ITGI_REST_BASE_URL: z.string().default("https://staging.iffcotokio.co.in/partner-services"),
-  /** PLACEHOLDER — ITGI has not yet issued our partner code (see docs/itgi-integration-notes.md §8). */
-  ITGI_PARTNER_CODE: z.string().default(""),
-  ITGI_PARTNER_BRANCH: z.string().default(""),
-  ITGI_PARTNER_SUB_BRANCH: z.string().default(""),
-  /** Echoed back in the proposal payload's responseURL tag. */
-  ITGI_RESPONSE_URL: z.string().default(""),
-  /** PLACEHOLDER — Basic-auth credentials for the policy-download REST API. */
+  // ── IFFCO-Tokio (ITGI) credentials ──
+  // Non-secret ITGI settings (hosts, partner code/branch): src/providers/itgi/config.ts
+  /** HTTP Basic credentials for ALL ITGI REST services (CKYC, master data, policy download). */
   ITGI_DOWNLOAD_USER: z.string().default(""),
   ITGI_DOWNLOAD_PASSWORD: z.string().default(""),
 
-  // ── HDFC ERGO — credentials env-only, never in DB/code ──
-  // HEI motor service (JSON) + Pehchaan e-KYC (separate host, separate JWT).
-  // Private Car only: the vendor kit ships no two-wheeler or commercial
-  // collection, product code or master data.
-  HDFC_ENABLED: z
-    .string()
-    .default("false")
-    .transform((v) => v === "true"),
-  HDFC_BASE_URL: z
-    .string()
-    .default("https://accessuat.hdfcergo.com/cp/integration/heiintegrationservice/integration/"),
-  HDFC_SOURCE: z.string().default(""),
-  HDFC_CHANNEL_ID: z.string().default(""),
+  // ── HDFC ERGO credentials ──
+  // Non-secret HDFC settings (hosts, source/channel, product code, TTLs):
+  // src/providers/hdfc/config.ts
+  /** Base64 "user:password" for the HEI token call. */
   HDFC_CREDENTIAL: z.string().optional(),
-  HDFC_PRODUCT_PVTCAR: z.string().default("2311"),
-  /** Token lifetime in seconds. HDFC returns no expiry — value unconfirmed. */
-  HDFC_TOKEN_TTL: z.coerce.number().int().positive().default(1500),
-  HDFC_KYC_BASE_URL: z.string().default("https://ekyc-uat.hdfcergo.com/e-kyc"),
+  /** Pehchaan e-KYC API key (separate service, separate JWT). */
   HDFC_KYC_API_KEY: z.string().optional(),
-  HDFC_KYC_TOKEN_TTL: z.coerce.number().int().positive().default(480),
-  /** Absolute URL Pehchaan returns the browser to after its hosted journey. */
-  HDFC_KYC_RETURN_URL: z.string().default(""),
 
-  // ── Future Generali (TCS Motor API) — credentials env-only, never in DB/code ──
-  FG_ENABLED: z
-    .string()
-    .default("false")
-    .transform((v) => v === "true"),
-  /** API gateway base (JSON motor endpoints live under /MotorAPI/1.0.0). */
-  FG_BASE_URL: z
-    .string()
-    .default("https://uat-internal-apigw.generalicentralinsurance.com:8243"),
-  /**
-   * OAuth2 token endpoint (password grant). The rebranded gateway is on
-   * generalicentralinsurance.com; the CKYC v3 doc shows the token host on the
-   * same domain (uat-internal-apim.generalicentralinsurance.com:9443). The old
-   * futuregenerali.in host is retained only for the legacy renewal product.
-   * NOTE: confirm the motor token host with FG before go-live.
-   */
-  FG_TOKEN_URL: z
-    .string()
-    .default("https://uat-internal-apim.generalicentralinsurance.com:9443/oauth2/token"),
+  // ── Future Generali credentials ──
+  // Non-secret FG settings (gateway hosts, vendor/agent/branch codes, payment
+  // gateway options, LiveChek host): src/providers/fg/config.ts
   /** Base64 "client_id:client_secret" sent as the Authorization: Basic header (motor product). */
   FG_CLIENT_BASIC: z.string().optional(),
   FG_USERNAME: z.string().optional(),
   FG_PASSWORD: z.string().optional(),
-  FG_VENDOR_CODE: z.string().default("Webagg"),
-  FG_AGENT_CODE: z.string().default("60001464"),
-  FG_BRANCH_CODE: z.string().default("10"),
-
-  // ── FG CKYC (GCKYC/3.0.0) — separate WSO2 product (own client subscription) ──
   /**
-   * CKYC gateway base (…/GCKYC/3.0.0). ENV-DRIVEN — never hardcode the host.
-   * Two UAT candidates exist post-rebrand and only ONE answers on UAT:
-   *   - rebranded (default here): uat-internal-apigw.generalicentralinsurance.com:8243/GCKYC/3.0.0
-   *   - legacy/live-verified:     uat-internal-apigw.futuregenerali.in:8243/GCKYC/3.0.0
-   * Memory records the live-verified working UAT CKYC host as futuregenerali.in,
-   * so the current live .env points there. Before flipping .env to the rebranded
-   * host, the operator MUST confirm which one answers:
-   *   npx tsx --env-file=.env scripts/verify-fg-ckyc-host.ts
-   *   npx tsx --env-file=.env scripts/verify-fg-ckyc-host.ts --host <candidate>
-   * The legacy host stays reachable simply by setting this env var — do not
-   * remove that capability.
+   * Base64 client for the CKYC product (GCKYC/3.0.0) — a distinct WSO2
+   * subscription from motor. Falls back to FG_CLIENT_BASIC when unset.
    */
-  FG_CKYC_BASE_URL: z
-    .string()
-    .default("https://uat-internal-apigw.generalicentralinsurance.com:8243/GCKYC/3.0.0"),
-  /** CKYC OAuth2 token endpoint (may differ from motor; defaults to FG_TOKEN_URL when unset). */
-  FG_CKYC_TOKEN_URL: z.string().optional(),
-  /** Base64 client for the CKYC product (distinct subscription from motor). */
   FG_CKYC_CLIENT_BASIC: z.string().optional(),
   /**
-   * Dedicated CKYC resource-owner login (FG TechSupport: GCCKYC_Dev/GCKYC@dev26).
-   * The CKYC WSO2 product issues its token to this user, not the shared motor
-   * login; both fall back to FG_USERNAME/FG_PASSWORD when unset.
+   * Dedicated CKYC resource-owner login (FG TechSupport: GCCKYC_Dev). The CKYC
+   * WSO2 product issues its token to this user, not the shared motor login; both
+   * fall back to FG_USERNAME/FG_PASSWORD when unset.
    */
   FG_CKYC_USERNAME: z.string().optional(),
   FG_CKYC_PASSWORD: z.string().optional(),
   /** Static gateway subscription key sent as the `Token` header on CKYC calls. */
   FG_CKYC_SUBSCRIPTION_TOKEN: z.string().optional(),
-  /** Absolute URL the eKYC portal returns the browser to after manual KYC (redirect bridge VISoF_Return_URL). */
-  FG_CKYC_RETURN_URL: z.string().optional(),
-
-  // ── FG Motor Renewal (Renewal/1.0.0/RenewalModify) — full-JSON 3-op product ──
-  // Rebranded Generali Central gateway. Base is the RenewalModify context; the
-  // adapter appends /ModifyRenewalQuote, /ModifyRenewalProposal,
-  // /ModifyRenewalPolicyIssuance. Separate WSO2 product `GCMotorRenewalAPI`
-  // (own subscription/token, password grant). PROD URL is not in the kit yet —
-  // confirm with FG before go-live.
-  //
-  // ⚠ FG_RENEWAL_CLIENT_BASIC MUST be populated with the `GCMotorRenewalAPI`
-  // subscription's consumer Basic (UAT value in fg-rebranding-notes.md §9) — it
-  // is a DIFFERENT WSO2 product from motor. config.ts resolves the renewal creds
-  // as `env.FG_RENEWAL_CLIENT_BASIC ?? env.FG_CLIENT_BASIC` and
-  // `env.FG_RENEWAL_TOKEN_URL ?? env.FG_TOKEN_URL`, so if FG_RENEWAL_CLIENT_BASIC
-  // is left unset the renewal token is silently minted against the MOTOR
-  // subscription and every RenewalModify call 401/403s. Set FG_RENEWAL_TOKEN_URL
-  // too if the renewal token host differs from the motor token host.
-  FG_RENEWAL_BASE_URL: z
-    .string()
-    .default("https://uat-internal-apigw.generalicentralinsurance.com:8243/Renewal/1.0.0/RenewalModify"),
-  FG_RENEWAL_TOKEN_URL: z.string().optional(),
+  /**
+   * MUST be the `GCMotorRenewalAPI` subscription's consumer Basic — a DIFFERENT
+   * WSO2 product from motor. Left unset, the renewal token is silently minted
+   * against the MOTOR subscription and every RenewalModify call 401/403s.
+   */
   FG_RENEWAL_CLIENT_BASIC: z.string().optional(),
-
-  // ── FG Health (TCS BO Service) — separate WSO2 product/subscription ──
-  /** Gates health provider registration (in addition to FG_ENABLED). */
-  FG_HEALTH_ENABLED: z
-    .string()
-    .default("false")
-    .transform((v) => v === "true"),
-  /** Health SOAP service base (the BO/Service.svc gateway path). */
-  FG_HEALTH_BASE_URL: z
-    .string()
-    .default("https://uat-internal-apigw.generalicentralinsurance.com:8243/Health/1.0.0/BO/Service.svc"),
-  /** Health OAuth2 token endpoint (defaults to FG_TOKEN_URL when unset). */
-  FG_HEALTH_TOKEN_URL: z.string().optional(),
   /** Base64 client for the health product (distinct subscription from motor). */
   FG_HEALTH_CLIENT_BASIC: z.string().optional(),
-  /** Health agent code (samples use 60000272; falls back to FG_AGENT_CODE). */
-  FG_HEALTH_AGENT_CODE: z.string().optional(),
-
-  // ── FG Web-Aggregator payment gateway (checksum-signed form POST, v1.41) ──
-  /** Hosted payment page the signed form POSTs to (WebAggPayNew.aspx, v1.41). */
-  FG_PAYMENT_URL: z
-    .string()
-    .default(
-      "https://digiuat.generalicentralinsurance.com/Ecom_UAT/WEBAPPLN/UI/Common/WebAggPayNew.aspx",
-    ),
-  /** PaymentOption code: 1=PayTm, 2=HDFC, 3=PayU (PayU is mandated for web-agg). */
-  FG_PAYMENT_OPTION: z.string().default("3"),
-  /**
-   * Integration mode flag sent as the `Vendor` field. "1" = PHP mode (FG returns
-   * plaintext result params on the ResponseURL; checksum appends a 12th timestamp
-   * field). Blank/"0" = .NET mode (DES-encrypted ResponseData; 11-field checksum).
-   * Default PHP because OpenSSL 3 disables legacy single-DES on this runtime.
-   */
-  FG_PAYMENT_VENDOR: z.string().default("1"),
-  /** Absolute URL FG redirects back to after payment (our /payment/callback). */
-  FG_PAYMENT_RESPONSE_URL: z.string().optional(),
-  /** Reserved: FG's documented CheckSum is unsalted SHA-256 (see payment.ts). */
+  /** Reserved: FG's documented payment CheckSum is unsalted SHA-256 (see fg/payment.ts). */
   FG_PAYMENT_CHECKSUM_SECRET: z.string().optional(),
-  /** Absolute web URLs the callback 302-redirects the browser to. */
-  FG_PAYMENT_SUCCESS_URL: z.string().optional(),
-  FG_PAYMENT_FAILURE_URL: z.string().optional(),
-  /**
-   * Server-side reconciliation endpoint (FetchTRNDetails), v1.41 — one service for
-   * both UAT and production (the doc lists no UAT variant). Defaults to the SOAP
-   * endpoint from the live WSDL's `soap:address`, i.e. the bare `.asmx`. The doc
-   * also prints a slash form (`.../comservice.asmx/FetchTRNDetails`); that is
-   * ASP.NET's HTTP-POST binding, which takes form-urlencoded parameters — posting a
-   * SOAP envelope to it returns 500. Either URL now works (the transport picks the
-   * matching encoding), but prefer this one.
-   */
-  FG_PAYMENT_RECON_URL: z
-    .string()
-    .default("https://pg.generalicentralinsurance.com/quick_pay/quickpay/comservice.asmx"),
-  /** `source` value in the FetchTRNDetails request (web-agg transactions). */
-  FG_PAYMENT_RECON_SOURCE: z.string().default("webaggregator"),
-  /**
-   * Which id `FetchTRNDetails` is keyed by: "tid" = our TransactionID
-   * (== quoteNo == pg.tid); "wsPId" = FG's PG txn id (WS_P_ID). UNVERIFIED — the
-   * v1.41 PDF sample ids (QP536987, T497555205) look like PG/quickpay ids, so if
-   * recon is keyed by WS_P_ID a "tid" guess returns "not found" for every real
-   * txn. Defaults to "tid" (our current assumption); confirm on live UAT before
-   * turning on FG_PAYMENT_RECON_ENFORCE (see open confirmations).
-   */
-  FG_PAYMENT_RECON_KEY: z.enum(["tid", "wsPId"]).default("tid"),
-  /**
-   * Hard-block issuance when recon fails / returns "not found". Defaults to
-   * **false** until FG_PAYMENT_RECON_KEY is confirmed on UAT — otherwise a wrong
-   * key guess would block 100% of issuance. While false, the callback LOGS both
-   * ids (tid + WS_P_ID) and the recon outcome, then proceeds to issuance. Flip to
-   * "true" only once the recon key + amount/id matching are verified live.
-   */
-  FG_PAYMENT_RECON_ENFORCE: z
-    .string()
-    .default("false")
-    .transform((v) => v === "true"),
 
-  // ── LiveChek break-in / inspection (third-party REST) ──
-  LIVECHEK_BASE_URL: z.string().default("https://newapi.test.livechek.com/api"),
+  // ── LiveChek break-in / inspection credentials ──
+  // Non-secret LiveChek setting (base URL): src/providers/fg/config.ts
   LIVECHEK_APP_KEY: z.string().optional(),
   LIVECHEK_COMPANY_ID: z.string().optional(),
   LIVECHEK_APP_ID: z.string().optional(),

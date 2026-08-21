@@ -5,6 +5,8 @@ import {
   resolveBusinessType,
   applyRolloverDateSanity,
   exceedsVehicleAge,
+  assertAccessorySiWithinCap,
+  HDFC_ACCESSORY_SI_CAP_CODE,
   HDFC_DEFAULT_LOSS_OF_BELONGINGS_SI,
 } from "../mapper/canonical.ts";
 import { reqPvtCarFor } from "../mapper/req-pvtcar.ts";
@@ -683,5 +685,170 @@ describe("nominee relationship", () => {
       const out = reqPvtCarFor({ ...nominee("spouse"), businessType });
       expect(out.Owner_Driver_Nominee_Relationship).toBe("Spouse");
     }
+  });
+});
+
+describe("accessory sum-insured cap", () => {
+  /**
+   * "Total of Accessories(Electrical/Non Electrical/LPG-CNG KIT) cannot be
+   * greater than 25% of the vehicle SI" — PVTcarTestScenarios.xls "New and
+   * Rollover" row 25. HDFC used to enforce this itself, refusing the payload
+   * verbatim with "Total optional covers SI should not be more than 25% of
+   * Vehicle Base Value!" (live UAT, 13/08/2026). As of 21/08/2026 it prices the
+   * same request instead (₹4L of accessories on a ₹5,59,200 Swift, gross
+   * ₹13,258), so the rule is ours. That 21/08 response is persisted at
+   * scripts/_hdfc-row25-recapture-2026-08-21T08-06-20-700Z.json.
+   *
+   * "Vehicle SI" is HDFC's OWN Vehicle_IDV — the base vehicle value alone, not
+   * the vehicle plus its accessories. That is HDFC's wording in the refusal it
+   * used to raise ("25% of Vehicle Base Value"), and it matches the payload,
+   * where Policy_Details.Vehicle_IDV is a separate field from
+   * Req_PvtCar.ElecticalAccessoryIDV / NonElecticalAccessoryIDV /
+   * BiFuel_Kit_Value.
+   */
+  const shapeWith = (
+    accessories: Partial<MotorQuoteRequest>,
+    idv: number,
+  ): ReturnType<typeof toHdfcRequest> => {
+    const shape = toHdfcRequest(baseRequest(accessories), codes, "T");
+    // The IDV is HDFC's own recommendation, pinned by the provider after
+    // GetCalculateIDV — which is the first moment the vehicle base value exists.
+    shape.vehicle.idv = idv;
+    return shape;
+  };
+
+  it("refuses accessories worth more than 25% of the vehicle IDV", () => {
+    // Certification row 25 verbatim: ₹4L of accessories on the ₹5,59,200 Swift.
+    expect(() =>
+      assertAccessorySiWithinCap(
+        shapeWith({ electricalAccessoriesSI: 200_000, nonElectricalAccessoriesSI: 200_000 }, 559_200),
+      ),
+    ).toThrow(/25%/);
+  });
+
+  it("allows accessories at exactly the 25% ceiling", () => {
+    expect(() =>
+      assertAccessorySiWithinCap(shapeWith({ electricalAccessoriesSI: 100_000 }, 400_000)),
+    ).not.toThrow();
+  });
+
+  it("refuses one rupee past the ceiling", () => {
+    expect(() =>
+      assertAccessorySiWithinCap(shapeWith({ electricalAccessoriesSI: 100_001 }, 400_000)),
+    ).toThrow(/25%/);
+  });
+
+  it("counts the bi-fuel kit towards the total, as the rule names it", () => {
+    // 60,000 + 30,000 + 20,000 = 110,000 on a ₹4L vehicle. Neither the
+    // electrical nor the non-electrical leg breaches on its own.
+    expect(() =>
+      assertAccessorySiWithinCap(
+        shapeWith(
+          {
+            electricalAccessoriesSI: 60_000,
+            nonElectricalAccessoriesSI: 30_000,
+            bifuelKitType: "CNG",
+            bifuelKitSI: 20_000,
+          },
+          400_000,
+        ),
+      ),
+    ).toThrow(/25%/);
+  });
+
+  it("measures 25% of the vehicle base value, not of the vehicle plus accessories", () => {
+    // ₹1,10,000 of accessories on a ₹4,00,000 vehicle. Against the base value
+    // the cap is ₹1,00,000 and this breaches; against vehicle + accessories
+    // (₹5,10,000) the cap would be ₹1,27,500 and it would pass. HDFC's own
+    // refusal names the base value, so the stricter reading is the right one.
+    expect(() =>
+      assertAccessorySiWithinCap(shapeWith({ electricalAccessoriesSI: 110_000 }, 400_000)),
+    ).toThrow(/25%/);
+  });
+
+  it("says what breached, in rupees, so the customer can act on it", () => {
+    try {
+      assertAccessorySiWithinCap(
+        shapeWith({ electricalAccessoriesSI: 200_000, nonElectricalAccessoriesSI: 200_000 }, 559_200),
+      );
+      expect.unreachable("the cap should have been enforced");
+    } catch (e) {
+      const err = e as { statusCode?: number; code?: string; message: string };
+      expect(err.statusCode).toBe(422);
+      expect(err.code).toBe(HDFC_ACCESSORY_SI_CAP_CODE);
+      // Indian digit grouping, as everywhere else money is rendered in this repo.
+      expect(err.message).toContain("₹4,00,000");
+      expect(err.message).toContain("₹1,39,800");
+    }
+  });
+
+  it("passes a request that declares no accessories at all", () => {
+    expect(() => assertAccessorySiWithinCap(shapeWith({}, 559_200))).not.toThrow();
+  });
+
+  it("does not fire when HDFC returned no IDV to measure against", () => {
+    // Nothing to compare to is not a breach. HDFC would refuse the payload for
+    // the missing IDV first, and inventing a cap from 0 would turn every such
+    // request into our error instead of the vendor's.
+    expect(() =>
+      assertAccessorySiWithinCap(shapeWith({ electricalAccessoriesSI: 200_000 }, 0)),
+    ).not.toThrow();
+  });
+
+  it("a bi-fuel kit alone can breach the cap", () => {
+    // The kit is in the numerator on the pack's own wording ("Electrical/Non
+    // Electrical/LPG-CNG KIT"). Live UAT cannot arbitrate this today — it prices
+    // a kit-only breach at 120% of IDV, but it prices an ELECTRICAL breach at
+    // 120% too, so it is refusing no accessory breach at all
+    // (scripts/_hdfc-accessory-cap-probe.json, 21/08/2026).
+    expect(() =>
+      assertAccessorySiWithinCap(
+        shapeWith({ bifuelKitType: "CNG", bifuelKitSI: 100_001 }, 400_000),
+      ),
+    ).toThrow(/25%/);
+  });
+
+  it("allows a bi-fuel kit at exactly the ceiling", () => {
+    expect(() =>
+      assertAccessorySiWithinCap(shapeWith({ bifuelKitType: "CNG", bifuelKitSI: 100_000 }, 400_000)),
+    ).not.toThrow();
+  });
+
+  it("ignores a bi-fuel kit on a liability-only policy, where HDFC does not rate it", () => {
+    // PROVEN, not assumed: on TP Only the kit value is inert. At 26% and at 50%
+    // of a ₹3,04,000 IDV, live UAT returned the identical response to the rupee
+    // (gross ₹2,925) — BiFuel_Kit_OD_Premium 0, BiFuel_Kit_TP_Premium a flat ₹60
+    // either way. Refusing here would deny a policy over a number HDFC ignores.
+    expect(() =>
+      assertAccessorySiWithinCap(
+        shapeWith({ selectedPolicy: "thirdParty", bifuelKitType: "CNG", bifuelKitSI: 300_000 }, 400_000),
+      ),
+    ).not.toThrow();
+  });
+
+  it("still counts the kit on a standalone-OD policy, which does have an own-damage section", () => {
+    expect(() =>
+      assertAccessorySiWithinCap(
+        shapeWith({ selectedPolicy: "standAloneOD", bifuelKitType: "CNG", bifuelKitSI: 300_000 }, 400_000),
+      ),
+    ).toThrow(/25%/);
+  });
+
+  it("does not fire on a liability-only policy: mapper/canonical.ts already zeroed both accessory IDVs", () => {
+    // Named for what it actually proves. The electrical and non-electrical IDVs
+    // are forced to 0 by the TP Only rule long before the cap is measured, so
+    // there is nothing left in the numerator — which the assertion on the shape
+    // makes explicit rather than leaving to the absence of a throw.
+    const shape = shapeWith(
+      {
+        selectedPolicy: "thirdParty",
+        electricalAccessoriesSI: 200_000,
+        nonElectricalAccessoriesSI: 200_000,
+      },
+      559_200,
+    );
+    expect(shape.addons.electricalAccessoryIdv).toBe(0);
+    expect(shape.addons.nonElectricalAccessoryIdv).toBe(0);
+    expect(() => assertAccessorySiWithinCap(shape)).not.toThrow();
   });
 });

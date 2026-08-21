@@ -34,7 +34,7 @@ export interface paths {
                                 slug: string;
                                 displayName: string;
                                 capabilities: ("fourWheeler" | "twoWheeler" | "commercial" | "newVehicle" | "newCommercial")[];
-                                operations: ("quote" | "retrieveQuote" | "proposal" | "ckyc" | "ovd" | "issuance" | "renewal" | "inspection" | "policyStatus" | "coi" | "healthQuote" | "healthProposal" | "healthIssuance")[];
+                                operations: ("quote" | "retrieveQuote" | "proposal" | "ckyc" | "corporateCkyc" | "ovd" | "issuance" | "renewal" | "inspection" | "policyStatus" | "coi" | "healthQuote" | "healthProposal" | "healthIssuance")[];
                                 motorCapabilities: {
                                     fourWheeler?: {
                                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
@@ -962,6 +962,14 @@ export interface paths {
                         mobile?: string;
                         /** Format: uri */
                         redirectUrl?: string;
+                        /** @enum {string} */
+                        customerType?: "individual" | "corporate";
+                        entityPan?: string;
+                        entityCin?: string;
+                        entityCkycNumber?: string;
+                        dateOfIncorporation?: string;
+                        /** @enum {string} */
+                        entityType?: "company" | "partnershipFirm" | "trust" | "unincorporatedInstitution" | "properietor" | "huf" | "llp" | "societyOrEducationalInstitute" | "governmentEntity" | "foreignEmbassy";
                     };
                 };
             };
@@ -2843,7 +2851,7 @@ export interface components {
                 slug: string;
                 displayName: string;
                 capabilities: ("fourWheeler" | "twoWheeler" | "commercial" | "newVehicle" | "newCommercial")[];
-                operations: ("quote" | "retrieveQuote" | "proposal" | "ckyc" | "ovd" | "issuance" | "renewal" | "inspection" | "policyStatus" | "coi" | "healthQuote" | "healthProposal" | "healthIssuance")[];
+                operations: ("quote" | "retrieveQuote" | "proposal" | "ckyc" | "corporateCkyc" | "ovd" | "issuance" | "renewal" | "inspection" | "policyStatus" | "coi" | "healthQuote" | "healthProposal" | "healthIssuance")[];
                 motorCapabilities: {
                     fourWheeler?: {
                         policyTypes: ("comprehensive" | "thirdParty" | "standAloneOD")[];
@@ -2961,6 +2969,14 @@ export interface components {
             mobile?: string;
             /** Format: uri */
             redirectUrl?: string;
+            /** @enum {string} */
+            customerType?: "individual" | "corporate";
+            entityPan?: string;
+            entityCin?: string;
+            entityCkycNumber?: string;
+            dateOfIncorporation?: string;
+            /** @enum {string} */
+            entityType?: "company" | "partnershipFirm" | "trust" | "unincorporatedInstitution" | "properietor" | "huf" | "llp" | "societyOrEducationalInstitute" | "governmentEntity" | "foreignEmbassy";
         };
         KycResult: {
             kycId?: string;

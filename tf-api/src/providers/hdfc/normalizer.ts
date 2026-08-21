@@ -273,9 +273,16 @@ export function normalizePayment(body: unknown): HdfcPaymentResult {
 
 /**
  * Step 07 response → certificate. Extends the shared `CertificateResult`
- * contract (`coiBase64`, `status`, `_rawResponse`) with HDFC's own policy
- * number, which getpolicydocument echoes back but which the shared contract
- * doesn't carry (see normalizer.test.ts contract cross-check note below).
+ * contract (`coiBase64`, `status`, `_rawResponse`) with an optional policy
+ * number.
+ *
+ * That field is TOLERANCE, not something to rely on: the kit's response sheet
+ * for "07 GetPolicyDocument" lists only StatusCode, Message, Error, Warning,
+ * TransactionID and PDF_BYTES, and the live 21/08/2026 response carried no
+ * policy number either. An earlier docblock claimed getpolicydocument "echoes
+ * it back", which came from an invented fixture rather than the vendor. The
+ * issuance path takes the policy number from SubmitPaymentDetails
+ * (`normalizePayment`), which genuinely does return one.
  */
 export interface HdfcCertificateResult extends CertificateResult {
   policyNumber?: string;
@@ -283,10 +290,50 @@ export interface HdfcCertificateResult extends CertificateResult {
 
 export function normalizeCertificate(body: unknown): HdfcCertificateResult {
   const b = obj(body);
-  const doc = obj(b.Req_Policy_Document ?? b.Policy_Document);
+  // Resp_, not Req_. The RESPONSE container is Resp_Policy_Document and the
+  // document field is PDF_BYTES — see PrivateCarDataDictionary.xlsx, "07
+  // GetPolicyDocument", request rows 1-2 versus response row 6. This read
+  // Req_Policy_Document.Document until 21/08/2026, which is the request
+  // container and a field name that appears nowhere, so a real issued policy
+  // returned an empty coiBase64. The older spellings are kept purely as
+  // tolerance; no live response has carried them.
+  const doc = obj(b.Resp_Policy_Document ?? b.Req_Policy_Document ?? b.Policy_Document);
+  const coiBase64 = str(doc.PDF_BYTES) ?? str(doc.Document) ?? str(doc.PolicyDocument) ?? "";
   return {
     policyNumber: str(doc.Policy_Number) ?? str(doc.PolicyNumber),
-    coiBase64: str(doc.Document) ?? str(doc.PolicyDocument) ?? "",
-    _rawResponse: body,
+    coiBase64,
+    _rawResponse: withoutPdfBytes(body, coiBase64.length),
   };
+}
+
+/**
+ * `_rawResponse` minus the document itself.
+ *
+ * The COI runs to ~477 KB of base64, and echoing HDFC's body verbatim shipped it
+ * twice on every fetch — once as `coiBase64`, once inside `_rawResponse` —
+ * roughly a megabyte of JSON for one certificate. The envelope is worth keeping:
+ * the `/hdfc` harness renders it as certification evidence, and StatusCode /
+ * Message / the container name are what a tester quotes back to HDFC. The bytes
+ * are not evidence, so they become a marker recording the length that was there.
+ *
+ * Copies rather than deletes — the caller's body is HDFC's parsed response and
+ * may be logged or asserted on elsewhere.
+ */
+function withoutPdfBytes(body: unknown, length: number): unknown {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return body;
+  const b = { ...(body as Record<string, unknown>) };
+  for (const key of ["Resp_Policy_Document", "Req_Policy_Document", "Policy_Document"]) {
+    const container = b[key];
+    if (!container || typeof container !== "object") continue;
+    const copy = { ...(container as Record<string, unknown>) };
+    let elided = false;
+    for (const field of ["PDF_BYTES", "Document", "PolicyDocument"]) {
+      if (typeof copy[field] === "string" && copy[field] !== "") {
+        copy[field] = `[elided — ${length} base64 chars, returned in coiBase64]`;
+        elided = true;
+      }
+    }
+    if (elided) b[key] = copy;
+  }
+  return b;
 }

@@ -1,5 +1,5 @@
 import type { ItgiConfig } from "./config.ts";
-import { ITGI_ENDPOINTS } from "./config.ts";
+import { ITGI_ENDPOINTS, itgiBasicAuth } from "./config.ts";
 import type { ItgiTransport } from "./http.ts";
 
 export interface ItgiDownloadInput {
@@ -35,7 +35,7 @@ export async function itgiDownloadPolicy(
     },
     {
       requestId,
-      basicAuth: { user: cfg.downloadUser, password: cfg.downloadPassword },
+      basicAuth: itgiBasicAuth(cfg),
     },
   )) as Record<string, unknown>;
 

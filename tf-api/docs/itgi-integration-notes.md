@@ -58,6 +58,12 @@ proposal returns `orderNo` + `traceNo` → payment update returns `policyNumber`
 | CKYC validate-OTP | `.../partner-services/kyc/fetch-validate-otp` | REST/JSON |
 | CKYC create | `.../partner-services/kyc/create` | REST/JSON |
 | CKYC update | `.../partner-services/kyc/update` | REST/JSON (optional for issuance) |
+| Master data | `.../partner-services/master/data` | REST/JSON, **HTTP Basic** — request spec unknown (§8.5) |
+| Partner portal (HTML) | `.../portaltest/MotorServiceReq` | Browser page, **not** a web service (§8.8) |
+
+**Auth:** SOAP carries no header — the partner code in the body is the credential. **Every REST service
+(CKYC, master data, policy download) takes HTTP Basic** with the partner username/password; without it
+they answer 401 with an empty body (verified 2026-08-21).
 
 Base host: `https://staging.iffcotokio.co.in`. ⚠ WSDL `<soap:address>` values are dev placeholders — ignore
 them, use the table above. ⚠ Production host/paths not provided.
@@ -199,56 +205,75 @@ Not needed for issuance.
   RTO master (gap #3) downgrades from blocker to nice-to-have.
 - Confirms the dual `autocoverage=false/true` response pair, add-on premiums as a single `coveragePremium`.
 
-## 8. Gaps / open confirmations (⚠ blockers before build/UAT)
+## 8. Gaps / open confirmations
 
-Re-verified against the two "new" folders ITGI shared on 2026-07-24 — **none of these were resolved by them.**
-Production URLs deliberately excluded (not needed for now).
+**Status 2026-08-21** — ITGI issued UAT credentials for Novacred Insurance Broking (PCP & TWP) and we
+re-probed live: `npx tsx --env-file=.env scripts/itgi-uat-probe.ts` (read-only; never touches proposal
+or payment). The former hard blockers are gone. Production URLs deliberately excluded (not needed yet).
 
-### Hard blockers — cannot make a single successful live call
-1. **Partner credentials** — real `partnerCode` / `partnerBranch` / `subBranch` for PCP and TWP. Every SOAP call
-   authenticates via these in the body. Kit only has other partners' / inconsistent samples (`ITGIMOT003` vs
-   `ITGMOT003` vs `...040/042/050/205`, and `ITGIMOT216`=PhonePe). Also **HTTP Basic user/pass** for policy download.
-2. **IP whitelisting — EMPIRICALLY CONFIRMED BLOCKED (probed 2026-07-26).** Run `npx tsx --env-file=.env
-   scripts/itgi-uat-probe.ts` to reproduce. Evidence:
-   - `staging.iffcotokio.co.in` resolves to **220.227.8.74** (the same IP hard-coded in the kit's WSDL
-     `<soap:address>` — so it is the real staging host, not a placeholder).
-   - TCP :443 to that host **times out with no SYN-ACK** — packets are silently dropped (firewall DROP).
-   - From the same machine, `www.iffcotokio.co.in:443` connects in ~96 ms and `example.com` returns 200,
-     so this is not a local network problem.
-   → ITGI must whitelist our egress IP before *any* live call (SOAP or CKYC REST) can be made. This also
-   means the CKYC "no auth header" question cannot be tested until the IP is registered.
-3. **RTO master** — canonical→ITGI `rtoCity` code table (absent from kit; verified across the whole tree).
-   ⚠ May downgrade to a clarification if ITGI confirms the field accepts city names / standard RTO codes (see §7a).
+### Resolved — live-verified 2026-08-21
+1. **IP whitelisting — RESOLVED.** `staging.iffcotokio.co.in` now answers; the July 2026 TCP-drop is gone.
+   `IDVWebService` returns a real band for a 2023 Swift/Delhi: idv 4,72,300 (min 4,45,995 / max 6,29,640).
+2. **Partner credentials — RECEIVED and working.** `ITGIMOT321` / branch `Novacred` / sub-branch `Novacred`
+   (both PCP and TWP), Basic-auth pair `ITGIMOT321` : `partner@2020`. `MotorPremiumWebserviceVA` priced the
+   same vehicle live: **₹14,483.32** base (`autocoverage=false`) and **₹18,384.40** with the bundled
+   Depreciation Waiver (`autocoverage=true`) — the documented dual-block response, exactly as §7 predicted.
+3. **CKYC auth — ANSWERED: HTTP Basic, same partner pair.** Unauthenticated `/kyc/fetch` returns **401 with an
+   empty body**; with Basic it returns `200 {"status":"200","result":{"status":"No Record"}}`. So it was never
+   an IP question — the kit simply omits the auth section.
+4. **Policy-download credentials — RECEIVED** (same pair). `/policy/download` answers the business validation
+   `{"statusMessage":"FAIL","error":[{"errorField":"policyDownloadNo","errorMessage":"Policy Number is required."}]}`.
 
-### Our-side prerequisite that unlocks the above
-4. **Partner provisioning inputs** — ITGI issues the partner code + whitelists us only after we send our **public IP,
-   request URL, response URL, and logo/contact**.
-
-### Missing artifacts we can work around
-5. **Three WSDLs absent** — kit ships WSDLs only for IDV, Premium, Proposal. `PaymentUpdateWS`, `CheckPolicyStatus`
-   and `PartnerDownloadPolicyCopy` have **sample req/res only**, no schema. Envelopes are hand-buildable from samples.
-6. **UAT smoke-test data** — no known-good make+RTO+coverage combo that ITGI UAT will accept end-to-end
-   (this is what slowed FG/ICICI). Needs to come from ITGI's team.
-7. **Live Master Data Service** — endpoint/creds for current masters; kit Excels seed dev fine (their ReadMe flags them stale).
-
-### Minor clarifications (resolve during integration)
-8. **Payment authorization fields** — what `authorizationCode` / `authorizationStatus` / `authorizationDecision` must
-   carry from our PG on `updatePaymentDetails`.
-9. **Policy PDF delivery** — staging returns a placeholder; confirm the real download/COI mechanism.
+### Still open
+5. **RTO master** — still not shipped. The help doc defines `RTOCity` as "RTO city code. Should match the ITGI
+   master data", and the samples use tokens like `CHHDHAMT`. Mitigating evidence: the plain city name **`DELHI`
+   is accepted by both IDV and premium** in our live calls, so the field takes a city token, not a numeric code.
+   We still need the full canonical→ITGI city list. The **master-data service** (`/partner-services/master/data`)
+   exists and accepts our Basic auth, but every request shape we tried returns
+   `{"status":0,"error":[{"errorField":"runtime","errorMessage":"...technical fault..."}]}` → **ask ITGI for its
+   request spec**, which would also replace the stale kit Excels.
+6. **UAT smoke-test data** — a known-good TWP make+RTO combo, and a test PAN/Aadhaar+mobile that returns an
+   actual CKYC record (our probe PAN correctly returns "No Record").
+7. **Proposal → payment → status → COI not yet exercised live.** `PartnerProposalRequest` is up (an empty POST
+   draws an Axis SOAP fault, so the service is there), but these create real records in ITGI's core, so they
+   need ITGI's go-ahead plus the `authorizationCode` / `authorizationStatus` / `authorizationDecision` semantics
+   for `updatePaymentDetails`, and confirmation of the real policy-PDF/COI delivery.
+8. **`/portaltest/MotorServiceReq`** — listed with the credentials, but it serves the **"ITGI Partner Web Portal"
+   HTML page**, not a web service. Presumably the browser leg of the Partner-PG flow; confirm its role.
+   Held in `ITGI_ENDPOINTS.partnerPortal`, unused for now.
+9. **Three WSDLs absent** — `PaymentUpdateWS`, `CheckPolicyStatus`, `PartnerDownloadPolicyCopy` ship as sample
+   req/res only. Envelopes are hand-built from the samples; workable.
 10. **CVI (commercial)** — no masters in kit; defer unless ITGI provides them.
+
+### Payload defects the live calls exposed (both fixed 2026-08-21)
+- **`policyHeader` was missing** from the premium envelope. Axis binds the operation's parameters positionally,
+  so it read `<policy>` as the `PolicyHeader` and faulted
+  `org.xml.sax.SAXException: Invalid element in com.itgi.motor.premiumwrapper.PolicyHeader - contractType`.
+  Every kit sample opens with `<policyHeader><messageId>…</messageId></policyHeader>`; we now do too.
+- **New-vehicle pricing used the wrong operation.** We posted `<getMotorPremium>` to
+  `NewVehiclePremiumWebserviceVA`; the operation is `<getNewVehiclePremium>` and its response comes back
+  under `getNewVehiclePremiumReturn` (the normalizer now reads both tags).
 
 ---
 
-## 8a. Implementation status (2026-07-24)
+## 8a. Implementation status (2026-08-21)
 
-The adapter is **built and unit-tested, but never executed against live ITGI** — that needs blockers
-1–3 above. `ITGI_ENABLED` defaults to `false`, so the provider is not registered until it is turned on.
+The quote half of the adapter is now **live on ITGI UAT**: IDV and premium both price real vehicles with
+our own partner code, and the CKYC / policy-download REST services authenticate. The issuance half
+(proposal → payment → status → COI) is built and unit-tested but **still never executed live**, because
+those calls create real records — see gap 7. `ITGI_ENABLED` defaults to `false`, so the provider is not
+registered until it is turned on.
+
+**Not yet quotable through the app**, despite the live pricing above: `ProviderRtoCode(itgi)` is empty and
+`scripts/import-itgi-master.ts` has not been run against any environment (0 itgi rows in mmv/rto/insurer
+locally, vs ~7.5k for icici). Until the RTO master lands, `db-code-resolver.ts` raises
+`ItgiUnmappedCodeError` → `no_quote`, so ITGI is silently omitted from comparisons.
 
 Implemented in `src/providers/itgi/`: config + capabilities, error classification, SOAP/JSON transports,
 formatting helpers, policy-path resolution (comprehensive / act-only / OD-renewal / new-vehicle, with
 break-in as a composable modifier), strict code resolver, IDV + premium mapper, response normalizer
 (incl. dual `autocoverage` block selection), CKYC REST client, proposal → payment → status → certificate,
-the provider class, and `scripts/import-itgi-master.ts`. 107 ITGI unit tests; full suite 432 passing.
+the provider class, and `scripts/import-itgi-master.ts`. 104 ITGI unit tests; full suite 913 passing.
 
 **Two corrections to the original design, made during implementation:**
 

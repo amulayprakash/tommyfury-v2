@@ -136,6 +136,7 @@ export function buildPremiumPayload(
   codes: ItgiCodes,
   path: ItgiPolicyPath,
   partner: ItgiPartnerDetails,
+  messageId: string,
 ): string {
   const contractType = itgiContractType(req.vehicleType);
   const inception = req.policyStartDate ?? new Date().toISOString().slice(0, 10);
@@ -161,8 +162,16 @@ export function buildPremiumPayload(
     tag("zcover", path.zcover) +
     `</vehicle>`;
 
+  // New vehicles are priced by their own operation on their own endpoint; the
+  // body below is otherwise identical.
+  const operation = path.usesNewVehicleEndpoint ? "getNewVehiclePremium" : "getMotorPremium";
+
   return (
-    `<getMotorPremium>` +
+    `<${operation}>` +
+    // Axis binds the operation's parameters positionally, so omitting
+    // policyHeader makes it read <policy> as the PolicyHeader and fault with
+    // "Invalid element in ...PolicyHeader - contractType".
+    `<policyHeader>${tag("messageId", messageId)}</policyHeader>` +
     `<policy>` +
     tag("contractType", contractType) +
     tag("expiryDate", toItgiDateTime(expiry, "23:59:59")) +
@@ -178,6 +187,6 @@ export function buildPremiumPayload(
     tag("partnerCode", partner.partnerCode) +
     tag("partnerSubBranch", partner.partnerSubBranch) +
     `</partner>` +
-    `</getMotorPremium>`
+    `</${operation}>`
   );
 }

@@ -11,7 +11,10 @@ const parser = new XMLParser({
   // The premium service returns two <getMotorPremiumReturn> siblings. Without
   // this, a single-block response parses to an object and a dual-block one to an
   // array — force the elements we branch on to always be arrays.
-  isArray: (name) => name === "getMotorPremiumReturn" || name === "coveragePremiumDetail",
+  isArray: (name) =>
+    name === "getMotorPremiumReturn" ||
+    name === "getNewVehiclePremiumReturn" ||
+    name === "coveragePremiumDetail",
 });
 
 /** Wraps a body fragment in a SOAP 1.1 envelope with the given prefix→uri map. */

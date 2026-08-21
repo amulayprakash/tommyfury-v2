@@ -222,7 +222,9 @@ export function HdfcPlansPage() {
 
           <section className="space-y-3 rounded-md border p-3">
             {/* Changing the IDV re-prices: it is part of the conditions, so the
-                compare request rebuilds and HDFC rates it again. */}
+                compare request rebuilds and HDFC rates it again. IdvControl
+                commits on release rather than per drag tick, which is what keeps
+                that from being one live vendor call per pixel. */}
             <IdvControl
               value={conditions.idvValue ?? null}
               min={quote.minIdv}

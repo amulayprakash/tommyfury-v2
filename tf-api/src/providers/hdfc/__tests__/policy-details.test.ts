@@ -69,11 +69,32 @@ describe("value rules", () => {
     expect(policyDetailsNew(shape()).YearOfManufacture).toBe("2019");
   });
 
-  it("sends Registration_No as null at premium time", () => {
-    // The collection's premium samples use null; a real plate makes HDFC demand
-    // the registrationNumberSection* fields.
-    expect(policyDetailsNew(shape()).Registration_No).toBeNull();
-    expect(policyDetailsRollover(shape({ businessType: "Roll Over" })).Registration_No).toBeNull();
+  it("sends a dashed Registration_No at premium time", () => {
+    // This asserted null until 17/08/2026, when UAT began rejecting the null
+    // with "Vehicle Registration number is mandatory". Holding every other
+    // field constant, the dashed plate prices and null does not — and the plate
+    // returns the same premium the literal "New" does, so HDFC validates this
+    // field without rating on it. See premiumRegistrationNo.
+    expect(policyDetailsNew(shape()).Registration_No).toBe("MH-01-QQ-7878");
+    expect(policyDetailsRollover(shape({ businessType: "Roll Over" })).Registration_No).toBe(
+      "MH-01-QQ-7878",
+    );
+    // All THREE templates go through premiumRegistrationNo. Used Car is asserted
+    // by value here and not only by key order, because the key-order test above
+    // passes just as happily with a `null` in this slot — which is exactly the
+    // value UAT began refusing on 17/08/2026.
+    expect(policyDetailsUsed(shape({ businessType: "Used Car" })).Registration_No).toBe(
+      "MH-01-QQ-7878",
+    );
+  });
+
+  it("falls back to 'New' at premium time when the vehicle has no plate yet", () => {
+    // A brand-new vehicle is quoted before it is registered. "New" is what
+    // HDFC's own IDV sample sends, and it prices.
+    const noPlate = shape();
+    noPlate.vehicle.registrationNo = undefined;
+    expect(policyDetailsNew(noPlate).Registration_No).toBe("New");
+    expect(policyDetailsUsed({ ...noPlate, businessType: "Used Car" }).Registration_No).toBe("New");
   });
 
   it("omits the previous insurer and policy number at premium time", () => {

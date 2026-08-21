@@ -59,6 +59,7 @@ import {
   toItgiDate,
   toItgiDateTime,
   itgiContractType,
+  makeMessageId,
   makeUniqueQuoteId,
   splitRegistrationNumber,
 } from "./format.ts";
@@ -163,7 +164,13 @@ export class ItgiProvider
       path.usesNewVehicleEndpoint
         ? ITGI_ENDPOINTS.newVehiclePremium(this.config)
         : ITGI_ENDPOINTS.premium(this.config),
-      buildPremiumPayload({ ...dated, idvValue: chosen }, codes, path, this.partner),
+      buildPremiumPayload(
+        { ...dated, idvValue: chosen },
+        codes,
+        path,
+        this.partner,
+        makeMessageId(ctx.requestId),
+      ),
       ITGI_NS.premium,
       ctx.requestId,
     );

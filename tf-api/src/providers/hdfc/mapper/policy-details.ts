@@ -1,4 +1,4 @@
-import { boolTF, normalizeClaim, num, toHdfcDate, yearOnly } from "../format.ts";
+import { boolTF, formatRegWithDashes, normalizeClaim, num, toHdfcDate, yearOnly } from "../format.ts";
 import { HDFC_BUSINESS_TYPE, HDFC_POLICY_TYPE } from "../config.ts";
 import type { HdfcRequestShape } from "../types.ts";
 
@@ -23,6 +23,25 @@ export interface PolicyDetailsOptions {
    * previous insured code".
    */
   forProposal?: boolean;
+}
+
+/**
+ * Registration_No for CalculatePremium.
+ *
+ * This USED to be null on every business type, because sending a real plate at
+ * premium time once made HDFC's schema demand the registrationNumberSection*
+ * fields. That is no longer true, and as of 17/08/2026 UAT rejects the null
+ * outright with "Vehicle Registration number is mandatory".
+ *
+ * Proven on live UAT by varying this field alone and holding everything else
+ * constant: null fails, the dashed plate prices, and the literal "New" prices —
+ * to the rupee, the same premium as the plate (IDV 12,44,800 / gross ₹15,977 on
+ * the probe vehicle). So the field is validated but not rated, and a vehicle
+ * with no plate yet can safely say "New", which is what HDFC's own IDV sample
+ * sends and what CreateProposal already falls back to.
+ */
+function premiumRegistrationNo(req: HdfcRequestShape): string {
+  return formatRegWithDashes(req.vehicle.registrationNo) ?? "New";
 }
 
 /**
@@ -164,9 +183,9 @@ export function policyDetailsNew(req: HdfcRequestShape): PolicyDetails {
     DateofDeliveryOrRegistration: deliveryOrRegDate(req),
     DateofFirstRegistration: v.firstRegistrationDate ? toHdfcDate(v.firstRegistrationDate) : null,
     YearOfManufacture: yearOnly(v.manufactureYear, req.policy.startDate),
-    // The collection uses null here; a real plate would make HDFC's schema
-    // demand registrationNumberSection* fields. CreateProposal overwrites it.
-    Registration_No: null,
+    // See premiumRegistrationNo — a new vehicle has no plate yet, so this is
+    // "New". CreateProposal overwrites it with the real one.
+    Registration_No: premiumRegistrationNo(req),
     EngineNumber: v.engineNumber?.trim() ?? null,
     ChassisNumber: v.chassisNumber?.trim() ?? null,
     RTOLocationCode: String(v.rtoCode),
@@ -258,9 +277,8 @@ export function policyDetailsRollover(
     DateofDeliveryOrRegistration: deliveryOrRegDate(req),
     DateofFirstRegistration: v.firstRegistrationDate ? toHdfcDate(v.firstRegistrationDate) : null,
     YearOfManufacture: yearOnly(v.manufactureYear, p.startDate),
-    // As for New Business: the collection's premium sample sends null and
-    // CreateProposal overwrites it with the dashed plate.
-    Registration_No: null,
+    // See premiumRegistrationNo — a rollover always has a plate.
+    Registration_No: premiumRegistrationNo(req),
     EngineNumber: v.engineNumber?.trim() ?? null,
     ChassisNumber: v.chassisNumber?.trim() ?? null,
     RTOLocationCode: String(v.rtoCode),
@@ -293,12 +311,10 @@ export function policyDetailsUsed(req: HdfcRequestShape): PolicyDetails {
     DateofDeliveryOrRegistration: deliveryOrRegDate(req),
     DateofFirstRegistration: toHdfcDate(v.firstRegistrationDate),
     YearOfManufacture: yearOnly(v.manufactureYear, req.policy.startDate),
-    // NOTE: HDFC's Used Car samples — premium AND proposal — both send a dashed
-    // plate here ("MH-43-BY-2760") with no registrationNumberSection* fields, so
-    // the standalone module's comment claiming "collection uses null in premium"
-    // is wrong for this business type. Its null is kept because that is the value
-    // proven on UAT, and CreateProposal overwrites it with the real plate anyway.
-    Registration_No: null,
+    // HDFC's Used Car samples — premium AND proposal — both send a dashed plate
+    // here ("MH-43-BY-2760"), which is what premiumRegistrationNo now produces.
+    // The old null contradicted HDFC's own sample and UAT no longer accepts it.
+    Registration_No: premiumRegistrationNo(req),
     EngineNumber: v.engineNumber?.trim() ?? null,
     ChassisNumber: v.chassisNumber?.trim() ?? null,
     RTOLocationCode: String(v.rtoCode),

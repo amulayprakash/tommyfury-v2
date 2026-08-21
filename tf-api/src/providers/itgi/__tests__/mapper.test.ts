@@ -60,7 +60,7 @@ describe("itgi idv payload", () => {
 
 describe("itgi premium payload", () => {
   it("reproduces the vendor's misspelled tags verbatim", () => {
-    const xml = buildPremiumPayload(req, codes, path(), partner);
+    const xml = buildPremiumPayload(req, codes, path(), partner, "1964");
     // These misspellings are the vendor's own; "fixing" them breaks the call.
     expect(xml).toContain("<engineCpacity>1197</engineCpacity>");
     expect(xml).toContain("<regictrationCity>DELHI</regictrationCity>");
@@ -69,14 +69,14 @@ describe("itgi premium payload", () => {
   });
 
   it("sends contract type, zcover and the partner block", () => {
-    const xml = buildPremiumPayload(req, codes, path(), partner);
+    const xml = buildPremiumPayload(req, codes, path(), partner, "1964");
     expect(xml).toContain("<contractType>PCP</contractType>");
     expect(xml).toContain("<zcover>CO</zcover>");
     expect(xml).toContain("<partnerCode>ITGIMOT999</partnerCode>");
   });
 
   it("includes IDV Basic and NCB coverage items", () => {
-    const xml = buildPremiumPayload(req, codes, path(), partner);
+    const xml = buildPremiumPayload(req, codes, path(), partner, "1964");
     expect(xml).toContain("<coverageId>IDV Basic</coverageId>");
     expect(xml).toContain("<sumInsured>105665</sumInsured>");
     expect(xml).toContain("<coverageId>No Claim Bonus</coverageId>");
@@ -84,7 +84,7 @@ describe("itgi premium payload", () => {
 
   it("sends opt-in add-ons with sum insured Y", () => {
     const withAddons = { ...req, tyreProtect: true, rimProtect: true, engineProtect: true };
-    const xml = buildPremiumPayload(withAddons, codes, path(withAddons), partner);
+    const xml = buildPremiumPayload(withAddons, codes, path(withAddons), partner, "1964");
     expect(xml).toContain("<coverageId>Tyre Protection</coverageId>");
     expect(xml).toContain("<coverageId>Engine Gear Box Protection</coverageId>");
     expect(xml).toContain("<coverageId>RIM</coverageId><number/><sumInsured>Y</sumInsured>");
@@ -92,32 +92,49 @@ describe("itgi premium payload", () => {
 
   it("escapes the ampersand in Towing & Related", () => {
     const withRsa = { ...req, rsa: true };
-    const xml = buildPremiumPayload(withRsa, codes, path(withRsa), partner);
+    const xml = buildPremiumPayload(withRsa, codes, path(withRsa), partner, "1964");
     expect(xml).toContain("Towing &amp; Related");
   });
 
   it("sends act-only policies with zcover AC and IDV sum insured 1", () => {
     const tp = { ...req, selectedPolicy: "thirdParty" } as MotorQuoteRequest;
-    const xml = buildPremiumPayload(tp, codes, path(tp), partner);
+    const xml = buildPremiumPayload(tp, codes, path(tp), partner, "1964");
     expect(xml).toContain("<zcover>AC</zcover>");
     expect(xml).toContain("<coverageId>IDV Basic</coverageId><number/><sumInsured>1</sumInsured>");
     expect(xml).toContain("<coverageId>Legal Liability to Driver</coverageId>");
   });
 
   it("omits the NCB item when ncb is zero", () => {
-    const xml = buildPremiumPayload({ ...req, ncbPercent: 0 }, codes, path(), partner);
+    const xml = buildPremiumPayload({ ...req, ncbPercent: 0 }, codes, path(), partner, "1964");
     expect(xml).not.toContain("No Claim Bonus");
   });
 
   it("rejects an NCB percentage the vendor does not accept", () => {
-    const xml = buildPremiumPayload({ ...req, ncbPercent: 33 }, codes, path(), partner);
+    const xml = buildPremiumPayload({ ...req, ncbPercent: 33 }, codes, path(), partner, "1964");
     expect(xml).not.toContain("No Claim Bonus");
   });
 
   it("marks a single-year OD renewal with type OD", () => {
     const od = { ...req, selectedPolicy: "standAloneOD" } as MotorQuoteRequest;
-    const xml = buildPremiumPayload(od, codes, path(od), partner);
+    const xml = buildPremiumPayload(od, codes, path(od), partner, "1964");
     expect(xml).toContain("<type>OD</type>");
+  });
+
+  // Axis binds the operation's parameters positionally: without policyHeader it
+  // reads <policy> as the PolicyHeader and faults with
+  // "Invalid element in ...PolicyHeader - contractType" (seen on UAT 21/08/2026).
+  it("opens with the policyHeader Axis expects first", () => {
+    const xml = buildPremiumPayload(req, codes, path(), partner, "1964");
+    expect(xml).toContain("<getMotorPremium><policyHeader><messageId>1964</messageId></policyHeader>");
+    expect(xml.indexOf("<policyHeader>")).toBeLessThan(xml.indexOf("<policy>"));
+  });
+
+  it("switches to the new-vehicle operation for a brand-new vehicle", () => {
+    const nv = { ...req, vehicleType: "newVehicle", businessType: "new" } as MotorQuoteRequest;
+    const xml = buildPremiumPayload(nv, codes, path(nv), partner, "1964");
+    expect(xml).toContain("<getNewVehiclePremium>");
+    expect(xml).toContain("</getNewVehiclePremium>");
+    expect(xml).not.toContain("<getMotorPremium>");
   });
 
   it("detects elected add-ons for premium block selection", () => {

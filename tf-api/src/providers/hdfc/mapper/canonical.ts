@@ -1,5 +1,6 @@
 import type { MotorQuoteRequest, MotorFullQuoteRequest } from "@/contracts/quote-request.ts";
 import type { AddonKey } from "@/contracts/enums.ts";
+import { AppError } from "@/errors/app-error.ts";
 import {
   hdfcPolicyType,
   hdfcPlanFor,
@@ -125,6 +126,125 @@ export function exceedsVehicleAge(
     registered.getUTCDate(),
   );
   return starts.getTime() > anniversary;
+}
+
+/**
+ * Accessory sum-insured ceiling, from HDFC's own certification pack
+ * (PVTcarTestScenarios.xls, "New and Rollover" row 25): "Total of
+ * Accessories(Electrical/Non Electrical/LPG-CNG KIT) cannot be greater than 25%
+ * of the vehicle SI."
+ *
+ * HDFC used to police this itself. Asked on live UAT for ₹4,00,000 of
+ * accessories on a ₹5,59,200 Swift it refused the whole payload, verbatim:
+ *
+ *   Total optional covers SI should not be more than 25% of Vehicle Base Value!
+ *
+ * As of 21/08/2026 the identical request PRICES instead: gross ₹13,258 on an
+ * IDV of ₹5,59,200 against a ₹1,39,800 ceiling, the electrical accessories rated
+ * at ₹8,000 and the non-electrical at ₹525. That response was re-captured live
+ * on 21/08/2026 and persisted at
+ * scripts/_hdfc-row25-recapture-2026-08-21T08-06-20-700Z.json — by
+ * scripts/_hdfc-row25-recapture.ts, which drives the mapper and transport
+ * directly precisely so that THIS guardrail cannot short-circuit the call it is
+ * trying to observe. So the rule has joined the RTI ceiling and the anti-theft
+ * discount on the list of underwriting rules HDFC states but no longer
+ * enforces — which makes it ours.
+ */
+export const HDFC_MAX_ACCESSORY_SI_PERCENT = 25;
+
+/** The error code an over-cap accessory declaration is refused with. */
+export const HDFC_ACCESSORY_SI_CAP_CODE = "HDFC_ACCESSORY_SI_CAP";
+
+/** Whole rupees, grouped the Indian way — ₹4,00,000, not ₹400000. */
+const inr = (rupees: number): string => `₹${Math.round(rupees).toLocaleString("en-IN")}`;
+
+/**
+ * Enforce HDFC_MAX_ACCESSORY_SI_PERCENT, throwing when the declared accessories
+ * exceed it.
+ *
+ * WHY THIS ONE REFUSES rather than silently dropping, as the RTI ceiling and the
+ * anti-theft discount do. Those two are covers the customer gets no less of by
+ * having them removed — RTI past three years is a cover HDFC will not write at
+ * all, and the anti-theft discount is money we should never have claimed. An
+ * accessory sum insured is different: it is a value the customer declared and
+ * expects to be insured for. Silently clamping it to the cap, or zeroing it,
+ * would quote a premium for materially less cover than was asked for without
+ * saying so. Refusing is also exactly what HDFC itself did until 21/08/2026, and
+ * compare.service.ts fans providers out through Promise.allSettled, so a refusal
+ * costs the customer only the HDFC card — the same outcome HDFC's own refusal
+ * produced.
+ *
+ * WHY THE VEHICLE'S BASE VALUE IS THE DENOMINATOR. HDFC's own refusal names it —
+ * "25% of Vehicle Base Value" — and the payload agrees: Policy_Details.Vehicle_IDV
+ * is a separate field from Req_PvtCar.ElecticalAccessoryIDV /
+ * NonElecticalAccessoryIDV / BiFuel_Kit_Value, so "the vehicle SI" is the
+ * vehicle alone. Measuring against vehicle + accessories instead would raise the
+ * ceiling on the very declaration being tested (₹1,10,000 of accessories on a
+ * ₹4,00,000 car breaches a base-value cap of ₹1,00,000 but would clear an
+ * inclusive cap of ₹1,27,500), which is the looser and less faithful reading.
+ *
+ * WHAT IS IN THE NUMERATOR, and what is NOT PROVEN about it. The pack's wording
+ * names three amounts and all three are counted: the electrical and
+ * non-electrical accessory IDVs and the bi-fuel / LPG-CNG kit value. Be clear
+ * about the evidence, because it is uneven — the only live refusal HDFC ever
+ * raised was on an ELECTRICAL + NON-ELECTRICAL breach, and its wording ("Total
+ * optional covers SI") does not itself enumerate the kit. A kit-only breach was
+ * put to UAT on 21/08/2026 (scripts/_hdfc-accessory-cap-probe.ts, Alto LXI 12763,
+ * IDV ₹3,04,000, ceiling ₹76,000) and HDFC PRICED it at every level tried — 26%,
+ * 30%, 50% and even 120% of the IDV, rating the kit at a flat 4% of its declared
+ * value each time. That does NOT settle the question the way it looks, because
+ * the same probe priced an ELECTRICAL breach at 120% of IDV too: UAT is
+ * currently refusing no accessory breach of any kind, so its behaviour cannot
+ * arbitrate between the two readings. With live behaviour silent, the pack's own
+ * words are the only evidence there is, and they name the kit. The conflict is
+ * recorded for HDFC in docs/hdfc-vendor-blockers.md.
+ *
+ * THE ONE PLACE THE KIT IS EXCLUDED is a liability-only policy, and that IS
+ * proven. On `TP Only` the same probe found the kit value completely inert: at
+ * 26% and at 50% of the IDV the response was identical to the rupee (gross
+ * ₹2,925), because HDFC charges no `BiFuel_Kit_OD_Premium` at all there and the
+ * `BiFuel_Kit_TP_Premium` is a flat ₹60 whatever the kit is worth. A cap on the
+ * own-damage sum insured has nothing to bite on when there is no own-damage
+ * section and the number is not rated, so refusing a liability quote over it
+ * would deny a customer a policy on the strength of a figure HDFC ignores. The
+ * electrical and non-electrical IDVs need no such exclusion: mapper/canonical.ts
+ * already forces both to 0 on a TP Only policy.
+ *
+ * WHY IT LIVES OUTSIDE toHdfcRequest. The vehicle SI is HDFC's own
+ * recommendation and only exists after GetCalculateIDV — `MotorQuoteRequest`
+ * usually carries no IDV at all, and HDFC rejects any deviation from its
+ * recommendation anyway. So the provider calls this once the recommended IDV has
+ * been pinned onto the shape, which is the first moment there is anything to
+ * measure against.
+ */
+export function assertAccessorySiWithinCap(shape: HdfcRequestShape): void {
+  const vehicleSi = shape.vehicle.idv;
+  // No IDV means HDFC has not valued the vehicle yet; it will refuse the payload
+  // for that first. Inventing a cap from 0 would turn a vendor gap into our error.
+  if (!vehicleSi || vehicleSi <= 0) return;
+
+  const a = shape.addons;
+  // The kit is an own-damage sum insured like the other two, and drops out of the
+  // numerator on a policy that has no own-damage section — see the docblock.
+  const liabilityOnly = shape.policy.policyType === HDFC_POLICY_TYPE.thirdParty;
+  const kit = liabilityOnly ? 0 : a.biFuelKitValue;
+  const declared = a.electricalAccessoryIdv + a.nonElectricalAccessoryIdv + kit;
+
+  // There is deliberately no `declared <= 0` fast path. The canonical schema makes
+  // all three summands non-negative, and the cap below is non-negative whenever
+  // the vehicle SI is — which the guard above has already established — so
+  // "nothing declared" already falls out of the `declared <= cap` comparison. A
+  // branch that can never change the outcome is a branch that can only rot.
+  const cap = Math.floor((vehicleSi * HDFC_MAX_ACCESSORY_SI_PERCENT) / 100);
+  if (declared <= cap) return;
+
+  throw new AppError(
+    422,
+    `HDFC insures accessories up to ${HDFC_MAX_ACCESSORY_SI_PERCENT}% of the vehicle's sum insured. ` +
+      `The declared electrical, non-electrical and bi-fuel kit values total ${inr(declared)}, ` +
+      `above the ${inr(cap)} allowed on a vehicle insured for ${inr(vehicleSi)}.`,
+    HDFC_ACCESSORY_SI_CAP_CODE,
+  );
 }
 
 /**

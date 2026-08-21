@@ -105,13 +105,26 @@ export function carriesHdfcEnvelope(body: unknown): boolean {
     b.Status !== undefined ||
     b.status !== undefined ||
     b.Error !== undefined ||
-    b.error !== undefined
+    b.error !== undefined ||
+    // Message is judgeable too, now that assertHdfcSuccess reads it. Without
+    // this the two disagree: a non-2xx body carrying only a Message would be
+    // rejected here as unjudgeable, losing the one line explaining why.
+    b.Message !== undefined ||
+    b.message !== undefined
   );
 }
 
 export interface NormalizedHdfcResponse {
   statusCode: string | number | null;
   error: string | null;
+  /**
+   * HDFC's other diagnostic channel. UNDOCUMENTED — the data dictionary's
+   * response sheets list only StatusCode / Error / Warning — but it is what the
+   * wire actually carries, on success ("Premium Calculated", "Proposal
+   * Generated") and on failure alike. Ignoring it is why a live CreateProposal
+   * refusal once reported itself as the useless "status 0".
+   */
+  message: string | null;
   warning: string | null;
   data: unknown;
 }
@@ -119,18 +132,24 @@ export interface NormalizedHdfcResponse {
 /** HDFC is inconsistent about casing; collapse it into one shape. */
 export function normalizeHdfcResponse(raw: unknown): NormalizedHdfcResponse {
   if (raw == null || typeof raw !== "object") {
-    return { statusCode: null, error: null, warning: null, data: raw };
+    return { statusCode: null, error: null, message: null, warning: null, data: raw };
   }
   const r = raw as Record<string, unknown>;
   return {
     statusCode: (r.StatusCode ?? r.statusCode ?? r.Status ?? r.status ?? null) as string | number | null,
     error: (r.Error ?? r.error ?? null) as string | null,
+    message: (r.Message ?? r.message ?? r.Msg ?? r.msg ?? null) as string | null,
     warning: (r.Warning ?? r.warning ?? null) as string | null,
     data: raw,
   };
 }
 
-/** HDFC uses "1" / 200 / "200" / "SUCCESS" across endpoints. */
+/**
+ * HDFC uses "1" / 200 / "200" / "SUCCESS" across endpoints — the code differs by
+ * endpoint, so this is a set rather than one value. It is NOT exhaustive: a
+ * successful CreateProposal answers 0. See `completedWrite` for why that is
+ * judged on evidence instead of by widening this set.
+ */
 export function isHdfcSuccess(statusCode: unknown): boolean {
   if (statusCode == null) return false;
   const s = String(statusCode).trim().toUpperCase();
@@ -148,7 +167,36 @@ export function isHdfcSuccess(statusCode: unknown): boolean {
 export function assertHdfcSuccess(body: unknown, step: string): void {
   const norm = normalizeHdfcResponse(body);
   if (isHdfcSuccess(norm.statusCode)) return;
-  if (norm.statusCode == null && !norm.error) return;
-  const reason = norm.error ?? `status ${String(norm.statusCode)}`;
+  if (completedWrite(body)) return;
+  if (norm.statusCode == null && !norm.error && !norm.message) return;
+  const reason = norm.error ?? norm.message ?? `status ${String(norm.statusCode)}`;
   throw new ProviderError(HDFC_SLUG, 502, `HDFC ${step} failed: ${reason}`, body);
+}
+
+/**
+ * True when the body proves the write HDFC was asked to perform actually landed.
+ *
+ * Live on 21/08/2026 a SUCCESSFUL CreateProposal answered `StatusCode: 0` with
+ * `Message: "Proposal Generated"` and a real proposal number. `isHdfcSuccess`
+ * does not recognise 0, so the call was reported as failed — a false negative on
+ * a WRITE. HDFC had already created the proposal; each retry created another,
+ * and the numbers were thrown away with the exception.
+ *
+ * The narrow fix is to trust the artifact rather than the status code. HDFC does
+ * not mint a proposal or policy number for a request it rejected, so either one
+ * is positive proof of success no matter what the envelope says. Widening
+ * `isHdfcSuccess` to accept 0 was the alternative and is worse: 0 would then read
+ * as success on every endpoint, including ones where it genuinely means failure.
+ */
+function completedWrite(body: unknown): boolean {
+  if (body == null || typeof body !== "object") return false;
+  const pd = (body as Record<string, unknown>).Policy_Details;
+  const details = pd && typeof pd === "object" ? (pd as Record<string, unknown>) : {};
+  const artifact = (v: unknown): boolean => typeof v === "string" && v.trim() !== "";
+  return (
+    artifact(details.ProposalNumber) ||
+    artifact(details.PolicyNumber) ||
+    artifact((body as Record<string, unknown>).ProposalNumber) ||
+    artifact((body as Record<string, unknown>).PolicyNumber)
+  );
 }

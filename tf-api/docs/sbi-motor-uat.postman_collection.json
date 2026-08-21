@@ -1,0 +1,1368 @@
+{
+  "info": {
+    "name": "SBI General - Motor Private Car (PMCAR001) UAT",
+    "schema": "https://schema.postman.com/json/collection/v2.1.0/collection.json",
+    "description": "End-to-end SBI General **private car** motor journey on UAT: token -> quick quote -> full quote -> issuance -> policy PDF.\n\nBuilt from the `SBIG_PMCAR01_Motor_JSON_Integration_Kit_Client` kit (product `PMCAR001`, risk `R10005`, agreement code `6660`). Every code in the sample payloads is resolved from the kit's own `Master_datatables` rather than invented:\n\n- Vehicle - Maruti Suzuki (`18`) Alto (`83`) Std (`1413`): 796cc petrol hatchback, 5 seats, flagged Active/Active in `SBI_T_Variant_4W`.\n- RTO - `MH-12` Pune: `Location_ID` 421, `District_Code` DS_286, cluster `MH_PUN`, region West, `Zone A`.\n- Branch - Maharashtra, GSTIN `27AAMCS8857L1ZC` from `SBI_T_State`.\n\n### Running it\n\nSelect the `SBI General - Motor UAT` environment, then run the folders in order. Each step feeds the next through collection variables (`accessToken` -> `idv` -> `quotationNo` -> `duePremium` -> `policyNo`), so the whole collection runs top-to-bottom in the Collection Runner.\n\n### Dates\n\nThe collection-level pre-request script derives every date at send time, so the saved payloads never go stale: risk starts tomorrow and runs a year, the expiring policy is the year before it, and first registration is `vehicleAgeMonths` (default 18) before risk start.\n\n### Gotchas worth knowing\n\n- SBI returns business, validation and underwriting failures **inside an HTTP 200**. Every test script logs `ErrorList` / `ValidationResult`, and Issuance warns when `AutoUwResultCode != 1`.\n- `Amount` on Issuance must equal the latest Full Quote `DuePremium`.\n- The field names `AdditonalCompDeductible` and `RTOCityDistric` are misspelled in SBI's own schema. Sending the corrected spelling silently drops the value.\n- Policy type drives cover periods: Package (`1`) is 1yr OD/TP/PA, Bundled (`6`) is 1yr OD + 3yr TP, and the liability-only types need the OD covers *removed* from the JSON rather than zeroed."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// -------------------------------------------------------------------------",
+          "// Derive the SBI request header and every date the payloads need, so the",
+          "// saved bodies never go stale.",
+          "// -------------------------------------------------------------------------",
+          "const MONTHS = [\"Jan\", \"Feb\", \"Mar\", \"Apr\", \"May\", \"Jun\", \"Jul\", \"Aug\", \"Sep\", \"Oct\", \"Nov\", \"Dec\"];",
+          "const pad = n => String(n).padStart(2, \"0\");",
+          "const isoDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;",
+          "const stamp = d => `${pad(d.getDate())}-${MONTHS[d.getMonth()]}-${d.getFullYear()}-${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;",
+          "",
+          "const now = new Date();",
+          "pm.variables.set(\"requestID\", String(Date.now()).slice(-9));",
+          "pm.variables.set(\"transactionTimestamp\", stamp(now));",
+          "",
+          "// Risk period: starts tomorrow, runs one year (Package).",
+          "const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);",
+          "const end = new Date(start.getFullYear() + 1, start.getMonth(), start.getDate() - 1);",
+          "pm.variables.set(\"effectiveDate\", isoDate(start) + \"T00:00:00\");",
+          "pm.variables.set(\"expiryDate\", isoDate(end) + \"T23:59:59\");",
+          "pm.variables.set(\"proposalDate\", isoDate(now));",
+          "pm.variables.set(\"quoteValidTo\", isoDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 30)));",
+          "pm.variables.set(\"issuanceTransactionDate\", isoDate(now) + \"T\" + pad(now.getHours()) + \":\" + pad(now.getMinutes()) + \":\" + pad(now.getSeconds()));",
+          "",
+          "// Expiring policy: the year immediately before the new risk period.",
+          "const preStart = new Date(start.getFullYear() - 1, start.getMonth(), start.getDate());",
+          "const preEnd = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1);",
+          "pm.variables.set(\"prePolicyStartDate\", isoDate(preStart) + \"T00:00:00\");",
+          "pm.variables.set(\"prePolicyEndDate\", isoDate(preEnd) + \"T23:59:59\");",
+          "pm.variables.set(\"ncbLetterDate\", isoDate(preEnd) + \"T00:00:00\");",
+          "",
+          "// First registration, `vehicleAgeMonths` before risk start. Keep this under",
+          "// 36 months or SBI starts declining the age-limited add-on covers.",
+          "const ageMonths = Number(pm.collectionVariables.get(\"vehicleAgeMonths\") || 18);",
+          "const registered = new Date(start.getFullYear(), start.getMonth() - ageMonths, start.getDate());",
+          "pm.variables.set(\"registrationDate\", isoDate(registered) + \"T00:00:00\");",
+          "pm.variables.set(\"manufactureYear\", String(registered.getFullYear()));",
+          "",
+          "// A fresh payment reference per run keeps UAT receipts from colliding.",
+          "pm.variables.set(\"paymentReferNo\", \"TF\" + Date.now());",
+          "",
+          "// Warn early rather than letting a stale token produce a confusing 401.",
+          "const expiresAt = Number(pm.collectionVariables.get(\"accessTokenExpiresAt\") || 0);",
+          "if (pm.info.requestName !== \"Generate Token\" && expiresAt && Date.now() > expiresAt) {",
+          "    console.warn(\"Access token has expired - run 01 - Auth / Generate Token again.\");",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://devapi.sbigeneral.in",
+      "description": "SBI UAT API gateway. Production host still to be confirmed with SBI."
+    },
+    {
+      "key": "pdfBaseUrl",
+      "value": "https://devapi.sbigeneral.in",
+      "description": "Host for the encrypted PDF 2.0 service."
+    },
+    {
+      "key": "channel",
+      "value": "SBIG",
+      "description": "RequestHeader.channel - fixed by SBI."
+    },
+    {
+      "key": "productCode",
+      "value": "PMCAR001",
+      "description": "Private car product code."
+    },
+    {
+      "key": "productVersion",
+      "value": "1.0",
+      "description": "Policy model version."
+    },
+    {
+      "key": "agreementCode",
+      "value": "6660",
+      "description": "UAT agreement code from the kit credentials."
+    },
+    {
+      "key": "pdfAgreementCode",
+      "value": "0006660",
+      "description": "The same agreement code zero-padded to 7 digits - the PDF 2.0 service wants this form."
+    },
+    {
+      "key": "intermediaryCode",
+      "value": "Others",
+      "description": "Intermediary code; SBI to confirm the live value."
+    },
+    {
+      "key": "issuingBranchCode",
+      "value": "",
+      "description": "SBI issuing branch code - to be supplied by SBI for the live agreement."
+    },
+    {
+      "key": "channelType",
+      "value": "3",
+      "description": "SBI_T_ChannelType: 1 Direct, 2 Broker, 3 Bancassurance, 4 Agent, 5 Dealer."
+    },
+    {
+      "key": "policyType",
+      "value": "1",
+      "description": "SBI_T_PolicyType: 1 Package, 2 Liability Only, 6 Bundled, 7 Long Term Package, 9 Stand-alone OD."
+    },
+    {
+      "key": "kindOfPolicy",
+      "value": "1",
+      "description": "SBI_T_Kindofpolicy: 1 Comprehensive, 2 Liability only, 3 Bundled."
+    },
+    {
+      "key": "businessType",
+      "value": "6",
+      "description": "SBI_T_BusinessType: 1 New, 6 Rollover, 2-5 Renewal bands."
+    },
+    {
+      "key": "newBizClassification",
+      "value": "2",
+      "description": "SBI_T_NewBizClassification: 1 New, 2 Roll-Over, 3 Renewal."
+    },
+    {
+      "key": "vehicleAgeMonths",
+      "value": "18",
+      "description": "Months between first registration and risk start. Drives which add-ons are allowed."
+    },
+    {
+      "key": "vehicleMake",
+      "value": "18",
+      "description": "SBI_T_Make_4W Make_ID - 18 = Maruti Suzuki."
+    },
+    {
+      "key": "vehicleModel",
+      "value": "83",
+      "description": "SBI_T_Model_4W Model_ID - 83 = Alto."
+    },
+    {
+      "key": "variant",
+      "value": "1413",
+      "description": "SBI_T_Variant_4W Variant_ID - 1413 = Alto Std."
+    },
+    {
+      "key": "vehicleSegment",
+      "value": "HATCHBACK",
+      "description": "SBI_T_Model_4W Vehicle_Segment."
+    },
+    {
+      "key": "bodyStyle",
+      "value": "HATCHBACK",
+      "description": "SBI_T_Variant_4W BodyStytle."
+    },
+    {
+      "key": "fuelType",
+      "value": "1",
+      "description": "SBI_T_FuelType: 1 Petrol, 2 Diesel, 3 CNG inbuilt, 7 Battery, 8 CNG external kit."
+    },
+    {
+      "key": "engineCapacity",
+      "value": "796",
+      "description": "cc, from the variant master."
+    },
+    {
+      "key": "seatingCapacity",
+      "value": "5",
+      "description": "Seats, from the variant master."
+    },
+    {
+      "key": "vehicleColor",
+      "value": "6",
+      "description": "SBI_T_Color: 6 = White."
+    },
+    {
+      "key": "registrationNo",
+      "value": "MH 12 AB 1234",
+      "description": "Must match the RTO code. The literal \"NEW\" is rejected (SBIG-PA-Validation-B9255)."
+    },
+    {
+      "key": "chassisNo",
+      "value": "MA3EWDE1S00123456",
+      "description": "Format-checked by SBIG-PA-Validation-B9319."
+    },
+    {
+      "key": "engineNo",
+      "value": "K10BN1234567",
+      "description": "Engine number."
+    },
+    {
+      "key": "exShowroomPrice",
+      "value": "450000",
+      "description": "B00002 Price. Zero here forces a UW referral (SBIG-PA-UW-U1014)."
+    },
+    {
+      "key": "idv",
+      "value": "",
+      "description": "Filled from the Quick Quote IDV_Suggested. Moving it beyond -10% / +20% triggers a UW referral."
+    },
+    {
+      "key": "idvMin",
+      "value": "",
+      "description": "Filled from the Quick Quote response."
+    },
+    {
+      "key": "idvMax",
+      "value": "",
+      "description": "Filled from the Quick Quote response."
+    },
+    {
+      "key": "voluntaryDeductible",
+      "value": "0",
+      "description": "SBI_T_Voluntarydeductibles for PMCAR001: 0, 2500, 5000, 7500, 15000."
+    },
+    {
+      "key": "rtoCode",
+      "value": "MH-12",
+      "description": "SBI_T_RTO_Location RTO_Code."
+    },
+    {
+      "key": "rtoLocationId",
+      "value": "421",
+      "description": "Location_ID for MH-12 (Pune)."
+    },
+    {
+      "key": "rtoDistrictCode",
+      "value": "DS_286",
+      "description": "District_Code - note SBI spells the field RTOCityDistric."
+    },
+    {
+      "key": "rtoStateId",
+      "value": "MH",
+      "description": "RTO state."
+    },
+    {
+      "key": "rtoCluster",
+      "value": "MH_PUN",
+      "description": "RTO cluster."
+    },
+    {
+      "key": "rtoRegion",
+      "value": "West",
+      "description": "RTO region."
+    },
+    {
+      "key": "rtoZone",
+      "value": "Zone A",
+      "description": "RTO zone."
+    },
+    {
+      "key": "isNewVehicle",
+      "value": "0",
+      "description": "SBI_T_YesNo. 0 for a rollover, 1 for a brand-new vehicle."
+    },
+    {
+      "key": "hasPrePolicy",
+      "value": "1",
+      "description": "Whether an expiring policy exists."
+    },
+    {
+      "key": "prePolicyNo",
+      "value": "PREV/POL/2025/000123",
+      "description": "Expiring policy number."
+    },
+    {
+      "key": "preInsurerCode",
+      "value": "115",
+      "description": "SBI_T_PreviousInsurancecompanyname: 115 ICICI Lombard, 144 SBI General, 125 HDFC ERGO, 106 IFFCO-Tokio."
+    },
+    {
+      "key": "isNcb",
+      "value": "1",
+      "description": "Transfer of NCB."
+    },
+    {
+      "key": "ncb",
+      "value": "0.2",
+      "description": "SBI_T_NCBSlab: 0, 0.2, 0.25, 0.35, 0.45, 0.5, 0.65."
+    },
+    {
+      "key": "title",
+      "value": "9000000001",
+      "description": "SBI_T_NameTitle: 9000000001 = Mr."
+    },
+    {
+      "key": "firstName",
+      "value": "RAHUL",
+      "description": "Proposer first name."
+    },
+    {
+      "key": "lastName",
+      "value": "SHARMA",
+      "description": "Proposer last name."
+    },
+    {
+      "key": "gender",
+      "value": "M",
+      "description": "SBI_T_Gender: M / F / O."
+    },
+    {
+      "key": "dateOfBirth",
+      "value": "1990-04-19",
+      "description": "Proposer date of birth."
+    },
+    {
+      "key": "occupation",
+      "value": "6",
+      "description": "SBI_T_Occupation: 6 = engineering professional."
+    },
+    {
+      "key": "panNumber",
+      "value": "BLPPG0173B",
+      "description": "IdType 1 = PAN."
+    },
+    {
+      "key": "mobile",
+      "value": "9766495689",
+      "description": "Proposer mobile."
+    },
+    {
+      "key": "email",
+      "value": "rahul.sharma@example.com",
+      "description": "Proposer email."
+    },
+    {
+      "key": "addressLine1",
+      "value": "12",
+      "description": "PlotNo."
+    },
+    {
+      "key": "addressLine2",
+      "value": "Shivaji Residency",
+      "description": "BuildingHouseName."
+    },
+    {
+      "key": "addressLine3",
+      "value": "FC Road",
+      "description": "StreetName."
+    },
+    {
+      "key": "pinCode",
+      "value": "411001",
+      "description": "Also used for day/night parking pincode."
+    },
+    {
+      "key": "cityCode",
+      "value": "3000000645",
+      "description": "SBI_T_City City_Code - Pune."
+    },
+    {
+      "key": "districtCode",
+      "value": "4000000512",
+      "description": "SBI_T_District District_Code - Pune."
+    },
+    {
+      "key": "stateCode",
+      "value": "MH",
+      "description": "SBI_T_State State_Code - mandatory (SBIG-PA-Validation-B1037)."
+    },
+    {
+      "key": "countryCode",
+      "value": "1000000108",
+      "description": "SBI_T_Country - India."
+    },
+    {
+      "key": "branchStateCode",
+      "value": "MH",
+      "description": "Policy.SBIGBranchStateCode - mandatory (SBIG-PA-Validation-B1036)."
+    },
+    {
+      "key": "branchGSTN",
+      "value": "27AAMCS8857L1ZC",
+      "description": "SBI Maharashtra branch GSTIN from SBI_T_State."
+    },
+    {
+      "key": "nomineeName",
+      "value": "PRIYA SHARMA",
+      "description": "Mandatory for the PA cover (BIG-PA-Validation-B2241)."
+    },
+    {
+      "key": "nomineeRelation",
+      "value": "3",
+      "description": "SBI_T_Relationship: 3 = Wife."
+    },
+    {
+      "key": "nomineeDob",
+      "value": "1992-08-11",
+      "description": "Nominee date of birth."
+    },
+    {
+      "key": "nomineeAge",
+      "value": "34",
+      "description": "Nominee age."
+    },
+    {
+      "key": "payMode",
+      "value": "103",
+      "description": "SBI_T_BCP_PayMode: 103 Cheque, 113 Internetbanking, 105 Credit Card, 212 EFT."
+    },
+    {
+      "key": "remitBankAccount",
+      "value": "8",
+      "description": "SBI_T_BCP_RemitBankAccount: 8 = HDFC Premium Collection A/C 7513."
+    },
+    {
+      "key": "bankCode",
+      "value": "211",
+      "description": "SBI_T_BankName Code."
+    },
+    {
+      "key": "bankName",
+      "value": "AXIS BANK",
+      "description": "Remitting bank."
+    },
+    {
+      "key": "bankBranchName",
+      "value": "KHED-SHIVAPUR",
+      "description": "Remitting branch."
+    },
+    {
+      "key": "bankBranchCode",
+      "value": "7000003582",
+      "description": "Remitting branch code."
+    },
+    {
+      "key": "ifscCode",
+      "value": "",
+      "description": "Optional IFSC."
+    },
+    {
+      "key": "receiptCreatedBy",
+      "value": "TF-API",
+      "description": "Receipt creator tag."
+    },
+    {
+      "key": "pdfGcmKey",
+      "value": "CQuYCxIVNyTOt487084UPBMxhS0XxRE4",
+      "description": "Fixed UAT AES-256 key for the PDF 2.0 service."
+    },
+    {
+      "key": "pdfGcmIv",
+      "value": "w6tmvKzUj6Rg",
+      "description": "Fixed UAT 96-bit IV."
+    },
+    {
+      "key": "clientId",
+      "value": "{{sbiClientId}}",
+      "description": "Resolved from the environment - the gateway credentials are never hard-coded here."
+    },
+    {
+      "key": "clientSecret",
+      "value": "{{sbiClientSecret}}",
+      "description": "Resolved from the environment."
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "description": "Set by 01 - Auth."
+    },
+    {
+      "key": "accessTokenExpiresAt",
+      "value": "",
+      "description": "Set by 01 - Auth."
+    },
+    {
+      "key": "quotationNo",
+      "value": "",
+      "description": "Set by Full Quote - create."
+    },
+    {
+      "key": "proposalNo",
+      "value": "",
+      "description": "Set by Issuance."
+    },
+    {
+      "key": "policyNo",
+      "value": "",
+      "description": "Set by Issuance."
+    },
+    {
+      "key": "duePremium",
+      "value": "",
+      "description": "Set by the quote steps; Issuance must collect exactly this."
+    },
+    {
+      "key": "policyPdfFileName",
+      "value": "",
+      "description": "Set by the policy-document step."
+    },
+    {
+      "key": "policyPdfBase64",
+      "value": "",
+      "description": "Set by the policy-document step."
+    },
+    {
+      "key": "pdf2DocBase64",
+      "value": "",
+      "description": "Set by the PDF 2.0 step."
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Auth",
+      "description": "WSO2/IBM gateway token, valid for 7200s. Every other call needs it as a Bearer token **plus** the two `X-IBM-*` headers.",
+      "item": [
+        {
+          "name": "Generate Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"token returned\", () => pm.expect(json.access_token).to.be.a(\"string\").and.not.empty);",
+                  "pm.collectionVariables.set(\"accessToken\", json.access_token);",
+                  "pm.collectionVariables.set(\"accessTokenExpiresAt\", Date.now() + (Number(json.expire_in || 7200) - 120) * 1000);",
+                  "console.log(\"Token acquired, expires in\", json.expire_in, \"s\");"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-IBM-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-IBM-Client-Secret",
+                "value": "{{clientSecret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cld/v1/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cld",
+                "v1",
+                "token"
+              ]
+            },
+            "description": "GET, no body. Returns `{ \"access_token\": \"...\", \"expire_in\": 7200 }`.\n\nThe test script stores the token in the `accessToken` collection variable, which the collection-level Bearer auth reads."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 - Quote",
+      "description": "Quick Quote is a pricing probe and persists nothing. Full Quote persists the proposal and returns the `QuotationNo` that Issuance consumes.",
+      "item": [
+        {
+          "name": "Quick Quote - Package (base covers)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const raw = pm.response.text();",
+                  "let parsed = null;",
+                  "try { parsed = JSON.parse(raw); } catch (e) { console.log(\"Non-JSON response:\", raw.slice(0, 2000)); }",
+                  "const json = parsed || {};",
+                  "",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"JSON body\", () => pm.expect(parsed, \"response was not JSON\").to.not.be.null);",
+                  "",
+                  "// Business, validation and UW failures arrive inside a 200. Log them verbatim.",
+                  "const problems = json.ErrorList || json.errorList || json.Errors || json.ValidationResult || json.MessageList;",
+                  "if (problems) { console.log(\"SBI messages:\", JSON.stringify(problems, null, 2)); }",
+                  "",
+                  "const risk = json.PolicyLobList && json.PolicyLobList[0]",
+                  "    && json.PolicyLobList[0].PolicyRiskList && json.PolicyLobList[0].PolicyRiskList[0];",
+                  "",
+                  "pm.test(\"premium calculated\", () => pm.expect(json.IsPremiumCalcSuccess).to.eql(\"Y\"));",
+                  "",
+                  "if (risk) {",
+                  "    // The first call leaves IDV_User unset so SBI returns its own IDV band;",
+                  "    // carry the suggestion forward so the Full Quote can pin the IDV.",
+                  "    if (risk.IDV_Suggested) pm.collectionVariables.set(\"idv\", risk.IDV_Suggested);",
+                  "    if (risk.MinIDV_Suggested) pm.collectionVariables.set(\"idvMin\", risk.MinIDV_Suggested);",
+                  "    if (risk.MaxIDV_Suggested) pm.collectionVariables.set(\"idvMax\", risk.MaxIDV_Suggested);",
+                  "}",
+                  "",
+                  "if (json.DuePremium) pm.collectionVariables.set(\"duePremium\", json.DuePremium);",
+                  "",
+                  "console.log(\"Quick Quote (base)\", {",
+                  "    idvSuggested: risk && risk.IDV_Suggested,",
+                  "    idvBand: risk && [risk.MinIDV_Suggested, risk.MaxIDV_Suggested],",
+                  "    odTotal: risk && risk.OD_TotalPremium,",
+                  "    tpTotal: risk && risk.TP_TotalPremium,",
+                  "    netPremium: json.BeforeVatPremium,",
+                  "    gst: json.TGST,",
+                  "    duePremium: json.DuePremium,",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-IBM-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-IBM-Client-Secret",
+                "value": "{{clientSecret}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestHeader\": {\n    \"requestID\": \"{{requestID}}\",\n    \"action\": \"quickQuote\",\n    \"channel\": \"{{channel}}\",\n    \"transactionTimestamp\": \"{{transactionTimestamp}}\"\n  },\n  \"RequestBody\": {\n    \"ProductCode\": \"{{productCode}}\",\n    \"ProductVersion\": \"{{productVersion}}\",\n    \"AgreementCode\": \"{{agreementCode}}\",\n    \"IntermediaryCode\": \"{{intermediaryCode}}\",\n    \"ChannelType\": \"{{channelType}}\",\n    \"BusinessType\": \"{{businessType}}\",\n    \"BusinessSubType\": \"1\",\n    \"NewBizClassification\": \"{{newBizClassification}}\",\n    \"KindofPolicy\": \"{{kindOfPolicy}}\",\n    \"TransactionInitiatedBy\": \"PUMA\",\n    \"EffectiveDate\": \"{{effectiveDate}}\",\n    \"ExpiryDate\": \"{{expiryDate}}\",\n    \"ProposalDate\": \"{{proposalDate}}\",\n    \"QuoteValidTo\": \"{{quoteValidTo}}\",\n    \"PremiumCurrencyCode\": \"INR\",\n    \"SiCurrencyCode\": \"INR\",\n    \"PremiumLocalExchangeRate\": 1,\n    \"SBIGBranchStateCode\": \"{{branchStateCode}}\",\n    \"IssuingBranchGSTN\": \"{{branchGSTN}}\",\n    \"IssuingBranchCode\": \"{{issuingBranchCode}}\",\n    \"InspectionDoneBy\": \"2\",\n    \"HasPrePolicy\": \"{{hasPrePolicy}}\",\n    \"PrePolicyNo\": \"{{prePolicyNo}}\",\n    \"PreInsuranceComName\": \"{{preInsurerCode}}\",\n    \"PrePolicyStartDate\": \"{{prePolicyStartDate}}\",\n    \"PrePolicyEndDate\": \"{{prePolicyEndDate}}\",\n    \"PolicyCustomerList\": [\n      {\n        \"IsPolicyHolder\": \"Y\",\n        \"IsInsured\": \"Y\",\n        \"IsOrgParty\": \"N\",\n        \"PartyStatus\": \"1\",\n        \"Title\": \"{{title}}\",\n        \"FirstName\": \"{{firstName}}\",\n        \"MiddleName\": \"\",\n        \"LastName\": \"{{lastName}}\",\n        \"CustomerName\": \"{{firstName}} {{lastName}}\",\n        \"RegistrationName\": \"{{firstName}} {{lastName}}\",\n        \"GenderCode\": \"{{gender}}\",\n        \"DateOfBirth\": \"{{dateOfBirth}}\",\n        \"OccupationCode\": \"{{occupation}}\",\n        \"NationalityCode\": \"IND\",\n        \"IdType\": \"1\",\n        \"IdNo\": \"{{panNumber}}\",\n        \"Mobile\": \"{{mobile}}\",\n        \"ContactEmail\": \"{{email}}\",\n        \"PlotNo\": \"{{addressLine1}}\",\n        \"BuildingHouseName\": \"{{addressLine2}}\",\n        \"StreetName\": \"{{addressLine3}}\",\n        \"Locality\": \"1\",\n        \"PostCode\": \"{{pinCode}}\",\n        \"City\": \"{{cityCode}}\",\n        \"District\": \"{{districtCode}}\",\n        \"State\": \"{{stateCode}}\",\n        \"CountryCode\": \"{{countryCode}}\",\n        \"GSTRegistrationNum\": \"\",\n        \"SBIGCustomerId\": \"\"\n      }\n    ],\n    \"PolicyLobList\": [\n      {\n        \"ProductCode\": \"{{productCode}}\",\n        \"PolicyType\": \"{{policyType}}\",\n        \"PolicyRiskList\": [\n          {\n            \"ProductElementCode\": \"R10005\",\n            \"RegistrationNo\": \"{{registrationNo}}\",\n            \"RegistrationDate\": \"{{registrationDate}}\",\n            \"IsNewVehicle\": \"{{isNewVehicle}}\",\n            \"ChassisNo\": \"{{chassisNo}}\",\n            \"EngineNo\": \"{{engineNo}}\",\n            \"ManufactureYear\": \"{{manufactureYear}}\",\n            \"VehicleMake\": \"{{vehicleMake}}\",\n            \"VehicleModel\": \"{{vehicleModel}}\",\n            \"Variant\": \"{{variant}}\",\n            \"VehicleSegment\": \"{{vehicleSegment}}\",\n            \"BodyStyle\": \"{{bodyStyle}}\",\n            \"BodyType\": \"1\",\n            \"FuelType\": \"{{fuelType}}\",\n            \"CNGKitType\": \"0\",\n            \"EngineCapacity\": \"{{engineCapacity}}\",\n            \"SeatingCapacity\": \"{{seatingCapacity}}\",\n            \"CarryingCapacity\": \"{{seatingCapacity}}\",\n            \"WheelNum\": 4,\n            \"VehicleColor\": \"{{vehicleColor}}\",\n            \"VehicleUsage\": \"1\",\n            \"RTOLocation\": \"{{rtoCode}}\",\n            \"RTOLocationID\": \"{{rtoLocationId}}\",\n            \"RTOCityDistric\": \"{{rtoDistrictCode}}\",\n            \"RTONameCode\": \"{{rtoStateId}}\",\n            \"RTOCluster\": \"{{rtoCluster}}\",\n            \"RTORegion\": \"{{rtoRegion}}\",\n            \"Zone\": \"{{rtoZone}}\",\n            \"VoluntaryDeductible\": \"{{voluntaryDeductible}}\",\n            \"IsNCB\": \"{{isNcb}}\",\n            \"NCB\": \"{{ncb}}\",\n            \"NCBProof\": \"1\",\n            \"NCBLetterDate\": \"{{ncbLetterDate}}\",\n            \"IsFGFT\": \"0\",\n            \"IsAAMember\": \"0\",\n            \"AntiTheftAlarmSystem\": \"0\",\n            \"IsHandicappedMod\": \"0\",\n            \"IsCertifiedVintageCar\": \"0\",\n            \"IsImportedWithoutDuty\": \"0\",\n            \"IsConfinedOwnPremises\": \"0\",\n            \"IsDrivingTuitionsUse\": \"0\",\n            \"IsFEVehicle\": \"0\",\n            \"ModificationType\": \"1\",\n            \"IsGeographicalExtension\": \"0\",\n            \"GeoExtnBangladesh\": \"0\",\n            \"GeoExtnBhutan\": \"0\",\n            \"GeoExtnMaldives\": \"0\",\n            \"GeoExtnNepal\": \"0\",\n            \"GeoExtnPakistan\": \"0\",\n            \"GeoExtnSriLanka\": \"0\",\n            \"DayParkLoc\": \"1\",\n            \"DayParkLocPinCode\": \"{{pinCode}}\",\n            \"NightParkLoc\": \"1\",\n            \"NightParkLocPinCode\": \"{{pinCode}}\",\n            \"RoadType\": \"4\",\n            \"DailyUseDistance\": \"1\",\n            \"PaidDriverCount\": 0,\n            \"EmployeeCount\": 0,\n            \"LLSSACount\": 0,\n            \"TrailerCount\": 0,\n            \"PolicyCoverageList\": [\n              {\n                \"ProductElementCode\": \"C101064\",\n                \"EffectiveDate\": \"{{effectiveDate}}\",\n                \"ExpiryDate\": \"{{expiryDate}}\",\n                \"PolicyBenefitList\": [\n                  {\n                    \"ProductElementCode\": \"B00002\",\n                    \"Price\": \"{{exShowroomPrice}}\"\n                  }\n                ]\n              },\n              {\n                \"ProductElementCode\": \"C101065\",\n                \"EffectiveDate\": \"{{effectiveDate}}\",\n                \"ExpiryDate\": \"{{expiryDate}}\",\n                \"PolicyBenefitList\": [\n                  {\n                    \"ProductElementCode\": \"B00008\",\n                    \"SumInsured\": 9999999\n                  },\n                  {\n                    \"ProductElementCode\": \"B00009\",\n                    \"SumInsured\": 750000\n                  }\n                ]\n              },\n              {\n                \"ProductElementCode\": \"C101066\",\n                \"EffectiveDate\": \"{{effectiveDate}}\",\n                \"ExpiryDate\": \"{{expiryDate}}\",\n                \"OwnerHavingValidDrivingLicence\": \"1\",\n                \"OwnerHavingValidPACover\": \"0\",\n                \"PolicyBenefitList\": [\n                  {\n                    \"ProductElementCode\": \"B00015\",\n                    \"SumInsured\": 1500000,\n                    \"NomineeName\": \"{{nomineeName}}\",\n                    \"NomineeRelToProposer\": \"{{nomineeRelation}}\",\n                    \"NomineeDOB\": \"{{nomineeDob}}\",\n                    \"NomineeAge\": \"{{nomineeAge}}\"\n                  }\n                ]\n              }\n            ]\n          }\n        ]\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cld/v1/quickquote",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cld",
+                "v1",
+                "quickquote"
+              ]
+            },
+            "description": "Statutory minimum Package cover set:\n\n| Cover | Code | Benefits |\n| --- | --- | --- |\n| Own Damage | `C101064` | `B00002` Own Damage Basic (`Price` = ex-showroom) |\n| Legal Liability to Third Party | `C101065` | `B00008` TP Bodily Injury (SI 9999999), `B00009` TP Property Damage (SI 750000) |\n| PA Cover | `C101066` | `B00015` PA Owner-Driver (SI 1500000 + nominee) |\n\n`IDV_User` is deliberately **not** sent here, so SBI returns `IDV_Suggested` / `MinIDV_Suggested` / `MaxIDV_Suggested`. The test script stores the suggestion into `idv` for the Full Quote to pin."
+          },
+          "response": []
+        },
+        {
+          "name": "Quick Quote - Package + add-ons",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const raw = pm.response.text();",
+                  "let parsed = null;",
+                  "try { parsed = JSON.parse(raw); } catch (e) { console.log(\"Non-JSON response:\", raw.slice(0, 2000)); }",
+                  "const json = parsed || {};",
+                  "",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"JSON body\", () => pm.expect(parsed, \"response was not JSON\").to.not.be.null);",
+                  "",
+                  "// Business, validation and UW failures arrive inside a 200. Log them verbatim.",
+                  "const problems = json.ErrorList || json.errorList || json.Errors || json.ValidationResult || json.MessageList;",
+                  "if (problems) { console.log(\"SBI messages:\", JSON.stringify(problems, null, 2)); }",
+                  "",
+                  "const risk = json.PolicyLobList && json.PolicyLobList[0]",
+                  "    && json.PolicyLobList[0].PolicyRiskList && json.PolicyLobList[0].PolicyRiskList[0];",
+                  "",
+                  "pm.test(\"premium calculated\", () => pm.expect(json.IsPremiumCalcSuccess).to.eql(\"Y\"));",
+                  "",
+                  "if (risk) {",
+                  "    // The first call leaves IDV_User unset so SBI returns its own IDV band;",
+                  "    // carry the suggestion forward so the Full Quote can pin the IDV.",
+                  "    if (risk.IDV_Suggested) pm.collectionVariables.set(\"idv\", risk.IDV_Suggested);",
+                  "    if (risk.MinIDV_Suggested) pm.collectionVariables.set(\"idvMin\", risk.MinIDV_Suggested);",
+                  "    if (risk.MaxIDV_Suggested) pm.collectionVariables.set(\"idvMax\", risk.MaxIDV_Suggested);",
+                  "}",
+                  "",
+                  "if (json.DuePremium) pm.collectionVariables.set(\"duePremium\", json.DuePremium);",
+                  "",
+                  "console.log(\"Quick Quote (add-ons)\", {",
+                  "    idvSuggested: risk && risk.IDV_Suggested,",
+                  "    idvBand: risk && [risk.MinIDV_Suggested, risk.MaxIDV_Suggested],",
+                  "    odTotal: risk && risk.OD_TotalPremium,",
+                  "    tpTotal: risk && risk.TP_TotalPremium,",
+                  "    netPremium: json.BeforeVatPremium,",
+                  "    gst: json.TGST,",
+                  "    duePremium: json.DuePremium,",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-IBM-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-IBM-Client-Secret",
+                "value": "{{clientSecret}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestHeader\": {\n    \"requestID\": \"{{requestID}}\",\n    \"action\": \"quickQuote\",\n    \"channel\": \"{{channel}}\",\n    \"transactionTimestamp\": \"{{transactionTimestamp}}\"\n  },\n  \"RequestBody\": {\n    \"ProductCode\": \"{{productCode}}\",\n    \"ProductVersion\": \"{{productVersion}}\",\n    \"AgreementCode\": \"{{agreementCode}}\",\n    \"IntermediaryCode\": \"{{intermediaryCode}}\",\n    \"ChannelType\": \"{{channelType}}\",\n    \"BusinessType\": \"{{businessType}}\",\n    \"BusinessSubType\": \"1\",\n    \"NewBizClassification\": \"{{newBizClassification}}\",\n    \"KindofPolicy\": \"{{kindOfPolicy}}\",\n    \"TransactionInitiatedBy\": \"PUMA\",\n    \"EffectiveDate\": \"{{effectiveDate}}\",\n    \"ExpiryDate\": \"{{expiryDate}}\",\n    \"ProposalDate\": \"{{proposalDate}}\",\n    \"QuoteValidTo\": \"{{quoteValidTo}}\",\n    \"PremiumCurrencyCode\": \"INR\",\n    \"SiCurrencyCode\": \"INR\",\n    \"PremiumLocalExchangeRate\": 1,\n    \"SBIGBranchStateCode\": \"{{branchStateCode}}\",\n    \"IssuingBranchGSTN\": \"{{branchGSTN}}\",\n    \"IssuingBranchCode\": \"{{issuingBranchCode}}\",\n    \"InspectionDoneBy\": \"2\",\n    \"HasPrePolicy\": \"{{hasPrePolicy}}\",\n    \"PrePolicyNo\": \"{{prePolicyNo}}\",\n    \"PreInsuranceComName\": \"{{preInsurerCode}}\",\n    \"PrePolicyStartDate\": \"{{prePolicyStartDate}}\",\n    \"PrePolicyEndDate\": \"{{prePolicyEndDate}}\",\n    \"PolicyCustomerList\": [\n      {\n        \"IsPolicyHolder\": \"Y\",\n        \"IsInsured\": \"Y\",\n        \"IsOrgParty\": \"N\",\n        \"PartyStatus\": \"1\",\n        \"Title\": \"{{title}}\",\n        \"FirstName\": \"{{firstName}}\",\n        \"MiddleName\": \"\",\n        \"LastName\": \"{{lastName}}\",\n        \"CustomerName\": \"{{firstName}} {{lastName}}\",\n        \"RegistrationName\": \"{{firstName}} {{lastName}}\",\n        \"GenderCode\": \"{{gender}}\",\n        \"DateOfBirth\": \"{{dateOfBirth}}\",\n        \"OccupationCode\": \"{{occupation}}\",\n        \"NationalityCode\": \"IND\",\n        \"IdType\": \"1\",\n        \"IdNo\": \"{{panNumber}}\",\n        \"Mobile\": \"{{mobile}}\",\n        \"ContactEmail\": \"{{email}}\",\n        \"PlotNo\": \"{{addressLine1}}\",\n        \"BuildingHouseName\": \"{{addressLine2}}\",\n        \"StreetName\": \"{{addressLine3}}\",\n        \"Locality\": \"1\",\n        \"PostCode\": \"{{pinCode}}\",\n        \"City\": \"{{cityCode}}\",\n        \"District\": \"{{districtCode}}\",\n        \"State\": \"{{stateCode}}\",\n        \"CountryCode\": \"{{countryCode}}\",\n        \"GSTRegistrationNum\": \"\",\n        \"SBIGCustomerId\": \"\"\n      }\n    ],\n    \"PolicyLobList\": [\n      {\n        \"ProductCode\": \"{{productCode}}\",\n        \"PolicyType\": \"{{policyType}}\",\n        \"PolicyRiskList\": [\n          {\n            \"ProductElementCode\": \"R10005\",\n            \"RegistrationNo\": \"{{registrationNo}}\",\n            \"RegistrationDate\": \"{{registrationDate}}\",\n            \"IsNewVehicle\": \"{{isNewVehicle}}\",\n            \"ChassisNo\": \"{{chassisNo}}\",\n            \"EngineNo\": \"{{engineNo}}\",\n            \"ManufactureYear\": \"{{manufactureYear}}\",\n            \"VehicleMake\": \"{{vehicleMake}}\",\n            \"VehicleModel\": \"{{vehicleModel}}\",\n            \"Variant\": \"{{variant}}\",\n            \"VehicleSegment\": \"{{vehicleSegment}}\",\n            \"BodyStyle\": \"{{bodyStyle}}\",\n            \"BodyType\": \"1\",\n            \"FuelType\": \"{{fuelType}}\",\n            \"CNGKitType\": \"0\",\n            \"EngineCapacity\": \"{{engineCapacity}}\",\n            \"SeatingCapacity\": \"{{seatingCapacity}}\",\n            \"CarryingCapacity\": \"{{seatingCapacity}}\",\n            \"WheelNum\": 4,\n            \"VehicleColor\": \"{{vehicleColor}}\",\n            \"VehicleUsage\": \"1\",\n            \"RTOLocation\": \"{{rtoCode}}\",\n            \"RTOLocationID\": \"{{rtoLocationId}}\",\n            \"RTOCityDistric\": \"{{rtoDistrictCode}}\",\n            \"RTONameCode\": \"{{rtoStateId}}\",\n            \"RTOCluster\": \"{{rtoCluster}}\",\n            \"RTORegion\": \"{{rtoRegion}}\",\n            \"Zone\": \"{{rtoZone}}\",\n            \"VoluntaryDeductible\": \"{{voluntaryDeductible}}\",\n            \"IsNCB\": \"{{isNcb}}\",\n            \"NCB\": \"{{ncb}}\",\n            \"NCBProof\": \"1\",\n            \"NCBLetterDate\": \"{{ncbLetterDate}}\",\n            \"IsFGFT\": \"0\",\n            \"IsAAMember\": \"0\",\n            \"AntiTheftAlarmSystem\": \"0\",\n            \"IsHandicappedMod\": \"0\",\n            \"IsCertifiedVintageCar\": \"0\",\n            \"IsImportedWithoutDuty\": \"0\",\n            \"IsConfinedOwnPremises\": \"0\",\n            \"IsDrivingTuitionsUse\": \"0\",\n            \"IsFEVehicle\": \"0\",\n            \"ModificationType\": \"1\",\n            \"IsGeographicalExtension\": \"0\",\n            \"GeoExtnBangladesh\": \"0\",\n            \"GeoExtnBhutan\": \"0\",\n            \"GeoExtnMaldives\": \"0\",\n            \"GeoExtnNepal\": \"0\",\n            \"GeoExtnPakistan\": \"0\",\n            \"GeoExtnSriLanka\": \"0\",\n            \"DayParkLoc\": \"1\",\n            \"DayParkLocPinCode\": \"{{pinCode}}\",\n            \"NightParkLoc\": \"1\",\n            \"NightParkLocPinCode\": \"{{pinCode}}\",\n            \"RoadType\": \"4\",\n            \"DailyUseDistance\": \"1\",\n            \"PaidDriverCount\": 0,\n            \"EmployeeCount\": 0,\n            \"LLSSACount\": 0,\n            \"TrailerCount\": 0,\n            \"PolicyCoverageList\": [\n              {\n                \"ProductElementCode\": \"C101064\",\n                \"EffectiveDate\": \"{{effectiveDate}}\",\n                \"ExpiryDate\": \"{{expiryDate}}\",\n                \"PolicyBenefitList\": [\n                  {\n                    \"ProductElementCode\": \"B00002\",\n                    \"Price\": \"{{exShowroomPrice}}\",\n                    \"SumInsured\": \"{{idv}}\"\n                  }\n                ]\n              },\n              {\n                \"ProductElementCode\": \"C101065\",\n                \"EffectiveDate\": \"{{effectiveDate}}\",\n                \"ExpiryDate\": \"{{expiryDate}}\",\n                \"PolicyBenefitList\": [\n                  {\n                    \"ProductElementCode\": \"B00008\",\n                    \"SumInsured\": 9999999\n                  },\n                  {\n                    \"ProductElementCode\": \"B00009\",\n                    \"SumInsured\": 750000\n                  }\n                ]\n              },\n              {\n                \"ProductElementCode\": \"C101066\",\n                \"EffectiveDate\": \"{{effectiveDate}}\",\n                \"ExpiryDate\": \"{{expiryDate}}\",\n                \"OwnerHavingValidDrivingLicence\": \"1\",\n                \"OwnerHavingValidPACover\": \"0\",\n                \"PolicyBenefitList\": [\n                  {\n                    \"ProductElementCode\": \"B00015\",\n                    \"SumInsured\": 1500000,\n                    \"NomineeName\": \"{{nomineeName}}\",\n                    \"NomineeRelToProposer\": \"{{nomineeRelation}}\",\n                    \"NomineeDOB\": \"{{nomineeDob}}\",\n                    \"NomineeAge\": \"{{nomineeAge}}\"\n                  }\n                ]\n              },\n              {\n                \"ProductElementCode\": \"C101072\",\n                \"SumInsured\": 1000\n              },\n              {\n                \"ProductElementCode\": \"C101067\",\n                \"SumInsured\": 99999999999\n              },\n              {\n                \"ProductElementCode\": \"C101073\"\n              },\n              {\n                \"ProductElementCode\": \"C101074\",\n                \"SumInsured\": 1000\n              },\n              {\n                \"ProductElementCode\": \"C101075\",\n                \"SumInsured\": 12500\n              },\n              {\n                \"ProductElementCode\": \"C101108\"\n              },\n              {\n                \"ProductElementCode\": \"C101111\"\n              },\n              {\n                \"ProductElementCode\": \"C101069\",\n                \"EffectiveDate\": \"{{effectiveDate}}\",\n                \"ExpiryDate\": \"{{expiryDate}}\",\n                \"PolicyBenefitList\": [\n                  {\n                    \"ProductElementCode\": \"B00026\",\n                    \"AdditionalTowingCharges\": \"500\"\n                  }\n                ]\n              }\n            ],\n            \"IDV_User\": \"{{idv}}\"\n          }\n        ]\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cld/v1/quickquote",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cld",
+                "v1",
+                "quickquote"
+              ]
+            },
+            "description": "The same risk with the optional covers layered on:\n\n| Cover | Code | Age limit (UW-BUSI RULES) |\n| --- | --- | --- |\n| Depreciation Reimbursement (zero-dep) | `C101072` | not allowed at vehicle age >= 5 |\n| Return to Invoice | `C101067` | not allowed at vehicle age >= 3 |\n| Key Replacement | `C101073` | - |\n| Inconvenience Allowance | `C101074` | SI must be 1000 / 2000 / 3000 |\n| Loss of Personal Belongings | `C101075` | - |\n| Engine Guard | `C101108` | not allowed at vehicle age >= 5 |\n| Cover for consumables | `C101111` | - |\n| Basic Road Side Assistance | `C101069` | not allowed at vehicle age >= 8 |\n\nThe default `vehicleAgeMonths` is 18, so every one of these is inside its window. Raise it and SBI starts rejecting covers."
+          },
+          "response": []
+        },
+        {
+          "name": "Full Quote - create",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const raw = pm.response.text();",
+                  "let parsed = null;",
+                  "try { parsed = JSON.parse(raw); } catch (e) { console.log(\"Non-JSON response:\", raw.slice(0, 2000)); }",
+                  "const json = parsed || {};",
+                  "",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"JSON body\", () => pm.expect(parsed, \"response was not JSON\").to.not.be.null);",
+                  "",
+                  "// Business, validation and UW failures arrive inside a 200. Log them verbatim.",
+                  "const problems = json.ErrorList || json.errorList || json.Errors || json.ValidationResult || json.MessageList;",
+                  "if (problems) { console.log(\"SBI messages:\", JSON.stringify(problems, null, 2)); }",
+                  "",
+                  "const risk = json.PolicyLobList && json.PolicyLobList[0]",
+                  "    && json.PolicyLobList[0].PolicyRiskList && json.PolicyLobList[0].PolicyRiskList[0];",
+                  "",
+                  "pm.test(\"premium calculated\", () => pm.expect(json.IsPremiumCalcSuccess).to.eql(\"Y\"));",
+                  "",
+                  "if (risk) {",
+                  "    // The first call leaves IDV_User unset so SBI returns its own IDV band;",
+                  "    // carry the suggestion forward so the Full Quote can pin the IDV.",
+                  "    if (risk.IDV_Suggested) pm.collectionVariables.set(\"idv\", risk.IDV_Suggested);",
+                  "    if (risk.MinIDV_Suggested) pm.collectionVariables.set(\"idvMin\", risk.MinIDV_Suggested);",
+                  "    if (risk.MaxIDV_Suggested) pm.collectionVariables.set(\"idvMax\", risk.MaxIDV_Suggested);",
+                  "}",
+                  "",
+                  "if (json.DuePremium) pm.collectionVariables.set(\"duePremium\", json.DuePremium);",
+                  "",
+                  "console.log(\"Full Quote (create)\", {",
+                  "    idvSuggested: risk && risk.IDV_Suggested,",
+                  "    idvBand: risk && [risk.MinIDV_Suggested, risk.MaxIDV_Suggested],",
+                  "    odTotal: risk && risk.OD_TotalPremium,",
+                  "    tpTotal: risk && risk.TP_TotalPremium,",
+                  "    netPremium: json.BeforeVatPremium,",
+                  "    gst: json.TGST,",
+                  "    duePremium: json.DuePremium,",
+                  "});",
+                  "",
+                  "pm.test(\"QuotationNo issued\", () => pm.expect(json.QuotationNo).to.be.a(\"string\").and.not.empty);",
+                  "if (json.QuotationNo) pm.collectionVariables.set(\"quotationNo\", json.QuotationNo);",
+                  "if (json.ProposalNo) pm.collectionVariables.set(\"proposalNo\", json.ProposalNo);",
+                  "console.log(\"QuotationNo:\", json.QuotationNo, \"ProposalStatus:\", json.ProposalStatus);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-IBM-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-IBM-Client-Secret",
+                "value": "{{clientSecret}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestHeader\": {\n    \"requestID\": \"{{requestID}}\",\n    \"action\": \"fullQuote\",\n    \"channel\": \"{{channel}}\",\n    \"transactionTimestamp\": \"{{transactionTimestamp}}\"\n  },\n  \"RequestBody\": {\n    \"ProductCode\": \"{{productCode}}\",\n    \"ProductVersion\": \"{{productVersion}}\",\n    \"AgreementCode\": \"{{agreementCode}}\",\n    \"IntermediaryCode\": \"{{intermediaryCode}}\",\n    \"ChannelType\": \"{{channelType}}\",\n    \"BusinessType\": \"{{businessType}}\",\n    \"BusinessSubType\": \"1\",\n    \"NewBizClassification\": \"{{newBizClassification}}\",\n    \"KindofPolicy\": \"{{kindOfPolicy}}\",\n    \"TransactionInitiatedBy\": \"PUMA\",\n    \"EffectiveDate\": \"{{effectiveDate}}\",\n    \"ExpiryDate\": \"{{expiryDate}}\",\n    \"ProposalDate\": \"{{proposalDate}}\",\n    \"QuoteValidTo\": \"{{quoteValidTo}}\",\n    \"PremiumCurrencyCode\": \"INR\",\n    \"SiCurrencyCode\": \"INR\",\n    \"PremiumLocalExchangeRate\": 1,\n    \"SBIGBranchStateCode\": \"{{branchStateCode}}\",\n    \"IssuingBranchGSTN\": \"{{branchGSTN}}\",\n    \"IssuingBranchCode\": \"{{issuingBranchCode}}\",\n    \"InspectionDoneBy\": \"2\",\n    \"HasPrePolicy\": \"{{hasPrePolicy}}\",\n    \"PrePolicyNo\": \"{{prePolicyNo}}\",\n    \"PreInsuranceComName\": \"{{preInsurerCode}}\",\n    \"PrePolicyStartDate\": \"{{prePolicyStartDate}}\",\n    \"PrePolicyEndDate\": \"{{prePolicyEndDate}}\",\n    \"PolicyCustomerList\": [\n      {\n        \"IsPolicyHolder\": \"Y\",\n        \"IsInsured\": \"Y\",\n        \"IsOrgParty\": \"N\",\n        \"PartyStatus\": \"1\",\n        \"Title\": \"{{title}}\",\n        \"FirstName\": \"{{firstName}}\",\n        \"MiddleName\": \"\",\n        \"LastName\": \"{{lastName}}\",\n        \"CustomerName\": \"{{firstName}} {{lastName}}\",\n        \"RegistrationName\": \"{{firstName}} {{lastName}}\",\n        \"GenderCode\": \"{{gender}}\",\n        \"DateOfBirth\": \"{{dateOfBirth}}\",\n        \"OccupationCode\": \"{{occupation}}\",\n        \"NationalityCode\": \"IND\",\n        \"IdType\": \"1\",\n        \"IdNo\": \"{{panNumber}}\",\n        \"Mobile\": \"{{mobile}}\",\n        \"ContactEmail\": \"{{email}}\",\n        \"PlotNo\": \"{{addressLine1}}\",\n        \"BuildingHouseName\": \"{{addressLine2}}\",\n        \"StreetName\": \"{{addressLine3}}\",\n        \"Locality\": \"1\",\n        \"PostCode\": \"{{pinCode}}\",\n        \"City\": \"{{cityCode}}\",\n        \"District\": \"{{districtCode}}\",\n        \"State\": \"{{stateCode}}\",\n        \"CountryCode\": \"{{countryCode}}\",\n        \"GSTRegistrationNum\": \"\",\n        \"SBIGCustomerId\": \"\"\n      }\n    ],\n    \"PolicyLobList\": [\n      {\n        \"ProductCode\": \"{{productCode}}\",\n        \"PolicyType\": \"{{policyType}}\",\n        \"PolicyRiskList\": [\n          {\n            \"ProductElementCode\": \"R10005\",\n            \"RegistrationNo\": \"{{registrationNo}}\",\n            \"RegistrationDate\": \"{{registrationDate}}\",\n            \"IsNewVehicle\": \"{{isNewVehicle}}\",\n            \"ChassisNo\": \"{{chassisNo}}\",\n            \"EngineNo\": \"{{engineNo}}\",\n            \"ManufactureYear\": \"{{manufactureYear}}\",\n            \"VehicleMake\": \"{{vehicleMake}}\",\n            \"VehicleModel\": \"{{vehicleModel}}\",\n            \"Variant\": \"{{variant}}\",\n            \"VehicleSegment\": \"{{vehicleSegment}}\",\n            \"BodyStyle\": \"{{bodyStyle}}\",\n            \"BodyType\": \"1\",\n            \"FuelType\": \"{{fuelType}}\",\n            \"CNGKitType\": \"0\",\n            \"EngineCapacity\": \"{{engineCapacity}}\",\n            \"SeatingCapacity\": \"{{seatingCapacity}}\",\n            \"CarryingCapacity\": \"{{seatingCapacity}}\",\n            \"WheelNum\": 4,\n            \"VehicleColor\": \"{{vehicleColor}}\",\n            \"VehicleUsage\": \"1\",\n            \"RTOLocation\": \"{{rtoCode}}\",\n            \"RTOLocationID\": \"{{rtoLocationId}}\",\n            \"RTOCityDistric\": \"{{rtoDistrictCode}}\",\n            \"RTONameCode\": \"{{rtoStateId}}\",\n            \"RTOCluster\": \"{{rtoCluster}}\",\n            \"RTORegion\": \"{{rtoRegion}}\",\n            \"Zone\": \"{{rtoZone}}\",\n            \"VoluntaryDeductible\": \"{{voluntaryDeductible}}\",\n            \"IsNCB\": \"{{isNcb}}\",\n            \"NCB\": \"{{ncb}}\",\n            \"NCBProof\": \"1\",\n            \"NCBLetterDate\": \"{{ncbLetterDate}}\",\n            \"IsFGFT\": \"0\",\n            \"IsAAMember\": \"0\",\n            \"AntiTheftAlarmSystem\": \"0\",\n            \"IsHandicappedMod\": \"0\",\n            \"IsCertifiedVintageCar\": \"0\",\n            \"IsImportedWithoutDuty\": \"0\",\n            \"IsConfinedOwnPremises\": \"0\",\n            \"IsDrivingTuitionsUse\": \"0\",\n            \"IsFEVehicle\": \"0\",\n            \"ModificationType\": \"1\",\n            \"IsGeographicalExtension\": \"0\",\n            \"GeoExtnBangladesh\": \"0\",\n            \"GeoExtnBhutan\": \"0\",\n            \"GeoExtnMaldives\": \"0\",\n            \"GeoExtnNepal\": \"0\",\n            \"GeoExtnPakistan\": \"0\",\n            \"GeoExtnSriLanka\": \"0\",\n            \"DayParkLoc\": \"1\",\n            \"DayParkLocPinCode\": \"{{pinCode}}\",\n            \"NightParkLoc\": \"1\",\n            \"NightParkLocPinCode\": \"{{pinCode}}\",\n            \"RoadType\": \"4\",\n            \"DailyUseDistance\": \"1\",\n            \"PaidDriverCount\": 0,\n            \"EmployeeCount\": 0,\n            \"LLSSACount\": 0,\n            \"TrailerCount\": 0,\n            \"PolicyCoverageList\": [\n              {\n                \"ProductElementCode\": \"C101064\",\n                \"EffectiveDate\": \"{{effectiveDate}}\",\n                \"ExpiryDate\": \"{{expiryDate}}\",\n                \"PolicyBenefitList\": [\n                  {\n                    \"ProductElementCode\": \"B00002\",\n                    \"Price\": \"{{exShowroomPrice}}\",\n                    \"SumInsured\": \"{{idv}}\"\n                  }\n                ]\n              },\n              {\n                \"ProductElementCode\": \"C101065\",\n                \"EffectiveDate\": \"{{effectiveDate}}\",\n                \"ExpiryDate\": \"{{expiryDate}}\",\n                \"PolicyBenefitList\": [\n                  {\n                    \"ProductElementCode\": \"B00008\",\n                    \"SumInsured\": 9999999\n                  },\n                  {\n                    \"ProductElementCode\": \"B00009\",\n                    \"SumInsured\": 750000\n                  }\n                ]\n              },\n              {\n                \"ProductElementCode\": \"C101066\",\n                \"EffectiveDate\": \"{{effectiveDate}}\",\n                \"ExpiryDate\": \"{{expiryDate}}\",\n                \"OwnerHavingValidDrivingLicence\": \"1\",\n                \"OwnerHavingValidPACover\": \"0\",\n                \"PolicyBenefitList\": [\n                  {\n                    \"ProductElementCode\": \"B00015\",\n                    \"SumInsured\": 1500000,\n                    \"NomineeName\": \"{{nomineeName}}\",\n                    \"NomineeRelToProposer\": \"{{nomineeRelation}}\",\n                    \"NomineeDOB\": \"{{nomineeDob}}\",\n                    \"NomineeAge\": \"{{nomineeAge}}\"\n                  }\n                ]\n              },\n              {\n                \"ProductElementCode\": \"C101072\",\n                \"SumInsured\": 1000\n              },\n              {\n                \"ProductElementCode\": \"C101067\",\n                \"SumInsured\": 99999999999\n              },\n              {\n                \"ProductElementCode\": \"C101073\"\n              },\n              {\n                \"ProductElementCode\": \"C101074\",\n                \"SumInsured\": 1000\n              },\n              {\n                \"ProductElementCode\": \"C101075\",\n                \"SumInsured\": 12500\n              },\n              {\n                \"ProductElementCode\": \"C101108\"\n              },\n              {\n                \"ProductElementCode\": \"C101111\"\n              },\n              {\n                \"ProductElementCode\": \"C101069\",\n                \"EffectiveDate\": \"{{effectiveDate}}\",\n                \"ExpiryDate\": \"{{expiryDate}}\",\n                \"PolicyBenefitList\": [\n                  {\n                    \"ProductElementCode\": \"B00026\",\n                    \"AdditionalTowingCharges\": \"500\"\n                  }\n                ]\n              }\n            ],\n            \"IDV_User\": \"{{idv}}\"\n          }\n        ]\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cld/v1/fullquote",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cld",
+                "v1",
+                "fullquote"
+              ]
+            },
+            "description": "The Quick Quote payload plus `IDV_User` (taken from the Quick Quote response), and **no** `QuotationNo` - that omission is what makes this a create.\n\nReturns `QuotationNo` and `ProposalStatus` (`10` = quoted). The test script stores `quotationNo` and `duePremium` for Issuance."
+          },
+          "response": []
+        },
+        {
+          "name": "Full Quote - revise",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const raw = pm.response.text();",
+                  "let parsed = null;",
+                  "try { parsed = JSON.parse(raw); } catch (e) { console.log(\"Non-JSON response:\", raw.slice(0, 2000)); }",
+                  "const json = parsed || {};",
+                  "",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"JSON body\", () => pm.expect(parsed, \"response was not JSON\").to.not.be.null);",
+                  "",
+                  "// Business, validation and UW failures arrive inside a 200. Log them verbatim.",
+                  "const problems = json.ErrorList || json.errorList || json.Errors || json.ValidationResult || json.MessageList;",
+                  "if (problems) { console.log(\"SBI messages:\", JSON.stringify(problems, null, 2)); }",
+                  "",
+                  "const risk = json.PolicyLobList && json.PolicyLobList[0]",
+                  "    && json.PolicyLobList[0].PolicyRiskList && json.PolicyLobList[0].PolicyRiskList[0];",
+                  "",
+                  "pm.test(\"premium calculated\", () => pm.expect(json.IsPremiumCalcSuccess).to.eql(\"Y\"));",
+                  "",
+                  "if (risk) {",
+                  "    // The first call leaves IDV_User unset so SBI returns its own IDV band;",
+                  "    // carry the suggestion forward so the Full Quote can pin the IDV.",
+                  "    if (risk.IDV_Suggested) pm.collectionVariables.set(\"idv\", risk.IDV_Suggested);",
+                  "    if (risk.MinIDV_Suggested) pm.collectionVariables.set(\"idvMin\", risk.MinIDV_Suggested);",
+                  "    if (risk.MaxIDV_Suggested) pm.collectionVariables.set(\"idvMax\", risk.MaxIDV_Suggested);",
+                  "}",
+                  "",
+                  "if (json.DuePremium) pm.collectionVariables.set(\"duePremium\", json.DuePremium);",
+                  "",
+                  "console.log(\"Full Quote (revise)\", {",
+                  "    idvSuggested: risk && risk.IDV_Suggested,",
+                  "    idvBand: risk && [risk.MinIDV_Suggested, risk.MaxIDV_Suggested],",
+                  "    odTotal: risk && risk.OD_TotalPremium,",
+                  "    tpTotal: risk && risk.TP_TotalPremium,",
+                  "    netPremium: json.BeforeVatPremium,",
+                  "    gst: json.TGST,",
+                  "    duePremium: json.DuePremium,",
+                  "});",
+                  "",
+                  "pm.test(\"same quote returned\", () => pm.expect(json.QuotationNo).to.eql(pm.collectionVariables.get(\"quotationNo\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-IBM-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-IBM-Client-Secret",
+                "value": "{{clientSecret}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestHeader\": {\n    \"requestID\": \"{{requestID}}\",\n    \"action\": \"fullQuote\",\n    \"channel\": \"{{channel}}\",\n    \"transactionTimestamp\": \"{{transactionTimestamp}}\"\n  },\n  \"RequestBody\": {\n    \"QuotationNo\": \"{{quotationNo}}\",\n    \"ProductCode\": \"{{productCode}}\",\n    \"ProductVersion\": \"{{productVersion}}\",\n    \"AgreementCode\": \"{{agreementCode}}\",\n    \"IntermediaryCode\": \"{{intermediaryCode}}\",\n    \"ChannelType\": \"{{channelType}}\",\n    \"BusinessType\": \"{{businessType}}\",\n    \"BusinessSubType\": \"1\",\n    \"NewBizClassification\": \"{{newBizClassification}}\",\n    \"KindofPolicy\": \"{{kindOfPolicy}}\",\n    \"TransactionInitiatedBy\": \"PUMA\",\n    \"EffectiveDate\": \"{{effectiveDate}}\",\n    \"ExpiryDate\": \"{{expiryDate}}\",\n    \"ProposalDate\": \"{{proposalDate}}\",\n    \"QuoteValidTo\": \"{{quoteValidTo}}\",\n    \"PremiumCurrencyCode\": \"INR\",\n    \"SiCurrencyCode\": \"INR\",\n    \"PremiumLocalExchangeRate\": 1,\n    \"SBIGBranchStateCode\": \"{{branchStateCode}}\",\n    \"IssuingBranchGSTN\": \"{{branchGSTN}}\",\n    \"IssuingBranchCode\": \"{{issuingBranchCode}}\",\n    \"InspectionDoneBy\": \"2\",\n    \"HasPrePolicy\": \"{{hasPrePolicy}}\",\n    \"PrePolicyNo\": \"{{prePolicyNo}}\",\n    \"PreInsuranceComName\": \"{{preInsurerCode}}\",\n    \"PrePolicyStartDate\": \"{{prePolicyStartDate}}\",\n    \"PrePolicyEndDate\": \"{{prePolicyEndDate}}\",\n    \"PolicyCustomerList\": [\n      {\n        \"IsPolicyHolder\": \"Y\",\n        \"IsInsured\": \"Y\",\n        \"IsOrgParty\": \"N\",\n        \"PartyStatus\": \"1\",\n        \"Title\": \"{{title}}\",\n        \"FirstName\": \"{{firstName}}\",\n        \"MiddleName\": \"\",\n        \"LastName\": \"{{lastName}}\",\n        \"CustomerName\": \"{{firstName}} {{lastName}}\",\n        \"RegistrationName\": \"{{firstName}} {{lastName}}\",\n        \"GenderCode\": \"{{gender}}\",\n        \"DateOfBirth\": \"{{dateOfBirth}}\",\n        \"OccupationCode\": \"{{occupation}}\",\n        \"NationalityCode\": \"IND\",\n        \"IdType\": \"1\",\n        \"IdNo\": \"{{panNumber}}\",\n        \"Mobile\": \"{{mobile}}\",\n        \"ContactEmail\": \"{{email}}\",\n        \"PlotNo\": \"{{addressLine1}}\",\n        \"BuildingHouseName\": \"{{addressLine2}}\",\n        \"StreetName\": \"{{addressLine3}}\",\n        \"Locality\": \"1\",\n        \"PostCode\": \"{{pinCode}}\",\n        \"City\": \"{{cityCode}}\",\n        \"District\": \"{{districtCode}}\",\n        \"State\": \"{{stateCode}}\",\n        \"CountryCode\": \"{{countryCode}}\",\n        \"GSTRegistrationNum\": \"\",\n        \"SBIGCustomerId\": \"\"\n      }\n    ],\n    \"PolicyLobList\": [\n      {\n        \"ProductCode\": \"{{productCode}}\",\n        \"PolicyType\": \"{{policyType}}\",\n        \"PolicyRiskList\": [\n          {\n            \"ProductElementCode\": \"R10005\",\n            \"RegistrationNo\": \"{{registrationNo}}\",\n            \"RegistrationDate\": \"{{registrationDate}}\",\n            \"IsNewVehicle\": \"{{isNewVehicle}}\",\n            \"ChassisNo\": \"{{chassisNo}}\",\n            \"EngineNo\": \"{{engineNo}}\",\n            \"ManufactureYear\": \"{{manufactureYear}}\",\n            \"VehicleMake\": \"{{vehicleMake}}\",\n            \"VehicleModel\": \"{{vehicleModel}}\",\n            \"Variant\": \"{{variant}}\",\n            \"VehicleSegment\": \"{{vehicleSegment}}\",\n            \"BodyStyle\": \"{{bodyStyle}}\",\n            \"BodyType\": \"1\",\n            \"FuelType\": \"{{fuelType}}\",\n            \"CNGKitType\": \"0\",\n            \"EngineCapacity\": \"{{engineCapacity}}\",\n            \"SeatingCapacity\": \"{{seatingCapacity}}\",\n            \"CarryingCapacity\": \"{{seatingCapacity}}\",\n            \"WheelNum\": 4,\n            \"VehicleColor\": \"{{vehicleColor}}\",\n            \"VehicleUsage\": \"1\",\n            \"RTOLocation\": \"{{rtoCode}}\",\n            \"RTOLocationID\": \"{{rtoLocationId}}\",\n            \"RTOCityDistric\": \"{{rtoDistrictCode}}\",\n            \"RTONameCode\": \"{{rtoStateId}}\",\n            \"RTOCluster\": \"{{rtoCluster}}\",\n            \"RTORegion\": \"{{rtoRegion}}\",\n            \"Zone\": \"{{rtoZone}}\",\n            \"VoluntaryDeductible\": \"{{voluntaryDeductible}}\",\n            \"IsNCB\": \"{{isNcb}}\",\n            \"NCB\": \"{{ncb}}\",\n            \"NCBProof\": \"1\",\n            \"NCBLetterDate\": \"{{ncbLetterDate}}\",\n            \"IsFGFT\": \"0\",\n            \"IsAAMember\": \"0\",\n            \"AntiTheftAlarmSystem\": \"0\",\n            \"IsHandicappedMod\": \"0\",\n            \"IsCertifiedVintageCar\": \"0\",\n            \"IsImportedWithoutDuty\": \"0\",\n            \"IsConfinedOwnPremises\": \"0\",\n            \"IsDrivingTuitionsUse\": \"0\",\n            \"IsFEVehicle\": \"0\",\n            \"ModificationType\": \"1\",\n            \"IsGeographicalExtension\": \"0\",\n            \"GeoExtnBangladesh\": \"0\",\n            \"GeoExtnBhutan\": \"0\",\n            \"GeoExtnMaldives\": \"0\",\n            \"GeoExtnNepal\": \"0\",\n            \"GeoExtnPakistan\": \"0\",\n            \"GeoExtnSriLanka\": \"0\",\n            \"DayParkLoc\": \"1\",\n            \"DayParkLocPinCode\": \"{{pinCode}}\",\n            \"NightParkLoc\": \"1\",\n            \"NightParkLocPinCode\": \"{{pinCode}}\",\n            \"RoadType\": \"4\",\n            \"DailyUseDistance\": \"1\",\n            \"PaidDriverCount\": 0,\n            \"EmployeeCount\": 0,\n            \"LLSSACount\": 0,\n            \"TrailerCount\": 0,\n            \"PolicyCoverageList\": [\n              {\n                \"ProductElementCode\": \"C101064\",\n                \"EffectiveDate\": \"{{effectiveDate}}\",\n                \"ExpiryDate\": \"{{expiryDate}}\",\n                \"PolicyBenefitList\": [\n                  {\n                    \"ProductElementCode\": \"B00002\",\n                    \"Price\": \"{{exShowroomPrice}}\",\n                    \"SumInsured\": \"{{idv}}\"\n                  }\n                ]\n              },\n              {\n                \"ProductElementCode\": \"C101065\",\n                \"EffectiveDate\": \"{{effectiveDate}}\",\n                \"ExpiryDate\": \"{{expiryDate}}\",\n                \"PolicyBenefitList\": [\n                  {\n                    \"ProductElementCode\": \"B00008\",\n                    \"SumInsured\": 9999999\n                  },\n                  {\n                    \"ProductElementCode\": \"B00009\",\n                    \"SumInsured\": 750000\n                  }\n                ]\n              },\n              {\n                \"ProductElementCode\": \"C101066\",\n                \"EffectiveDate\": \"{{effectiveDate}}\",\n                \"ExpiryDate\": \"{{expiryDate}}\",\n                \"OwnerHavingValidDrivingLicence\": \"1\",\n                \"OwnerHavingValidPACover\": \"0\",\n                \"PolicyBenefitList\": [\n                  {\n                    \"ProductElementCode\": \"B00015\",\n                    \"SumInsured\": 1500000,\n                    \"NomineeName\": \"{{nomineeName}}\",\n                    \"NomineeRelToProposer\": \"{{nomineeRelation}}\",\n                    \"NomineeDOB\": \"{{nomineeDob}}\",\n                    \"NomineeAge\": \"{{nomineeAge}}\"\n                  }\n                ]\n              },\n              {\n                \"ProductElementCode\": \"C101072\",\n                \"SumInsured\": 1000\n              },\n              {\n                \"ProductElementCode\": \"C101067\",\n                \"SumInsured\": 99999999999\n              },\n              {\n                \"ProductElementCode\": \"C101073\"\n              },\n              {\n                \"ProductElementCode\": \"C101074\",\n                \"SumInsured\": 1000\n              },\n              {\n                \"ProductElementCode\": \"C101075\",\n                \"SumInsured\": 12500\n              },\n              {\n                \"ProductElementCode\": \"C101108\"\n              },\n              {\n                \"ProductElementCode\": \"C101111\"\n              },\n              {\n                \"ProductElementCode\": \"C101069\",\n                \"EffectiveDate\": \"{{effectiveDate}}\",\n                \"ExpiryDate\": \"{{expiryDate}}\",\n                \"PolicyBenefitList\": [\n                  {\n                    \"ProductElementCode\": \"B00026\",\n                    \"AdditionalTowingCharges\": \"500\"\n                  }\n                ]\n              }\n            ],\n            \"IDV_User\": \"{{idv}}\"\n          }\n        ]\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cld/v1/fullquote",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cld",
+                "v1",
+                "fullquote"
+              ]
+            },
+            "description": "Optional. Re-prices an existing quote in place by echoing `QuotationNo` back in the body - use it when the customer changes IDV, deductible or add-ons before paying.\n\nIt returns the same `QuotationNo` with a fresh `DuePremium`, so re-run this (not the create) after any edit, otherwise Issuance collects the stale amount."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 - Buy",
+      "description": "Issuance takes the quote plus a collection (receipt) record and converts it into a policy.",
+      "item": [
+        {
+          "name": "Issuance (Buy)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const raw = pm.response.text();",
+                  "let parsed = null;",
+                  "try { parsed = JSON.parse(raw); } catch (e) { console.log(\"Non-JSON response:\", raw.slice(0, 2000)); }",
+                  "const json = parsed || {};",
+                  "",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"JSON body\", () => pm.expect(parsed, \"response was not JSON\").to.not.be.null);",
+                  "",
+                  "// Business, validation and UW failures arrive inside a 200. Log them verbatim.",
+                  "const problems = json.ErrorList || json.errorList || json.Errors || json.ValidationResult || json.MessageList;",
+                  "if (problems) { console.log(\"SBI messages:\", JSON.stringify(problems, null, 2)); }",
+                  "",
+                  "pm.test(\"PolicyNo issued\", () => pm.expect(json.PolicyNo).to.be.a(\"string\").and.not.empty);",
+                  "",
+                  "if (json.PolicyNo) pm.collectionVariables.set(\"policyNo\", json.PolicyNo);",
+                  "if (json.ProposalNo) pm.collectionVariables.set(\"proposalNo\", json.ProposalNo);",
+                  "",
+                  "// A referred proposal still returns 200 - do not treat it as bound cover.",
+                  "if (json.AutoUwResultCode && String(json.AutoUwResultCode) !== \"1\") {",
+                  "    console.warn(\"Underwriting referral, AutoUwResultCode =\", json.AutoUwResultCode);",
+                  "}",
+                  "",
+                  "console.log(\"Policy bound\", {",
+                  "    policyNo: json.PolicyNo,",
+                  "    proposalNo: json.ProposalNo,",
+                  "    proposalStatus: json.ProposalStatus,",
+                  "    duePremium: json.DuePremium,",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-IBM-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-IBM-Client-Secret",
+                "value": "{{clientSecret}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RequestHeader\": {\n    \"requestID\": \"{{requestID}}\",\n    \"action\": \"getIssurance\",\n    \"channel\": \"{{channel}}\",\n    \"transactionTimestamp\": \"{{transactionTimestamp}}\"\n  },\n  \"RequestBody\": {\n    \"QuotationNo\": \"{{quotationNo}}\",\n    \"Amount\": \"{{duePremium}}\",\n    \"CurrencyId\": 1,\n    \"PayMode\": \"{{payMode}}\",\n    \"FeeType\": 11,\n    \"Payer\": \"Customer\",\n    \"TransactionDate\": \"{{issuanceTransactionDate}}\",\n    \"PaymentReferNo\": \"{{paymentReferNo}}\",\n    \"InstrumentNumber\": \"{{paymentReferNo}}\",\n    \"InstrumentDate\": \"{{proposalDate}}\",\n    \"BankCode\": \"{{bankCode}}\",\n    \"BankName\": \"{{bankName}}\",\n    \"BankBranchName\": \"{{bankBranchName}}\",\n    \"BankBranchCode\": \"{{bankBranchCode}}\",\n    \"LocationType\": \"1\",\n    \"RemitBankAccount\": \"{{remitBankAccount}}\",\n    \"ReceiptCreatedBy\": \"{{receiptCreatedBy}}\",\n    \"PickupDate\": \"{{proposalDate}}\",\n    \"IFSCCode\": \"{{ifscCode}}\",\n    \"MICRNumber\": \"\",\n    \"PANNumber\": \"{{panNumber}}\",\n    \"ReceiptBranch\": \"{{issuingBranchCode}}\",\n    \"ReceiptTransactionDate\": \"{{proposalDate}}\",\n    \"ReceiptDate\": \"{{proposalDate}}\",\n    \"EscalationDepartment\": \"\",\n    \"Comment\": \"Issued via aggregator API\",\n    \"AccountNumber\": \"\",\n    \"AccountName\": \"\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cld/v1/issurance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cld",
+                "v1",
+                "issurance"
+              ]
+            },
+            "description": "`Amount` **must** equal the `DuePremium` from the latest Full Quote. The collection variable is set automatically, so re-run the Full Quote after any change.\n\nPayment fields come from the BCP masters shipped in the kit:\n\n- `PayMode` - `SBI_T_BCP_PayMode`. `103` Cheque (the kit sample), `113` Internetbanking, `105`/`110` Credit Card, `212` EFT. For an online aggregator journey `113` is the realistic value.\n- `RemitBankAccount` - `SBI_T_BCP_RemitBankAccount`. `8` = HDFC Premium Collection A/C 7513.\n- `LocationType` - `SBI_T_BCP_LocationType`. `1` = Local Cheque, own bank/branch.\n\nOn success the response carries `PolicyNo`, `ProposalNo`, `ProposalStatus` (`3`) and `AutoUwResultCode`. A UW referral comes back here rather than as an HTTP error, so check `AutoUwResultCode` before telling the customer they are covered."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04 - Policy document",
+      "description": "Two independent ways to fetch the policy schedule PDF. The plain one is enough for most journeys; the encrypted one is the newer \"PDF 2.0\" service keyed by agreement code.",
+      "item": [
+        {
+          "name": "Policy Document (plain, base64)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const raw = pm.response.text();",
+                  "let parsed = null;",
+                  "try { parsed = JSON.parse(raw); } catch (e) { console.log(\"Non-JSON response:\", raw.slice(0, 2000)); }",
+                  "const json = parsed || {};",
+                  "",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"JSON body\", () => pm.expect(parsed, \"response was not JSON\").to.not.be.null);",
+                  "",
+                  "// Business, validation and UW failures arrive inside a 200. Log them verbatim.",
+                  "const problems = json.ErrorList || json.errorList || json.Errors || json.ValidationResult || json.MessageList;",
+                  "if (problems) { console.log(\"SBI messages:\", JSON.stringify(problems, null, 2)); }",
+                  "",
+                  "const payload = json.getPolicyDocumentResponseBody && json.getPolicyDocumentResponseBody.payload;",
+                  "const url = payload && payload.URL;",
+                  "",
+                  "pm.test(\"PDF returned\", () => pm.expect(url).to.be.an(\"array\").with.length.of.at.least(2));",
+                  "",
+                  "if (Array.isArray(url)) {",
+                  "    pm.collectionVariables.set(\"policyPdfFileName\", url[0]);",
+                  "    pm.collectionVariables.set(\"policyPdfBase64\", url[1]);",
+                  "    console.log(\"Document:\", url[0], \"-\", Math.round(url[1].length * 0.75 / 1024), \"KB\");",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-IBM-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-IBM-Client-Secret",
+                "value": "{{clientSecret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/customers/v1/policies/documents?policyNumber={{policyNo}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers",
+                "v1",
+                "policies",
+                "documents"
+              ],
+              "query": [
+                {
+                  "key": "policyNumber",
+                  "value": "{{policyNo}}"
+                }
+              ]
+            },
+            "description": "Returns `getPolicyDocumentResponseBody.payload.URL` as a two-element array: `[filename, base64Pdf]`."
+          },
+          "response": []
+        },
+        {
+          "name": "Policy PDF 2.0 (AES-256-GCM)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// ---------------------------------------------------------------------------",
+                  "// AES-256-GCM on top of CryptoJS (Postman ships crypto-js, which has no GCM).",
+                  "// Verified against SBI's own sample ciphertext in \"encrypted-get-pdf.txt\".",
+                  "// ---------------------------------------------------------------------------",
+                  "const CryptoJS = require('crypto-js');",
+                  "const wa = (words, sigBytes) => CryptoJS.lib.WordArray.create(words, sigBytes);",
+                  "",
+                  "function blockEncryptor(keyWA) {",
+                  "  const cfg = { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.NoPadding };",
+                  "  return b => CryptoJS.AES.encrypt(wa(b.slice(0), 16), keyWA, cfg).ciphertext.words.slice(0, 4);",
+                  "}",
+                  "",
+                  "// Multiply in GF(2^128) using GCM's bit ordering.",
+                  "function gmul(X, Y) {",
+                  "  const Z = [0, 0, 0, 0], V = Y.slice(0);",
+                  "  for (let i = 0; i < 128; i++) {",
+                  "    if ((X[i >>> 5] >>> (31 - (i & 31))) & 1) { Z[0] ^= V[0]; Z[1] ^= V[1]; Z[2] ^= V[2]; Z[3] ^= V[3]; }",
+                  "    const lsb = V[3] & 1;",
+                  "    V[3] = ((V[3] >>> 1) | (V[2] << 31)) >>> 0;",
+                  "    V[2] = ((V[2] >>> 1) | (V[1] << 31)) >>> 0;",
+                  "    V[1] = ((V[1] >>> 1) | (V[0] << 31)) >>> 0;",
+                  "    V[0] = V[0] >>> 1;",
+                  "    if (lsb) V[0] = (V[0] ^ 0xe1000000) >>> 0;",
+                  "  }",
+                  "  return Z;",
+                  "}",
+                  "",
+                  "function ghash(H, words) {",
+                  "  let Y = [0, 0, 0, 0];",
+                  "  for (let b = 0; b * 4 < words.length; b++) {",
+                  "    const X = [words[b * 4] | 0, words[b * 4 + 1] | 0, words[b * 4 + 2] | 0, words[b * 4 + 3] | 0];",
+                  "    Y = gmul([(Y[0] ^ X[0]) >>> 0, (Y[1] ^ X[1]) >>> 0, (Y[2] ^ X[2]) >>> 0, (Y[3] ^ X[3]) >>> 0], H);",
+                  "  }",
+                  "  return Y;",
+                  "}",
+                  "",
+                  "const inc32 = b => [b[0], b[1], b[2], (b[3] + 1) | 0];",
+                  "",
+                  "function ctrXor(E, J0, srcWords, nBytes) {",
+                  "  const blocks = Math.ceil(nBytes / 16), out = [], src = srcWords.slice(0);",
+                  "  while (src.length < blocks * 4) src.push(0);",
+                  "  let ctr = J0;",
+                  "  for (let b = 0; b < blocks; b++) {",
+                  "    ctr = inc32(ctr);",
+                  "    const ks = E(ctr);",
+                  "    for (let w = 0; w < 4; w++) out.push(((src[b * 4 + w] | 0) ^ ks[w]) >>> 0);",
+                  "  }",
+                  "  return out;",
+                  "}",
+                  "",
+                  "function j0(ivWA) {",
+                  "  if (ivWA.sigBytes !== 12) throw new Error('SBI GCM expects a 96-bit (12-byte) IV');",
+                  "  return [ivWA.words[0] | 0, ivWA.words[1] | 0, ivWA.words[2] | 0, 1];",
+                  "}",
+                  "",
+                  "const lenBlock = n => [0, 0, Math.floor((n * 8) / 0x100000000), (n * 8) >>> 0];",
+                  "",
+                  "function sbiEncrypt(keyUtf8, ivUtf8, plaintext) {",
+                  "  const keyWA = CryptoJS.enc.Utf8.parse(keyUtf8);",
+                  "  const E = blockEncryptor(keyWA), H = E([0, 0, 0, 0]), J0 = j0(CryptoJS.enc.Utf8.parse(ivUtf8));",
+                  "  const pt = CryptoJS.enc.Utf8.parse(plaintext);",
+                  "  const ctWords = ctrXor(E, J0, pt.words, pt.sigBytes);",
+                  "  const ct = wa(ctWords, pt.sigBytes); ct.clamp();",
+                  "  const padded = ct.words.slice(0);",
+                  "  while (padded.length < Math.ceil(pt.sigBytes / 16) * 4) padded.push(0);",
+                  "  const S = ghash(H, padded.concat(lenBlock(pt.sigBytes))), T = E(J0);",
+                  "  const tag = wa([(S[0] ^ T[0]) >>> 0, (S[1] ^ T[1]) >>> 0, (S[2] ^ T[2]) >>> 0, (S[3] ^ T[3]) >>> 0], 16);",
+                  "  return CryptoJS.enc.Base64.stringify(ct.clone().concat(tag));",
+                  "}",
+                  "",
+                  "function sbiDecrypt(keyUtf8, ivUtf8, b64) {",
+                  "  const keyWA = CryptoJS.enc.Utf8.parse(keyUtf8);",
+                  "  const E = blockEncryptor(keyWA), J0 = j0(CryptoJS.enc.Utf8.parse(ivUtf8));",
+                  "  const all = CryptoJS.enc.Base64.parse(b64), n = all.sigBytes - 16;",
+                  "  const ct = wa(all.words.slice(0, Math.ceil(n / 4)), n); ct.clamp();",
+                  "  const pt = wa(ctrXor(E, J0, ct.words, n), n); pt.clamp();",
+                  "  return CryptoJS.enc.Utf8.stringify(pt);",
+                  "}",
+                  "",
+                  "// --- build and encrypt the getPDF request -------------------------------",
+                  "const payload = {",
+                  "    RequestHeader: {",
+                  "        requestID: pm.variables.replaceIn(\"{{requestID}}\"),",
+                  "        action: \"getPDF\",",
+                  "        channel: pm.variables.replaceIn(\"{{channel}}\"),",
+                  "        transactionTimestamp: pm.variables.replaceIn(\"{{transactionTimestamp}}\"),",
+                  "    },",
+                  "    RequestBody: {",
+                  "        PolicyNumber: pm.variables.replaceIn(\"{{policyNo}}\"),",
+                  "        Regeneration: \"N\",",
+                  "        SourceSystem: \"Saral\",",
+                  "        IntermediateCode: null,",
+                  "        ProductName: \"\",",
+                  "        Offline: \"N\",",
+                  "        AgreementCode: pm.variables.replaceIn(\"{{pdfAgreementCode}}\"),",
+                  "    },",
+                  "};",
+                  "",
+                  "pm.variables.set(\"pdfCiphertext\", sbiEncrypt(",
+                  "    pm.variables.replaceIn(\"{{pdfGcmKey}}\"),",
+                  "    pm.variables.replaceIn(\"{{pdfGcmIv}}\"),",
+                  "    JSON.stringify(payload, null, 4),",
+                  "));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// ---------------------------------------------------------------------------",
+                  "// AES-256-GCM on top of CryptoJS (Postman ships crypto-js, which has no GCM).",
+                  "// Verified against SBI's own sample ciphertext in \"encrypted-get-pdf.txt\".",
+                  "// ---------------------------------------------------------------------------",
+                  "const CryptoJS = require('crypto-js');",
+                  "const wa = (words, sigBytes) => CryptoJS.lib.WordArray.create(words, sigBytes);",
+                  "",
+                  "function blockEncryptor(keyWA) {",
+                  "  const cfg = { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.NoPadding };",
+                  "  return b => CryptoJS.AES.encrypt(wa(b.slice(0), 16), keyWA, cfg).ciphertext.words.slice(0, 4);",
+                  "}",
+                  "",
+                  "// Multiply in GF(2^128) using GCM's bit ordering.",
+                  "function gmul(X, Y) {",
+                  "  const Z = [0, 0, 0, 0], V = Y.slice(0);",
+                  "  for (let i = 0; i < 128; i++) {",
+                  "    if ((X[i >>> 5] >>> (31 - (i & 31))) & 1) { Z[0] ^= V[0]; Z[1] ^= V[1]; Z[2] ^= V[2]; Z[3] ^= V[3]; }",
+                  "    const lsb = V[3] & 1;",
+                  "    V[3] = ((V[3] >>> 1) | (V[2] << 31)) >>> 0;",
+                  "    V[2] = ((V[2] >>> 1) | (V[1] << 31)) >>> 0;",
+                  "    V[1] = ((V[1] >>> 1) | (V[0] << 31)) >>> 0;",
+                  "    V[0] = V[0] >>> 1;",
+                  "    if (lsb) V[0] = (V[0] ^ 0xe1000000) >>> 0;",
+                  "  }",
+                  "  return Z;",
+                  "}",
+                  "",
+                  "function ghash(H, words) {",
+                  "  let Y = [0, 0, 0, 0];",
+                  "  for (let b = 0; b * 4 < words.length; b++) {",
+                  "    const X = [words[b * 4] | 0, words[b * 4 + 1] | 0, words[b * 4 + 2] | 0, words[b * 4 + 3] | 0];",
+                  "    Y = gmul([(Y[0] ^ X[0]) >>> 0, (Y[1] ^ X[1]) >>> 0, (Y[2] ^ X[2]) >>> 0, (Y[3] ^ X[3]) >>> 0], H);",
+                  "  }",
+                  "  return Y;",
+                  "}",
+                  "",
+                  "const inc32 = b => [b[0], b[1], b[2], (b[3] + 1) | 0];",
+                  "",
+                  "function ctrXor(E, J0, srcWords, nBytes) {",
+                  "  const blocks = Math.ceil(nBytes / 16), out = [], src = srcWords.slice(0);",
+                  "  while (src.length < blocks * 4) src.push(0);",
+                  "  let ctr = J0;",
+                  "  for (let b = 0; b < blocks; b++) {",
+                  "    ctr = inc32(ctr);",
+                  "    const ks = E(ctr);",
+                  "    for (let w = 0; w < 4; w++) out.push(((src[b * 4 + w] | 0) ^ ks[w]) >>> 0);",
+                  "  }",
+                  "  return out;",
+                  "}",
+                  "",
+                  "function j0(ivWA) {",
+                  "  if (ivWA.sigBytes !== 12) throw new Error('SBI GCM expects a 96-bit (12-byte) IV');",
+                  "  return [ivWA.words[0] | 0, ivWA.words[1] | 0, ivWA.words[2] | 0, 1];",
+                  "}",
+                  "",
+                  "const lenBlock = n => [0, 0, Math.floor((n * 8) / 0x100000000), (n * 8) >>> 0];",
+                  "",
+                  "function sbiEncrypt(keyUtf8, ivUtf8, plaintext) {",
+                  "  const keyWA = CryptoJS.enc.Utf8.parse(keyUtf8);",
+                  "  const E = blockEncryptor(keyWA), H = E([0, 0, 0, 0]), J0 = j0(CryptoJS.enc.Utf8.parse(ivUtf8));",
+                  "  const pt = CryptoJS.enc.Utf8.parse(plaintext);",
+                  "  const ctWords = ctrXor(E, J0, pt.words, pt.sigBytes);",
+                  "  const ct = wa(ctWords, pt.sigBytes); ct.clamp();",
+                  "  const padded = ct.words.slice(0);",
+                  "  while (padded.length < Math.ceil(pt.sigBytes / 16) * 4) padded.push(0);",
+                  "  const S = ghash(H, padded.concat(lenBlock(pt.sigBytes))), T = E(J0);",
+                  "  const tag = wa([(S[0] ^ T[0]) >>> 0, (S[1] ^ T[1]) >>> 0, (S[2] ^ T[2]) >>> 0, (S[3] ^ T[3]) >>> 0], 16);",
+                  "  return CryptoJS.enc.Base64.stringify(ct.clone().concat(tag));",
+                  "}",
+                  "",
+                  "function sbiDecrypt(keyUtf8, ivUtf8, b64) {",
+                  "  const keyWA = CryptoJS.enc.Utf8.parse(keyUtf8);",
+                  "  const E = blockEncryptor(keyWA), J0 = j0(CryptoJS.enc.Utf8.parse(ivUtf8));",
+                  "  const all = CryptoJS.enc.Base64.parse(b64), n = all.sigBytes - 16;",
+                  "  const ct = wa(all.words.slice(0, Math.ceil(n / 4)), n); ct.clamp();",
+                  "  const pt = wa(ctrXor(E, J0, ct.words, n), n); pt.clamp();",
+                  "  return CryptoJS.enc.Utf8.stringify(pt);",
+                  "}",
+                  "",
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "const responseEnvelope = pm.response.json();",
+                  "pm.test(\"ciphertext returned\", () => pm.expect(responseEnvelope.ciphertext).to.be.a(\"string\").and.not.empty);",
+                  "",
+                  "const plain = JSON.parse(sbiDecrypt(",
+                  "    pm.variables.replaceIn(\"{{pdfGcmKey}}\"),",
+                  "    pm.variables.replaceIn(\"{{pdfGcmIv}}\"),",
+                  "    responseEnvelope.ciphertext,",
+                  "));",
+                  "",
+                  "pm.test(\"getPDF succeeded\", () => pm.expect(String(plain.StatusCode)).to.eql(\"0\"));",
+                  "",
+                  "if (plain.DocBase64) pm.collectionVariables.set(\"pdf2DocBase64\", plain.DocBase64);",
+                  "console.log(\"getPDF:\", {",
+                  "    statusCode: plain.StatusCode,",
+                  "    description: plain.Description,",
+                  "    transactionId: plain.TransactionID,",
+                  "    pdfKB: plain.DocBase64 ? Math.round(plain.DocBase64.length * 0.75 / 1024) : 0,",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-IBM-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-IBM-Client-Secret",
+                "value": "{{clientSecret}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"ciphertext\": \"{{pdfCiphertext}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{pdfBaseUrl}}/ept/getPDFArgCd",
+              "host": [
+                "{{pdfBaseUrl}}"
+              ],
+              "path": [
+                "ept",
+                "getPDFArgCd"
+              ]
+            },
+            "description": "Request and response bodies are both a single `{ \"ciphertext\": \"...\" }` field: **AES-256-GCM**, base64 of `ciphertext || 16-byte tag`, no AAD, using the fixed UAT key and 96-bit IV from the kit's *GCM Encryption details.txt*.\n\nPostman ships crypto-js, which has no GCM mode, so the pre-request script implements GCM (CTR + GHASH) on top of crypto-js' single-block AES. It was verified by round-tripping SBI's own sample ciphertext byte-for-byte.\n\nThe test script decrypts the response and stores `pdf2DocBase64`.\n\n> `AgreementCode` is zero-padded to 7 digits here (`0006660`), unlike the quote and issuance services which take `6660`."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

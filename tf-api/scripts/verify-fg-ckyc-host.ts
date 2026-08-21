@@ -1,16 +1,18 @@
 /**
  * OPERATOR-RUN, LIVE. Not a vitest test — never runs in CI, commits no secrets.
- * Confirms which UAT CKYC host actually answers before flipping FG_CKYC_BASE_URL.
+ * Confirms which UAT CKYC host actually answers before changing
+ * FG_GATEWAY.ckycBaseUrl in src/providers/fg/config.ts.
  *
- * Reads creds from process.env (populate .env first). Usage from tf-api/:
+ * Host comes from FG_GATEWAY.ckycBaseUrl (or --host); creds come from .env.
+ * Usage from tf-api/:
  *   npx tsx --env-file=.env scripts/verify-fg-ckyc-host.ts
  *   npx tsx --env-file=.env scripts/verify-fg-ckyc-host.ts \
  *     --host https://uat-internal-apigw.futuregenerali.in:8243/GCKYC/3.0.0
  *
  * Mints a CKYC-product token (WSO2 password grant) then POSTs VerifyCKYC. HTTP
  * 200 (apiStatus Success/Failed) => the host answers; connection error / 404 =>
- * it does not. Compare both candidates, then set FG_CKYC_BASE_URL in .env to the
- * one that answers. Do NOT hardcode the host in source.
+ * it does not. Compare both candidates, then set FG_GATEWAY.ckycBaseUrl to the
+ * one that answers.
  *
  * CKYC-specific resource-owner creds: intel §9 lists distinct CKYC UAT creds
  * (GCCKYC_Dev / GCKYC@dev26) separate from the shared motor FG_USERNAME/FG_PASSWORD.
@@ -18,20 +20,21 @@
  * §9 creds by setting FG_CKYC_USERNAME / FG_CKYC_PASSWORD in .env — they override
  * FG_USERNAME / FG_PASSWORD here and nowhere else.
  */
+import { FG_GATEWAY, FG_CHANNEL } from "@/providers/fg/config.ts";
+
 const hostArg = process.argv.indexOf("--host");
-const baseUrl = (hostArg > -1 ? process.argv[hostArg + 1] : process.env.FG_CKYC_BASE_URL)?.replace(/\/$/, "");
-const tokenUrl = process.env.FG_CKYC_TOKEN_URL ?? process.env.FG_TOKEN_URL;
+const baseUrl = (hostArg > -1 ? process.argv[hostArg + 1] : FG_GATEWAY.ckycBaseUrl)?.replace(/\/$/, "");
+const tokenUrl = FG_GATEWAY.tokenUrl;
 const basic = process.env.FG_CKYC_CLIENT_BASIC ?? process.env.FG_CLIENT_BASIC;
 const username = process.env.FG_CKYC_USERNAME ?? process.env.FG_USERNAME;
 const password = process.env.FG_CKYC_PASSWORD ?? process.env.FG_PASSWORD;
 const subToken = process.env.FG_CKYC_SUBSCRIPTION_TOKEN;
-const systemName = process.env.FG_VENDOR_CODE ?? "Webagg";
+const systemName = FG_CHANNEL.vendorCode;
 
 if (!baseUrl || !tokenUrl || !basic || !username || !password) {
   console.error(
-    "Missing env. Need FG_CKYC_BASE_URL (or --host), FG_CKYC_TOKEN_URL/FG_TOKEN_URL, " +
-      "FG_CKYC_CLIENT_BASIC/FG_CLIENT_BASIC, and resource-owner creds " +
-      "(FG_CKYC_USERNAME/FG_USERNAME + FG_CKYC_PASSWORD/FG_PASSWORD).",
+    "Missing credentials in .env. Need FG_CKYC_CLIENT_BASIC/FG_CLIENT_BASIC and " +
+      "resource-owner creds (FG_CKYC_USERNAME/FG_USERNAME + FG_CKYC_PASSWORD/FG_PASSWORD).",
   );
   process.exit(2);
 }

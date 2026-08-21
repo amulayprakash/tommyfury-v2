@@ -9,6 +9,32 @@ import type {
 export const ITGI_SLUG = "itgi";
 export const ITGI_DISPLAY_NAME = "IFFCO-Tokio";
 
+// ─── Vendor settings (was .env — only the credentials stayed there) ───────────
+
+/**
+ * Registers the ITGI provider at startup. ITGI still has to whitelist our egress
+ * IP before any of these hosts answer (docs/itgi-integration-notes.md §8).
+ */
+export const ITGI_ENABLED = true;
+
+/**
+ * Hybrid vendor: SOAP/XML for motor, REST/JSON for CKYC + policy download, and no
+ * OAuth at all — SOAP authenticates on the partner code in the request body and
+ * REST on HTTP Basic (ITGI_DOWNLOAD_USER/PASSWORD in env).
+ *
+ * ⚠️ UAT/staging hosts — production URLs are not in the vendor kit yet.
+ */
+export const ITGI_GATEWAY = {
+  soapBaseUrl: "https://staging.iffcotokio.co.in/portaltest/services",
+  restBaseUrl: "https://staging.iffcotokio.co.in/partner-services",
+  /** Partner code / branch / sub-branch issued by ITGI; the same pair covers PCP and TWP. */
+  partnerCode: "ITGIMOT321",
+  partnerBranch: "Novacred",
+  partnerSubBranch: "Novacred",
+  /** Echoed back in the proposal payload's responseURL tag. Unset — ITGI has not confirmed its use. */
+  responseUrl: "",
+} as const;
+
 /**
  * Private car + two-wheeler + new vehicle. Commercial (CVI) is deliberately
  * excluded: the vendor kit ships no CVI master data, so its codes cannot be
@@ -116,17 +142,27 @@ export interface ItgiConfig {
   downloadPassword: string;
 }
 
+/** Builds the ITGI config from the constants above plus the credentials in env. */
 export function itgiConfig(): ItgiConfig {
   return {
-    soapBaseUrl: env.ITGI_SOAP_BASE_URL.replace(/\/$/, ""),
-    restBaseUrl: env.ITGI_REST_BASE_URL.replace(/\/$/, ""),
-    partnerCode: env.ITGI_PARTNER_CODE,
-    partnerBranch: env.ITGI_PARTNER_BRANCH,
-    partnerSubBranch: env.ITGI_PARTNER_SUB_BRANCH,
-    responseUrl: env.ITGI_RESPONSE_URL,
+    soapBaseUrl: ITGI_GATEWAY.soapBaseUrl.replace(/\/$/, ""),
+    restBaseUrl: ITGI_GATEWAY.restBaseUrl.replace(/\/$/, ""),
+    partnerCode: ITGI_GATEWAY.partnerCode,
+    partnerBranch: ITGI_GATEWAY.partnerBranch,
+    partnerSubBranch: ITGI_GATEWAY.partnerSubBranch,
+    responseUrl: ITGI_GATEWAY.responseUrl,
     downloadUser: env.ITGI_DOWNLOAD_USER,
     downloadPassword: env.ITGI_DOWNLOAD_PASSWORD,
   };
+}
+
+/**
+ * Every ITGI REST service (KYC, master data, policy download) authenticates with
+ * the same partner HTTP Basic credentials — confirmed on UAT 21/08/2026, where
+ * an unauthenticated call returns 401 with an empty body.
+ */
+export function itgiBasicAuth(c: ItgiConfig): { user: string; password: string } {
+  return { user: c.downloadUser, password: c.downloadPassword };
 }
 
 /** Per-service endpoints (UAT paths from the vendor kit). */
@@ -135,6 +171,14 @@ export const ITGI_ENDPOINTS = {
   premium: (c: ItgiConfig) => `${c.soapBaseUrl}/MotorPremiumWebserviceVA`,
   newVehiclePremium: (c: ItgiConfig) => `${c.soapBaseUrl}/NewVehiclePremiumWebserviceVA`,
   proposal: (c: ItgiConfig) => `${c.soapBaseUrl}/PartnerProposalRequest`,
+  /**
+   * Browser-facing partner portal, not a web service: ITGI listed
+   * /portaltest/MotorServiceReq with the UAT credentials (21/08/2026) and it
+   * serves the "ITGI Partner Web Portal" HTML page. Kept here so the redirect
+   * leg of the Partner-PG flow has a home once ITGI confirms its use.
+   */
+  partnerPortal: (c: ItgiConfig) => `${c.soapBaseUrl.replace(/\/services$/, "")}/MotorServiceReq`,
+  masterData: (c: ItgiConfig) => `${c.restBaseUrl}/master/data`,
   payment: (c: ItgiConfig) => `${c.soapBaseUrl}/PaymentUpdateWS`,
   policyStatus: (c: ItgiConfig) => `${c.soapBaseUrl}/CheckPolicyStatus`,
   kycFetch: (c: ItgiConfig) => `${c.restBaseUrl}/kyc/fetch`,

@@ -61,7 +61,11 @@ export function normalizeIdv(body: unknown): ItgiIdvResult {
  * Depreciation Waiver). Pick the one matching what the customer elected.
  */
 export function selectPremiumBlock(body: unknown, hasAddons: boolean): Record<string, unknown> {
-  const blocks = findAll(body, "getMotorPremiumReturn");
+  // New vehicles come back from getNewVehiclePremium under its own return tag.
+  const blocks = [
+    ...findAll(body, "getMotorPremiumReturn"),
+    ...findAll(body, "getNewVehiclePremiumReturn"),
+  ];
   if (blocks.length === 0) return {};
   if (blocks.length === 1) return blocks[0]!;
   const wanted = String(hasAddons);

@@ -286,6 +286,32 @@ describe("renewalQuote", () => {
     expect(q.maxIdv).toBe(1556000);
   });
 
+  /**
+   * The accessory cap guards `priceQuote`, which the renewal flow does not use.
+   * That is correct rather than an oversight: mapper/renewal.ts hardcodes all
+   * three accessory amounts to 0, so a renewal has no accessory sum insured to
+   * cap. This pins that reasoning — if the renewal payload ever starts carrying
+   * real accessory values, this test fails and the guard has to be extended.
+   */
+  it("carries no accessory sum insured, so the 25% cap has nothing to bite on", async () => {
+    const { transport, calls } = recordingTransport({
+      getpolicydataforrenewal: extractResponse,
+      getcalculateidv: idvFixture,
+      calculatepremium: premiumFixture,
+    });
+    await provider(transport).renewalQuote({ policyNo: "POL-9" }, ctx);
+    const premium = calls[2]!.jsonBody as {
+      Req_PvtCar: {
+        ElecticalAccessoryIDV: number;
+        NonElecticalAccessoryIDV: number;
+        BiFuel_Kit_Value: number;
+      };
+    };
+    expect(premium.Req_PvtCar.ElecticalAccessoryIDV).toBe(0);
+    expect(premium.Req_PvtCar.NonElecticalAccessoryIDV).toBe(0);
+    expect(premium.Req_PvtCar.BiFuel_Kit_Value).toBe(0);
+  });
+
   it("prices with HDFC's recommended IDV, not the expiring policy's", async () => {
     const { transport, calls } = recordingTransport({
       getpolicydataforrenewal: extractResponse,

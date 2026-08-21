@@ -68,6 +68,39 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
+/**
+ * A condition group that starts collapsed.
+ *
+ * Nothing here is needed to reach a policy number — these are the inputs the
+ * certification PACK turns on (accessories, used-car, the standalone-OD
+ * third-party leg) and they are empty or defaulted on an ordinary issuance run.
+ * Left expanded they buried the eight fields that actually matter. Collapsed
+ * they are one click away, which is the difference between a form you scroll
+ * past and a capability you lose.
+ *
+ * `<details>` rather than state: it survives re-render, works without JS, and is
+ * keyboard-navigable for free. Same choice as `RawExchange`.
+ */
+export function AdvancedGroup({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <details className="rounded-md border">
+      <summary className="cursor-pointer p-3 text-sm font-semibold marker:text-muted-foreground">
+        {title}
+        <span className="ml-2 font-normal text-muted-foreground">{hint}</span>
+      </summary>
+      <div className="space-y-3 border-t p-3">{children}</div>
+    </details>
+  );
+}
+
 /** "" for an unset number, so the input stays empty rather than showing 0. */
 const numText = (n: number | undefined) => (n === undefined ? "" : String(n));
 const numValue = (raw: string) => (raw === "" ? undefined : Number(raw));
@@ -154,23 +187,6 @@ export function PreviousPolicyFields({ conditions, onChange }: GroupProps) {
   return (
     <Group title="Previous policy">
       <div className="grid gap-3 sm:grid-cols-2">
-        {/* The short name from the kit's Insurance_Company master (e.g. TATAAIG),
-            not a display name — the backend maps this straight onto HDFC's
-            PreviousPolicy_INSURER / _TPINSURER. */}
-        <Field label="Previous insurer code">
-          <Input
-            value={conditions.previousInsurerId}
-            onChange={(e) => onChange({ previousInsurerId: e.target.value.toUpperCase() })}
-            placeholder="e.g. TATAAIG"
-          />
-        </Field>
-        <Field label="Previous insurer name">
-          <Input
-            value={conditions.previousInsurerName}
-            onChange={(e) => onChange({ previousInsurerName: e.target.value })}
-            placeholder="e.g. Tata AIG"
-          />
-        </Field>
         <Field label="Previous policy number">
           <Input
             value={conditions.previousPolicyNumber}
@@ -204,10 +220,43 @@ export function PreviousPolicyFields({ conditions, onChange }: GroupProps) {
   );
 }
 
+/**
+ * The previous insurer, which a policy does NOT need to bind.
+ *
+ * Only 8 of HDFC's 38 insurer short-names cross-walk to our master, so this is
+ * blank on most real rollovers and the backend correctly sends null rather than
+ * inventing a code. Left visible it looked mandatory.
+ */
+export function PreviousInsurerFields({ conditions, onChange }: GroupProps) {
+  return (
+    <AdvancedGroup title="Previous insurer" hint="optional — sent as null when blank">
+      <div className="grid gap-3 sm:grid-cols-2">
+        {/* The short name from the kit's Insurance_Company master (e.g. TATAAIG),
+            not a display name — the backend maps this straight onto HDFC's
+            PreviousPolicy_INSURER / _TPINSURER. */}
+        <Field label="Previous insurer code">
+          <Input
+            value={conditions.previousInsurerId}
+            onChange={(e) => onChange({ previousInsurerId: e.target.value.toUpperCase() })}
+            placeholder="e.g. TATAAIG"
+          />
+        </Field>
+        <Field label="Previous insurer name">
+          <Input
+            value={conditions.previousInsurerName}
+            onChange={(e) => onChange({ previousInsurerName: e.target.value })}
+            placeholder="e.g. Tata AIG"
+          />
+        </Field>
+      </div>
+    </AdvancedGroup>
+  );
+}
+
 /** Standalone OD needs the still-running TP policy it sits alongside. */
 export function PreviousTpFields({ conditions, onChange }: GroupProps) {
   return (
-    <Group title="Previous third-party policy">
+    <AdvancedGroup title="Previous third-party policy" hint="standalone OD only">
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label="TP policy number">
           <Input
@@ -233,7 +282,7 @@ export function PreviousTpFields({ conditions, onChange }: GroupProps) {
         Name the previous insurer above too: with none, HDFC refuses the standalone OD proposal with
         &ldquo;Valid TP policy is required to book SAOD Policy.&rdquo;
       </p>
-    </Group>
+    </AdvancedGroup>
   );
 }
 
@@ -301,7 +350,10 @@ const BIFUEL_KIT_TYPES: NonNullable<CompareQuotesRequest["bifuelKitType"]>[] = [
  */
 export function AccessoryFields({ conditions, onChange }: GroupProps) {
   return (
-    <Group title="Accessories, bi-fuel & unnamed PA">
+    <AdvancedGroup
+      title="Accessories, bi-fuel & unnamed PA"
+      hint="all default to nil — pack rows 25–26"
+    >
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Electrical accessories sum insured (₹)">
           <Input
@@ -354,6 +406,6 @@ export function AccessoryFields({ conditions, onChange }: GroupProps) {
           />
         </Field>
       </div>
-    </Group>
+    </AdvancedGroup>
   );
 }

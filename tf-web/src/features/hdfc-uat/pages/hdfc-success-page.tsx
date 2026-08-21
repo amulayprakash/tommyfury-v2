@@ -1,11 +1,12 @@
-import { BadgeCheck, Copy, FileText, RotateCcw } from "lucide-react";
+import { BadgeCheck, Copy, FileText, Loader2, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 
 import { ROUTES } from "@/app/router/paths";
 import { Button } from "@/components/ui/button";
-import { env } from "@/lib/env";
+import { vendorClient } from "@/lib/api/vendor-client";
 import { formatInr } from "@/lib/utils";
+import { CoiUnavailableError, saveCoi, type CoiResponse } from "../coi-download";
 import { RawExchange } from "../components/raw-exchange";
 import { HDFC_SLUG } from "../build-hdfc-request";
 import { useHdfcUatStore } from "../hdfc-uat-store";
@@ -40,14 +41,42 @@ export function HdfcSuccessPage() {
     void navigate(ROUTES.hdfcUat.start);
   };
 
-  // The existing certificate route, keyed by the POLICY number: HDFC's
-  // `getCertificate` puts the path parameter straight into
-  // Req_Policy_Document.Policy_Number (see tf-api `hdfc.provider.ts`). It answers
-  // with the COI as base64 JSON rather than a PDF stream, so this opens the
-  // backend response in a new tab rather than pretending to be a download.
-  const certificateUrl = policyNo
-    ? `${env.VITE_VENDOR_API_URL}/${HDFC_SLUG}/policy/${encodeURIComponent(policyNo)}/certificate`
-    : null;
+  const [coiState, setCoiState] = useState<"idle" | "fetching">("idle");
+  const [coiError, setCoiError] = useState<string | null>(null);
+
+  /**
+   * Fetch the COI and save it as a PDF.
+   *
+   * The route is keyed by the POLICY number: HDFC's `getCertificate` puts the
+   * path parameter straight into `Req_Policy_Document.Policy_Number` (see tf-api
+   * `hdfc.provider.ts`). It answers with the document as base64 JSON rather than
+   * a PDF stream, so a plain link just showed the tester ~477 KB of base64 in a
+   * browser tab. The certification workbook wants the file itself filed against
+   * the policy number, so this downloads it.
+   */
+  const fetchCoi = async (): Promise<void> => {
+    if (!policyNo) return;
+    setCoiState("fetching");
+    setCoiError(null);
+    try {
+      const { data } = await vendorClient.get<{ response: CoiResponse }>(
+        `/${HDFC_SLUG}/policy/${encodeURIComponent(policyNo)}/certificate`,
+      );
+      saveCoi(data.response, policyNo);
+    } catch (err) {
+      // HDFC's own words where we have them — this is a certification harness,
+      // so a tester's next action is to read the failure back to their team.
+      setCoiError(
+        err instanceof CoiUnavailableError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Could not fetch the certificate.",
+      );
+    } finally {
+      setCoiState("idle");
+    }
+  };
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4">
@@ -71,14 +100,16 @@ export function HdfcSuccessPage() {
               <Button variant="outline" onClick={copy}>
                 <Copy /> {copied ? "Copied" : "Copy policy number"}
               </Button>
-              {certificateUrl ? (
-                <Button asChild variant="outline">
-                  <a href={certificateUrl} target="_blank" rel="noreferrer">
-                    <FileText /> Fetch certificate (COI)
-                  </a>
-                </Button>
-              ) : null}
+              <Button variant="outline" onClick={() => void fetchCoi()} disabled={coiState === "fetching"}>
+                {coiState === "fetching" ? <Loader2 className="animate-spin" /> : <FileText />}
+                {coiState === "fetching" ? "Fetching…" : "Download certificate (COI)"}
+              </Button>
             </div>
+            {coiError ? (
+              <p className="text-sm text-destructive" role="alert">
+                {coiError}
+              </p>
+            ) : null}
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">

@@ -152,6 +152,89 @@ describe("getQuote", () => {
       /RTO not serviceable/,
     );
   });
+
+  /**
+   * The accessory cap can only be judged against HDFC's own recommended IDV, so
+   * the guard sits between GetCalculateIDV and CalculatePremium. The fixture
+   * recommends ₹12,44,800, which caps accessories at ₹3,11,200.
+   */
+  describe("accessory sum-insured cap", () => {
+    it("refuses before CalculatePremium when the accessories breach the cap", async () => {
+      const { transport, calls } = recordingTransport({
+        getcalculateidv: idvFixture,
+        calculatepremium: premiumFixture,
+      });
+      await expect(
+        provider(transport).getQuote(
+          { ...quoteReq, electricalAccessoriesSI: 200_000, nonElectricalAccessoriesSI: 200_000 },
+          ctx,
+        ),
+      ).rejects.toThrow(/25%/);
+      // Only the IDV call went out: the premium call must never be attempted.
+      expect(calls.map((c) => c.url.split("/").pop())).toEqual(["getcalculateidv"]);
+    });
+
+    it("prices accessories that sit inside the cap", async () => {
+      const { transport, calls } = recordingTransport({
+        getcalculateidv: idvFixture,
+        calculatepremium: premiumFixture,
+      });
+      await provider(transport).getQuote(
+        { ...quoteReq, electricalAccessoriesSI: 200_000, nonElectricalAccessoriesSI: 100_000 },
+        ctx,
+      );
+      expect(calls.map((c) => c.url.split("/").pop())).toEqual([
+        "getcalculateidv",
+        "calculatepremium",
+      ]);
+    });
+  });
+});
+
+/**
+ * The cap sits in `priceQuote`, which getQuote and getFullQuote share. That
+ * makes it a single choke point — but only if the proposal path really does go
+ * through it, which is what this proves. Without it the guard could be silently
+ * bypassed on the one path that binds a policy.
+ */
+describe("accessory cap on the proposal path", () => {
+  const fullish = {
+    quoteId: "TXN-1",
+    proposer: {
+      firstName: "MAHENDRA",
+      lastName: "GHANCHI",
+      email: "m@example.com",
+      mobile: "7387005111",
+      dob: "1996-07-22",
+      panNumber: "BXGPG2512P",
+    },
+    address: { addressLine1: "12 Main St", pincode: "307801", city: "MUMBAI", state: "MH" },
+    vehicle: { engineNumber: "EN123", chassisNumber: "CH123", financeType: "none" },
+    kycRefId: "KYC-99",
+    isProposalOnly: false,
+    isVehicleUnderLoan: false,
+  };
+
+  it("refuses before CreateProposal, so an over-cap policy can never be bound", async () => {
+    const { transport, calls } = recordingTransport({
+      getcalculateidv: idvFixture,
+      calculatepremium: premiumFixture,
+      createproposal: proposalFixture,
+      getproposaldocument: { StatusCode: "1" },
+    });
+    await expect(
+      provider(transport).getFullQuote(
+        {
+          ...quoteReq,
+          ...fullish,
+          electricalAccessoriesSI: 200_000,
+          nonElectricalAccessoriesSI: 200_000,
+        } as MotorFullQuoteRequest,
+        ctx,
+      ),
+    ).rejects.toThrow(/25%/);
+    expect(calls.map((c) => c.url.split("/").pop())).toEqual(["getcalculateidv"]);
+  });
 });
 
 describe("getFullQuote", () => {

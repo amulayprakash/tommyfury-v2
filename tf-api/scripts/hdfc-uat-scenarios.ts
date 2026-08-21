@@ -23,14 +23,19 @@
  *   FAIL        our defect: HDFC rejected something we sent, or HDFC silently
  *               accepted something this condition says it must not — meaning the
  *               rule is ours to enforce and today we do not.
- *   VENDOR_DATA HDFC's sandbox could not price it (no IDV for the model, no rate
- *               in an R-master, a Blaze exception, a term its own data dictionary
- *               documents but its rules engine refuses). Not our code.
+ *   VENDOR_DATA HDFC's sandbox could not price it CORRECTLY (no IDV for the
+ *               model, no rate in an R-master, a Blaze exception, a term its own
+ *               data dictionary documents but its rules engine refuses, or a
+ *               rating component its own documentation describes that the engine
+ *               has stopped producing). Not our code — and for a row that returns
+ *               HTTP 200 with the wrong number in it, only ever on isolated
+ *               evidence recorded in the row, via vendorBehaviour().
  *   BLOCKED     our integration cannot express the condition at all. Each such
  *               row states the exact missing field / code path.
  *   MANUAL      a UI/manual condition with no API surface.
  */
 import { writeFileSync, readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { loadHdfcConfig } from "@/providers/hdfc/config.ts";
 import { HdfcProvider } from "@/providers/hdfc/hdfc.provider.ts";
 import { passthroughCodeResolver } from "@/providers/hdfc/db-code-resolver.ts";
@@ -109,12 +114,20 @@ const RTO = "10406";
 type SheetKey = "new-rollover" | "long-term" | "used-car" | "break-in";
 type Verdict = "PASS" | "FAIL" | "VENDOR_DATA" | "BLOCKED" | "MANUAL";
 
-interface Assertion {
+export interface Assertion {
   ok: boolean;
   detail: string;
+  /**
+   * Set on a FAILED assertion whose cause has been isolated to HDFC's own
+   * rating behaviour rather than to our payload — see `vendorBehaviour()`. The
+   * value-assertion twin of VENDOR_DATA_PATTERNS, which can only classify rows
+   * HDFC refused with a message; a row that returns HTTP 200 with the wrong
+   * number in it reaches no such pattern.
+   */
+  vendorData?: string;
 }
 /** Raw HDFC `Resp_PvtCar`, the ground truth every value assertion reads. */
-type Resp = Record<string, unknown>;
+export type Resp = Record<string, unknown>;
 
 interface Scenario {
   sheet: SheetKey;
@@ -162,8 +175,18 @@ interface Scenario {
 interface RowResult extends Omit<Scenario, "req" | "assert" | "expectRejection"> {
   verdict: Verdict;
   reason: string;
-  /** HDFC's verbatim message, never paraphrased. */
+  /**
+   * The verbatim refusal message, never paraphrased. Read it together with
+   * `refusedBy`: since the accessory cap became ours to enforce, this field can
+   * hold OUR text as well as HDFC's, and this document is sent to HDFC.
+   */
   vendorMessage?: string;
+  /**
+   * Who produced `vendorMessage`. Recorded when the refusal is caught, never
+   * inferred at render time — our own messages can legitimately begin with the
+   * word "HDFC", so the text cannot be used to tell them apart.
+   */
+  refusedBy?: "HDFC" | "us";
   request?: MotorQuoteRequest;
   grossPremium?: number;
   odPremium?: number;
@@ -322,14 +345,77 @@ function flaggedForInspection(expected: boolean) {
       ? ok(`isInspectionRequired=${expected}`)
       : bad(`expected isInspectionRequired=${expected} but got ${JSON.stringify(q.isInspectionRequired)}`);
 }
-function both(a: Scenario["assert"], b: Scenario["assert"]): Scenario["assert"] {
+/**
+ * Both halves of a two-part condition. NEITHER half short-circuits: both are
+ * evaluated and both details are reported, whichever fails.
+ *
+ * It used to return on the first failure, and that quietly cost real coverage —
+ * with the break-in loading withdrawn, rows 9 and 12 stopped evaluating their
+ * `flaggedForInspection` half altogether, so the pack's only positive live check
+ * of `CanonicalQuoteResult.isInspectionRequired` vanished from the artifact
+ * without anything saying so. Every assertion here is a pure read of the
+ * response and the canonical quote, so evaluating both is free.
+ *
+ * A failure keeps the `vendorData` tag of the FIRST failing half that carries
+ * one: an untagged failure is our defect and must not be laundered by a tagged
+ * one sitting beside it.
+ */
+export function both(a: Scenario["assert"], b: Scenario["assert"]): Scenario["assert"] {
   return (r, q) => {
     const x = a!(r, q);
-    if (!x.ok) return x;
     const y = b!(r, q);
-    return y.ok ? ok(`${x.detail}; ${y.detail}`) : bad(`${x.detail}; ${y.detail}`);
+    const detail = `${x.detail}; ${y.detail}`;
+    if (x.ok && y.ok) return ok(detail);
+    const failures = [x, y].filter((v) => !v.ok);
+    // Untagged failures win: if either half failed for a reason we have NOT
+    // isolated to the vendor, the row is ours.
+    const untagged = failures.find((v) => v.vendorData === undefined);
+    return untagged ? { ok: false, detail } : { ok: false, detail, vendorData: failures[0]!.vendorData };
   };
 }
+
+/**
+ * Marks an assertion's FAILURE as HDFC's, not ours.
+ *
+ * Use only where the failure has been isolated on live UAT to the vendor's own
+ * behaviour, and put that isolation in `why` — it is printed verbatim into the
+ * results sheet, and it is the only thing standing between "we proved this" and
+ * "we relabelled a red row green".
+ *
+ * `confirms` is what stops that string outliving its evidence. The tag is only
+ * applied when the response STILL shows the isolated behaviour at run time;
+ * anything else fails as ours. Without it a single sentence about one afternoon
+ * on UAT would excuse every future failure of the wrapped assertion — including
+ * the two that would be squarely our defect (our normalizer stopping reading the
+ * field, or the vendor returning a value that is present, non-zero and wrong).
+ * `VENDOR_DATA_PATTERNS` has the same property for free, because it matches text
+ * the vendor emitted on that call; a value assertion has to be given it.
+ */
+export function vendorBehaviour(
+  assert: NonNullable<Scenario["assert"]>,
+  why: string,
+  confirms: (r: Resp) => boolean,
+): Scenario["assert"] {
+  return (r, q) => {
+    const a = assert(r, q);
+    if (a.ok || !confirms(r)) return a;
+    return { ...a, vendorData: why };
+  };
+}
+
+/**
+ * The run-time signature of the withdrawn break-in loading: HDFC still returns
+ * both fields, and both are zero.
+ *
+ * Presence is checked explicitly rather than left to `n()`, which maps a missing
+ * field to 0 — so a renamed or dropped field reads as our defect, which is what
+ * it would be, instead of being absorbed into the vendor's excuse.
+ */
+export const breakInLoadingAbsent = (r: Resp): boolean =>
+  r.BreakInLoadingPercent !== undefined &&
+  r.BreakIN_Premium !== undefined &&
+  n(r.BreakInLoadingPercent) === 0 &&
+  n(r.BreakIN_Premium) === 0;
 
 /** HDFC sandbox limitations — never our defect. */
 const VENDOR_DATA_PATTERNS: { test: RegExp; why: string }[] = [
@@ -407,6 +493,51 @@ const VENDOR_DATA_PATTERNS: { test: RegExp; why: string }[] = [
   },
   {
     /**
+     * Raised on EVERY New Business package (`BusinessType_Mandatary: "New
+     * Vehicle"`, `POLICY_TYPE: "OD Plus TP"`) sent with `POLICY_TENURE = 1` —
+     * i.e. on the ordinary 1OD-3TP new private car term, which HDFC's own pack
+     * specifies for New and Rollover rows 1, 2 and 3 and which every
+     * `Req_PvtCar` sample in both vendor Postman collections sends.
+     *
+     * This is NEW vendor behaviour, not our defect. The same three rows priced
+     * on 13/08/2026 at these exact shapes (row 1 gross ₹22,714, row 2 ₹35,782,
+     * row 3 ₹21,685) and one of them was bound as a real UAT policy
+     * (2302201225648800000). It appeared in the 17–21/08 window, alongside the
+     * separate Registration_No change that hid it: HDFC validates the plate
+     * BEFORE the term, so while `Registration_No` was null the 19/08 run saw
+     * only "Vehicle Registration number is mandatory" and never reached this
+     * wall.
+     *
+     * Isolated on live UAT on 21/08/2026 (scripts/_hdfc-regno-sweep.ts, part 2;
+     * 12 call records with the full payload sent and the verbatim response in
+     * scripts/_hdfc-regno-sweep.json). Six payloads, model 12798 / RTO 10406,
+     * policy starting 21/08/2026, one input varied at a time from row 1:
+     *
+     *   POLICY_TENURE  addons  delivery date  CPA_Tenure  result
+     *   1              off     today          1           REFUSED (row 1 verbatim)
+     *   1              ALL     today          1           REFUSED (row 2 verbatim)
+     *   1              off     13/08/2026     1           REFUSED
+     *   1              off     −100 days      1           REFUSED (row 3 shape)
+     *   1              off     today          3           REFUSED
+     *   3              off     today          1           PRICED — gross ₹27,453
+     *
+     * So it is not the add-on set, not vehicle age and not CPA_Tenure:
+     * POLICY_TENURE is the only input whose value changes the outcome.
+     *
+     * We do NOT route around it. Forcing POLICY_TENURE to 3 would price a
+     * three-year own-damage leg the customer never asked for — the same reason
+     * the 2+3 rows above are not quoted at their 3-year figures. Raised with
+     * HDFC as vendor blocker item 11.
+     */
+    test: /Policy period cannot be less than 3 years/i,
+    why:
+      "HDFC's rules engine now refuses POLICY_TENURE=1 on a New Business package and demands a three-year own-damage leg, so the ordinary 1OD-3TP new private car term cannot be priced. " +
+      "New vendor behaviour in the 17–21/08/2026 window: these same rows priced on 13/08 (row 1 gross ₹22,714) and one was bound as UAT policy 2302201225648800000. " +
+      "Isolated on live UAT on 21/08 over six payloads varying one input at a time (scripts/_hdfc-regno-sweep.json): the add-on set, the delivery date and CPA_Tenure all make no difference, while the identical payload at POLICY_TENURE=3 prices at gross ₹27,453. " +
+      "Quoting that 3-year figure instead would sell a term the customer did not choose, so the row is left unpriced",
+  },
+  {
+    /**
      * Raised ONLY by `BusinessType_Mandatary: "Used Car"`, and isolated to that
      * one field on live UAT (2026-08-10, model 12798 / RTO 10406, 3-year-old
      * Swift): the Roll Over payload with nothing changed but that string is
@@ -462,6 +593,34 @@ const BREAKIN_SHEET_CONFLICT =
  */
 const LIABILITY_ADDON_CONFLICT =
   "HDFC prices own-damage add-ons on a policy that has no own-damage section: Basic_OD_Premium comes back 0 while Zero Dep, Tyre Secure, NCB Protect, RTI, Consumables, Engine-Gearbox and Emergency Assistance are all charged. HDFC does not police the combination, so the eligibility is ours: mapper/canonical.ts now forces every OD cover, accessory IDV and the voluntary excess off when POLICY_TYPE is 'TP Only'. What survives is what HDFC itself rates on a liability policy — UnnamedPerson_premium and PaidDriver_Premium came back populated on these very rows — plus compulsory PA and the bi-fuel kit, which carries its own BiFuel_Kit_TP_Premium.";
+
+/**
+ * See vendorBehaviour(). The isolation behind this text is scripts/_hdfc-breakin-sweep.ts
+ * and its persisted output; the summary is item 12 of docs/hdfc-vendor-blockers.md.
+ */
+const BREAKIN_LOADING_WITHDRAWN =
+  "HDFC UAT no longer computes a break-in loading at ANY lapse window. Isolated live on 21/08/2026 (scripts/_hdfc-breakin-sweep.json), Maruti Swift ZXI 12798 at RTO 10406: BreakInLoadingPercent and BreakIN_Premium both come back 0 at lapses of 1, 3, 30, 44, 45, 46, 60, 90, 120 and 200 days, where the same shapes returned 15 / ₹220 (3 and 60 days) and 15 / ₹1,000 (120 days) on 13/08/2026. THE STRONGEST EVIDENCE IS ARITHMETIC: the gross premium fell by exactly the withdrawn loading. The 13/08 grosses are this runner's own output from that day, preserved in git — commit a098827, docs/hdfc-uat-scenario-results.md, Break In rows 3 and 4. Break In #4 (120-day lapse), ₹15,342 on 13/08 minus ₹14,162 today = ₹1,180 = the 1,000 loading plus 18% GST, with the NCB already 0 on both dates; Break In #3 (60-day lapse), ₹5,909 minus ₹5,715 = ₹194 = 220 x 0.75 (the 25% NCB) x 1.18. Both differences reconcile to the withdrawn loading alone, to the rupee, and that residual of zero IS the whole of the arithmetic argument: the 13/08 run persisted the gross and the break-in fields but not the full Resp_PvtCar, so component-by-component identity across the two dates is an inference from the residual rather than something we can show field by field. A payload change that altered break-in DETECTION could produce that; one that altered rating could not, and the loading is simply not being computed. NEITHER of the payload values we can still send restores it: the only change to our CalculatePremium payload in this window was Registration_No (null -> dashed plate / \"New\"), and at a fixed 60-day break the dashed plate \"MH-01-QQ-7878\" and the literal \"New\" returned byte-identical responses — IDV 559200, OD 1469, TP 3416, gross ₹5,715, loading 0/0. We cannot rule the field out entirely, because the pre-change value was null and UAT now refuses it outright, so the exact payload that used to earn the loading is unreproducible; what we can say is that no payload we are able to send produces one. Corroborating that the lapse still reaches HDFC at all: in those same responses the NCB is granted at 25% up to 60 days and voided from 90 (own-damage premium ₹1,469 -> ₹8,261), so Policy_Details.PreviousPolicy_PolicyEndDate is being read and rated on. Raised with HDFC as item 12 of docs/hdfc-vendor-blockers.md; RECHECK AFTER 30/09/2026 or on any word from HDFC, and delete this tag the day a lapse past 45 days charges a loading again.";
+
+/**
+ * HDFC's OWN channel deck states a threshold its test pack does not:
+ * `Channel_Integration_Details.pptx`, slide "Private Car Break-In", verbatim —
+ *
+ *   "1) Break-in premium will be calculated only if there is a break-in of more
+ *    than 45 days, other wise break-in loading premium will be calculate as 0."
+ *
+ * The Break In sheet's row 2 contradicts that: it expects a loading at a break of
+ * more than 24 hours. The rows are LEFT ASSERTING THE PACK, not the deck, because
+ * live UAT sided with the pack while it was still charging loading at all — a
+ * 3-day lapse returned 15 / ₹220 on both 10/08 and 13/08/2026. Flipping row 2 to
+ * the deck's reading would make it PASS today, but it would pass because the
+ * loading engine is silent everywhere, not because 3 days is inside a 45-day
+ * grace, and that green would hide the regression rather than record it. The
+ * conflict is instead raised with HDFC, and the row is re-testable the day
+ * loading returns: if 3 days then reads 0 while 60 and 120 days read positive,
+ * the deck wins and row 2's assertion should be flipped THEN, on evidence.
+ */
+const BREAKIN_45_DAY_DECK_RULE =
+  "HDFC's own Channel_Integration_Details.pptx (\"Private Car Break-In\") says break-in loading is charged only \"if there is a break-in of more than 45 days\", which contradicts this sheet's expectation of a loading at a 3-day break — and which live UAT ITSELF contradicted while it was still charging loading (a 3-day lapse returned 15% / ₹220 on 10/08 and 13/08/2026). The pack's reading is kept until HDFC settles which of its two documents governs; see docs/hdfc-vendor-blockers.md.";
 
 /** Every own-damage cover HDFC was observed billing on a TP-only policy. */
 const OD_ADDON_PREMIUM_FIELDS = [
@@ -554,10 +713,30 @@ const NEW_AND_ROLLOVER: Scenario[] = [
     condition: "Try to Create policy Break-in (1+1), HDFC Quote should not display",
     expected: "Break In sheet reading: quote produced with break-in loading charged, and flagged for inspection.",
     vehicle: V.swift,
+    // 45 days, deliberately. It briefly went to 60 on the reasoning that HDFC's
+    // channel deck puts the threshold at "more than 45 days" and 45 therefore sits
+    // ambiguously ON the boundary. That reasoning was self-defeating: the whole
+    // finding recorded in BREAKIN_LOADING_WITHDRAWN is that the deck is NOT what
+    // UAT implements, and HDFC's own 13/08 response charged 15% / ₹220 at exactly
+    // 45 days. So 45 is the MORE discriminating input, not the ambiguous one — it
+    // is the only window whose answer separates the deck's reading from the pack's,
+    // and it is a window HDFC has demonstrably priced with a loading before.
     req: { previousPolicyExpiryDate: isoOffset(-45), isPreviousPolicyExpired: true },
-    assert: both(positive("BreakInLoadingPercent", "BreakIN_Premium"), flaggedForInspection(true)),
+    // isInspectionRequired is asserted FIRST and, like the loading it derives
+    // from, is gated on breakInLoadingAbsent: our normalizer reads it straight off
+    // BreakIN_Premium, so while HDFC sends 0 our false is correct. If the loading
+    // ever comes back positive while this stays false, the predicate no longer
+    // holds and the row fails as ours — which is what it would be.
+    assert: both(
+      vendorBehaviour(flaggedForInspection(true), BREAKIN_LOADING_WITHDRAWN, breakInLoadingAbsent),
+      vendorBehaviour(
+        positive("BreakInLoadingPercent", "BreakIN_Premium"),
+        BREAKIN_LOADING_WITHDRAWN,
+        breakInLoadingAbsent,
+      ),
+    ),
     notes: BREAKIN_SHEET_CONFLICT,
-    inputDeviation: "previous policy lapsed 45 days ago (a real break-in window).",
+    inputDeviation: "previous policy lapsed 45 days ago (a real break-in window, and the window HDFC itself charged a loading on, on 13/08/2026).",
   },
   {
     sheet: "new-rollover", no: 10, transactionType: "SAOD", policyTerm: "0+1",
@@ -577,10 +756,18 @@ const NEW_AND_ROLLOVER: Scenario[] = [
     condition: "Try to Create policy Break-in (0+1), HDFC Quote should not display",
     expected: "Break In sheet reading: quote produced with break-in loading charged, and flagged for inspection.",
     vehicle: V.swift,
+    // 45 days, for the reason given on row 9.
     req: { selectedPolicy: "standAloneOD", tenureYears: 1, ...PREV_TP, previousPolicyExpiryDate: isoOffset(-45), isPreviousPolicyExpired: true },
-    assert: both(positive("BreakInLoadingPercent", "BreakIN_Premium"), flaggedForInspection(true)),
+    assert: both(
+      vendorBehaviour(flaggedForInspection(true), BREAKIN_LOADING_WITHDRAWN, breakInLoadingAbsent),
+      vendorBehaviour(
+        positive("BreakInLoadingPercent", "BreakIN_Premium"),
+        BREAKIN_LOADING_WITHDRAWN,
+        breakInLoadingAbsent,
+      ),
+    ),
     notes: BREAKIN_SHEET_CONFLICT,
-    inputDeviation: "previous OD policy lapsed 45 days ago; the paired TP policy is still running.",
+    inputDeviation: "previous OD policy lapsed 45 days ago (the window HDFC itself charged a loading on, on 13/08/2026); the paired TP policy is still running.",
   },
   {
     sheet: "new-rollover", no: 13, transactionType: "SAOD", policyTerm: "0+1",
@@ -686,6 +873,8 @@ const NEW_AND_ROLLOVER: Scenario[] = [
     vehicle: V.swift,
     req: { electricalAccessoriesSI: 200_000, nonElectricalAccessoriesSI: 200_000 },
     expectRejection: { test: /25%|optional covers SI/i, describe: "₹4L of accessories on a ~₹5.6L IDV must be refused" },
+    notes:
+      "The refusal is now OURS, not HDFC's — the condition is unchanged, only who enforces it. HDFC used to police this itself, answering \"Total optional covers SI should not be more than 25% of Vehicle Base Value!\" to this exact request on 13/08/2026; on 21/08 it priced the same request instead, at gross ₹13,258 — re-captured live on 21/08/2026 and persisted at scripts/_hdfc-row25-recapture-2026-08-21T08-06-20-700Z.json (IDV 559200, 25% ceiling 139800, Electical_Acc_Premium 8000, NonElectical_Acc_Premium 525, Net_Premium 11236, Total_Premium 13258). So the rule joined the RTI ceiling and the anti-theft discount on the list HDFC states but does not enforce, and hdfc.provider.ts now refuses it between GetCalculateIDV and CalculatePremium — the first moment the vehicle sum insured exists. It REFUSES rather than silently clamping, which is what the other ours-to-enforce rules do, because an accessory SI is a value the customer declared and expects to be insured for: quoting a clamped figure would sell materially less cover than was asked for without saying so. \"Vehicle SI\" is read as the vehicle's base value alone (Policy_Details.Vehicle_IDV), not the vehicle plus its accessories, on HDFC's own wording — \"Vehicle Base Value\" — and because that is the stricter of the two readings. See mapper/canonical.ts assertAccessorySiWithinCap.",
   },
   {
     sheet: "new-rollover", no: 26, transactionType: "Roll-Over", policyTerm: "1+1",
@@ -806,7 +995,12 @@ const BREAK_IN: Scenario[] = [
     expected: "Proposal should be triggered for Inspection & Break-in loading premium will be charged.",
     vehicle: V.swift,
     req: { previousPolicyExpiryDate: isoOffset(-3), isPreviousPolicyExpired: true },
-    assert: positive("BreakInLoadingPercent", "BreakIN_Premium"),
+    assert: vendorBehaviour(
+      positive("BreakInLoadingPercent", "BreakIN_Premium"),
+      BREAKIN_LOADING_WITHDRAWN,
+      breakInLoadingAbsent,
+    ),
+    notes: BREAKIN_45_DAY_DECK_RULE,
     inputDeviation: "previous policy lapsed 3 days ago (> 24 h, well under 90 days).",
   },
   {
@@ -815,7 +1009,18 @@ const BREAK_IN: Scenario[] = [
     expected: "Proposal should be triggered for Inspection & Break-in loading premium will be charged.",
     vehicle: V.swift,
     req: { previousPolicyExpiryDate: isoOffset(-60), isPreviousPolicyExpired: true },
-    assert: both(positive("BreakInLoadingPercent", "BreakIN_Premium"), positive("Current_NCB_Per")),
+    // The NCB half is left UNWRAPPED, and stays first for readability: it still
+    // works (25% at a 60-day lapse, live 21/08), so if it ever fails that is our
+    // defect and must not inherit the break-in loading's vendor excuse. `both()`
+    // evaluates and reports both halves either way.
+    assert: both(
+      positive("Current_NCB_Per"),
+      vendorBehaviour(
+        positive("BreakInLoadingPercent", "BreakIN_Premium"),
+        BREAKIN_LOADING_WITHDRAWN,
+        breakInLoadingAbsent,
+      ),
+    ),
     notes: "Inside 90 days the NCB survives, so the assertion also checks Current_NCB_Per is still granted.",
     inputDeviation: "previous policy lapsed 60 days ago.",
   },
@@ -825,7 +1030,16 @@ const BREAK_IN: Scenario[] = [
     expected: "1. Proposal should be triggered for Inspection & Break-in loading premium will be charged. 2. NCB % should not be applicable.",
     vehicle: V.swift,
     req: { previousPolicyExpiryDate: isoOffset(-120), isPreviousPolicyExpired: true, ncbPercent: 20 },
-    assert: both(positive("BreakInLoadingPercent", "BreakIN_Premium"), zero("Current_NCB_Per", "NCBBonusDisc_Premium")),
+    // As row 3: the NCB half still holds (voided at 120 days, live 21/08) and is
+    // left unwrapped, so a future NCB failure reads as ours rather than HDFC's.
+    assert: both(
+      zero("Current_NCB_Per", "NCBBonusDisc_Premium"),
+      vendorBehaviour(
+        positive("BreakInLoadingPercent", "BreakIN_Premium"),
+        BREAKIN_LOADING_WITHDRAWN,
+        breakInLoadingAbsent,
+      ),
+    ),
     notes: "Both halves of HDFC's own expected result are asserted: loading charged AND the NCB voided by the >90-day lapse.",
     inputDeviation: "previous policy lapsed 120 days ago; 20% NCB declared so the void is observable.",
   },
@@ -1332,6 +1546,28 @@ const ALL_SCENARIOS: Record<SheetKey, Scenario[]> = {
 function errMessage(e: unknown): string {
   return (e instanceof Error ? e.message : String(e)).trim();
 }
+/**
+ * The refusal message as it appears in the artifact, ATTRIBUTED. This document
+ * is sent to HDFC, so a refusal our own guardrail raised must never be rendered
+ * under a heading that says the words are theirs.
+ */
+const BTICK = "`";
+function refusalCell(r: RowResult, whenNone: string): string {
+  if (!r.vendorMessage) return whenNone;
+  const who = r.refusedBy === "us" ? "**Ours:**" : "**HDFC:**";
+  return `${who} ${BTICK}${cell(r.vendorMessage)}${BTICK}`;
+}
+
+/**
+ * Who refused. `ProviderError` carries HDFC's own words and the default code
+ * `PROVIDER_ERROR`; any other `AppError.code` is one of our own guardrails
+ * refusing before the request was ever sent.
+ */
+function refusedByOf(e: unknown): "HDFC" | "us" {
+  const code = (e as { code?: string }).code;
+  return code && code !== "PROVIDER_ERROR" ? "us" : "HDFC";
+}
+
 function isRateLimited(e: unknown): boolean {
   return /\[429\]|\b429\b/.test(e instanceof Error ? e.message : String(e));
 }
@@ -1377,7 +1613,10 @@ async function main(): Promise<void> {
 
   const results: RowResult[] = [];
   /** Identical canonical requests ask HDFC the same question — ask it once. */
-  const cache = new Map<string, { row: string; result: Partial<RowResult>; error?: string }>();
+  const cache = new Map<
+    string,
+    { row: string; result: Partial<RowResult>; error?: string; errorCode?: string }
+  >();
   /**
    * When a whole policy term is refused by HDFC, the remaining conditions of that
    * term cannot be exercised — record the term's verbatim refusal against each of
@@ -1412,6 +1651,7 @@ async function main(): Promise<void> {
           row.respPvtCar = ((q._rawResponse as Record<string, unknown> | undefined)?.Resp_PvtCar ?? {}) as Resp;
         } catch (e) {
           row.vendorMessage = errMessage(e);
+          row.refusedBy = refusedByOf(e);
         }
         await sleep(1000 / RPS);
       }
@@ -1439,6 +1679,7 @@ async function main(): Promise<void> {
     if (gated) {
       row.verdict = "VENDOR_DATA";
       row.vendorMessage = gated.message;
+      row.refusedBy = "HDFC";
       row.reason = `Policy term ${s.policyTerm} is refused outright by HDFC UAT (${gated.why}), so this condition could not be exercised. Term gate established by the first row of this term.`;
       console.log(`   → VENDOR_DATA (term gate): ${gated.message.slice(0, 110)}`);
       results.push(row);
@@ -1450,12 +1691,19 @@ async function main(): Promise<void> {
     let raw: Resp | undefined;
     let quote: CanonicalQuoteResult | undefined;
     let error: string | undefined;
+    /**
+     * `AppError.code`. `PROVIDER_ERROR` (or no code at all) means the refusal
+     * came back from HDFC; anything else means one of OUR guardrails refused the
+     * request before it was ever sent — which changes who a PASS credits.
+     */
+    let errorCode: string | undefined;
 
     if (hit) {
       row.sharedWithRow = hit.row;
       raw = hit.result.respPvtCar;
       quote = hit.result.grossPremium !== undefined ? ({ grossPremium: hit.result.grossPremium } as CanonicalQuoteResult) : undefined;
       error = hit.error;
+      errorCode = hit.errorCode;
       Object.assign(row, {
         grossPremium: hit.result.grossPremium,
         odPremium: hit.result.odPremium,
@@ -1478,11 +1726,13 @@ async function main(): Promise<void> {
         row.respPvtCar = raw;
       } catch (e) {
         error = errMessage(e);
+        errorCode = (e as { code?: string }).code;
       }
       cache.set(key, {
         row: `${s.sheet} #${s.no}`,
         result: { grossPremium: row.grossPremium, odPremium: row.odPremium, tpPremium: row.tpPremium, idv: row.idv, respPvtCar: row.respPvtCar },
         error,
+        errorCode,
       });
       await sleep(1000 / RPS);
     }
@@ -1490,19 +1740,28 @@ async function main(): Promise<void> {
     // ── Verdict ────────────────────────────────────────────────────────────────
     if (error) {
       row.vendorMessage = error;
+      row.refusedBy = errorCode && errorCode !== "PROVIDER_ERROR" ? "us" : "HDFC";
       const vendorWhy = classifyVendorData(error);
+      const refuser =
+        row.refusedBy === "us"
+          ? "Our own guardrail refused it before the request left us"
+          : "HDFC refused it";
       if (s.expectRejection?.test.test(error)) {
         row.verdict = "PASS";
-        row.reason = `HDFC refused it, as the condition requires (${s.expectRejection.describe}).`;
+        row.reason = `${refuser}, as the condition requires (${s.expectRejection.describe}).`;
       } else if (vendorWhy) {
         row.verdict = "VENDOR_DATA";
         row.reason = vendorWhy;
       } else if (s.expectRejection) {
         row.verdict = "PASS";
-        row.reason = `HDFC refused it (${s.expectRejection.describe}), though its message does not name the rule.`;
+        row.reason = `${refuser} (${s.expectRejection.describe}), though the message does not name the rule.`;
       } else {
         row.verdict = "FAIL";
-        row.reason = "HDFC rejected our payload.";
+        // Attributed from `refusedBy`, never assumed. One of OUR OWN guardrails can
+        // refuse a row that declares no expectRejection, and this document is sent
+        // to HDFC: hardcoding "HDFC rejected our payload" would print that beside an
+        // "**Ours:**" verbatim cell and contradict itself in front of the vendor.
+        row.reason = `${refuser}, and this condition did not ask for a refusal.`;
       }
       // Only the term probe may gate: see Scenario.termProbe.
       if (row.verdict === "VENDOR_DATA" && s.termProbe && !termGate.has(gateKey)) {
@@ -1515,8 +1774,16 @@ async function main(): Promise<void> {
         "The rule is not enforced server-side, so it is ours to enforce.";
     } else if (s.assert) {
       const a = s.assert(raw ?? {}, quote!);
-      row.verdict = a.ok ? "PASS" : "FAIL";
-      row.reason = a.detail;
+      if (a.ok) {
+        row.verdict = "PASS";
+        row.reason = a.detail;
+      } else if (a.vendorData) {
+        row.verdict = "VENDOR_DATA";
+        row.reason = `${a.vendorData} Assertion that could not be met: ${a.detail}.`;
+      } else {
+        row.verdict = "FAIL";
+        row.reason = a.detail;
+      }
     } else {
       row.verdict = "PASS";
       row.reason = `priced: gross ₹${row.grossPremium}`;
@@ -1524,7 +1791,9 @@ async function main(): Promise<void> {
 
     console.log(
       `   → ${row.verdict}: ${row.reason.slice(0, 150)}` +
-        (row.vendorMessage ? `\n      HDFC: ${row.vendorMessage.slice(0, 200)}` : ""),
+        (row.vendorMessage
+          ? `\n      ${row.refusedBy === "us" ? "OURS" : "HDFC"}: ${row.vendorMessage.slice(0, 200)}`
+          : ""),
     );
     results.push(row);
   }
@@ -1599,7 +1868,7 @@ function writeMarkdown(rows: RowResult[], meta: { generatedAt: string }): void {
   L.push("| --- | --- |");
   L.push("| **PASS** | The call succeeded and the condition's expectation held — including the cases where the condition demands a refusal and HDFC refused. |");
   L.push("| **FAIL** | Our defect. Either HDFC rejected something we sent, or HDFC silently accepted something this condition forbids, which means the rule is ours to enforce and today we do not. |");
-  L.push("| **VENDOR_DATA** | HDFC's sandbox could not price it: no IDV for the model, no rate row in an R-master, a Blaze rules-engine crash, or a term its own data dictionary documents but its rules engine refuses. Not our code. |");
+  L.push("| **VENDOR_DATA** | HDFC's sandbox could not price it correctly: no IDV for the model, no rate row in an R-master, a Blaze rules-engine crash, a term its own data dictionary documents but its rules engine refuses, or a rating component its own documentation describes that the engine has stopped producing. Not our code — and where the call succeeded and only the number was wrong, the row carries the live isolation that proves it. |");
   L.push("| **BLOCKED** | Our integration cannot express the condition. Every such row names the missing field or code path. |");
   L.push("| **MANUAL** | A UI/manual condition with no API surface. |");
   L.push("");
@@ -1616,10 +1885,26 @@ function writeMarkdown(rows: RowResult[], meta: { generatedAt: string }): void {
   }
   L.push(`| **All sheets** | **${rows.length}** | ${VERDICTS.map((v) => `**${total[v]}**`).join(" | ")} |`);
   L.push("");
-  const executed = rows.filter((r) => r.grossPremium !== undefined || r.vendorMessage).length;
+  /**
+   * A row counts as executed only when HDFC ITSELF answered it. A refusal raised
+   * by one of our own guardrails (`refusedBy === "us"`) short-circuits the row
+   * before CalculatePremium, so it carries a message but no vendor verdict on the
+   * condition — counting those would overstate how much of the pack HDFC saw.
+   */
+  const answeredByHdfc = (r: RowResult): boolean =>
+    r.grossPremium !== undefined || (r.vendorMessage !== undefined && r.refusedBy !== "us");
+  const executed = rows.filter(answeredByHdfc).length;
+  const refusedByUs = rows.filter(
+    (r) => !answeredByHdfc(r) && r.vendorMessage !== undefined && r.refusedBy === "us",
+  ).length;
   L.push(
-    `${executed} of ${rows.length} conditions produced a live HDFC response; the rest are BLOCKED or MANUAL rows ` +
-      "that were never sent (each states why).",
+    `${executed} of ${rows.length} conditions produced a live HDFC response` +
+      (refusedByUs > 0
+        ? `; ${refusedByUs} further ${refusedByUs === 1 ? "condition was" : "conditions were"} refused by our ` +
+          "own guardrail before CalculatePremium and so never reached HDFC at all (each such row names the rule " +
+          "and says why enforcing it is ours)"
+        : "") +
+      "; the rest are BLOCKED or MANUAL rows that were never sent (each states why).",
   );
   L.push("");
 
@@ -1630,11 +1915,11 @@ function writeMarkdown(rows: RowResult[], meta: { generatedAt: string }): void {
   if (failures.length === 0) {
     L.push("_None._");
   } else {
-    L.push("| Sheet | # | Term | Condition | What went wrong | HDFC's verbatim message |");
+    L.push("| Sheet | # | Term | Condition | What went wrong | Verbatim refusal message |");
     L.push("| --- | ---: | --- | --- | --- | --- |");
     for (const r of failures) {
       L.push(
-        `| ${SHEET_TITLE[r.sheet]} | ${r.no} | ${cell(r.policyTerm)} | ${cell(r.condition)} | ${cell(r.reason)} | ${r.vendorMessage ? `\`${cell(r.vendorMessage)}\`` : "— (HTTP 200, assertion failed on the response)"} |`,
+        `| ${SHEET_TITLE[r.sheet]} | ${r.no} | ${cell(r.policyTerm)} | ${cell(r.condition)} | ${cell(r.reason)} | ${refusalCell(r, "— (HTTP 200, assertion failed on the response)")} |`,
       );
     }
   }
@@ -1644,11 +1929,11 @@ function writeMarkdown(rows: RowResult[], meta: { generatedAt: string }): void {
   const otherNonPass = rows.filter((r) => r.verdict !== "PASS" && r.verdict !== "FAIL");
   L.push("## Not passed for other reasons");
   L.push("");
-  L.push("| Sheet | # | Term | Condition | Verdict | Reason | HDFC's verbatim message |");
+  L.push("| Sheet | # | Term | Condition | Verdict | Reason | Verbatim refusal message |");
   L.push("| --- | ---: | --- | --- | --- | --- | --- |");
   for (const r of otherNonPass) {
     L.push(
-      `| ${SHEET_TITLE[r.sheet]} | ${r.no} | ${cell(r.policyTerm)} | ${cell(r.condition)} | ${r.verdict} | ${cell(r.reason)} | ${r.vendorMessage ? `\`${cell(r.vendorMessage)}\`` : "—"} |`,
+      `| ${SHEET_TITLE[r.sheet]} | ${r.no} | ${cell(r.policyTerm)} | ${cell(r.condition)} | ${r.verdict} | ${cell(r.reason)} | ${refusalCell(r, "—")} |`,
     );
   }
   L.push("");
@@ -1667,7 +1952,7 @@ function writeMarkdown(rows: RowResult[], meta: { generatedAt: string }): void {
     for (const r of subset) {
       const evidence = [
         cell(r.reason),
-        r.vendorMessage ? `HDFC: \`${cell(r.vendorMessage)}\`` : "",
+        refusalCell(r, ""),
         r.inputDeviation ? `_Input varied: ${cell(r.inputDeviation)}_` : "",
         r.notes ? `_${cell(r.notes)}_` : "",
         r.sharedWithRow ? `_Same payload as ${cell(r.sharedWithRow)}; that response reused._` : "",
@@ -1701,7 +1986,15 @@ function writeMarkdown(rows: RowResult[], meta: { generatedAt: string }): void {
   writeFileSync(OUT_MD, L.join("\n"));
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exitCode = 1;
-});
+// Only run when invoked directly, so the pure assertion combinators above stay
+// unit-testable — importing this module must never fire 205 live UAT calls.
+// pathToFileURL() is Node's own path→URL converter and produces the same
+// three-slash form import.meta.url uses on a Windows drive-letter path; a
+// hand-built "file://" string does not match. Same guard as
+// scripts/import-hdfc-master.ts, for the same reason.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  main().catch((e) => {
+    console.error(e);
+    process.exitCode = 1;
+  });
+}

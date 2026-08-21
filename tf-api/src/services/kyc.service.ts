@@ -8,6 +8,9 @@ import type { CkycRequest, KycResult, OvdRequest, OvdFile, OvdResult } from "@/c
 export async function completeCkyc(providerSlug: string, req: CkycRequest): Promise<KycResult> {
   const provider = getProvider(providerSlug);
   requireOperation(provider, "ckyc");
+  // Corporate requests need the vendor's own corporate KYC kit — never dispatch
+  // an entity-shaped request to a provider that only understands individuals.
+  if (req.customerType === "corporate") requireOperation(provider, "corporateCkyc");
   if (!supportsKyc(provider)) {
     throw new AppError(500, `Provider "${providerSlug}" mis-declares ckyc`, "PROVIDER_MISCONFIG");
   }

@@ -1,8 +1,8 @@
 {
-  "StatusCode": "1",
-  "Error": null,
-  "Req_Policy_Document": {
-    "Policy_Number": "2311202600012345",
-    "Document": "JVBERi0xLjQKJVBPTElDWQ=="
+  "StatusCode": 200,
+  "Message": "Pdf generated",
+  "TransactionID": "QT178730216708876CDC520",
+  "Resp_Policy_Document": {
+    "PDF_BYTES": "JVBERi0xLjQKJVBPTElDWQ=="
   }
 }

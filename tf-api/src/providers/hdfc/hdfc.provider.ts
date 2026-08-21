@@ -40,6 +40,7 @@ import { hdfcCompleteCkyc } from "./ckyc.ts";
 import { FetchTransport, assertHdfcSuccess, type HdfcTransport } from "./http.ts";
 import {
   toHdfcRequest,
+  assertAccessorySiWithinCap,
   buildGetCalculateIDV,
   buildCalculatePremium,
   buildCreateProposal,
@@ -162,6 +163,11 @@ export class HdfcProvider
     // HDFC rejects any deviation from its recommendation. Always price with it.
     const idv = selectIdvForPremium(band, shape.vehicle.idv);
     if (idv) shape.vehicle.idv = idv;
+
+    // The accessory cap is measured against the vehicle SI, which only exists
+    // once HDFC has recommended one — so it is judged here, not in the mapper.
+    // HDFC stated the rule and stopped enforcing it; see assertAccessorySiWithinCap.
+    assertAccessorySiWithinCap(shape);
 
     const premiumBody = await this.call(
       "calculatePremium",

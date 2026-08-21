@@ -303,6 +303,23 @@ describe("itgi ckyc", () => {
     expect(r.success).toBe(true);
   });
 
+  // UAT 21/08/2026: an unauthenticated /kyc/fetch answers 401 with an empty
+  // body — the KYC services take the same partner Basic credentials as download.
+  it("authenticates the kyc call with the partner basic credentials", async () => {
+    const t = stubJson({ status: 200, result: { status: "No Record" } });
+    await itgiKycFetch(
+      cfg,
+      { clientType: "IND", firstName: "T", idType: "PAN", idNumber: "X" } as never,
+      t,
+      "req-1",
+    );
+    expect(t.json).toHaveBeenCalledWith(
+      expect.stringContaining("/kyc/fetch"),
+      expect.anything(),
+      expect.objectContaining({ basicAuth: { user: "u", password: "p" } }),
+    );
+  });
+
   it("surfaces OTPPending so the caller can prompt for the OTP", async () => {
     const t = stubJson({ status: 200, result: { status: "OTPPending", ckycRemarks: "consent sent" } });
     const r = await itgiKycFetch(

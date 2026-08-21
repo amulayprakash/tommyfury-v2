@@ -16,8 +16,10 @@ describe("HDFC capability surface", () => {
   });
 
   it("declares the full lifecycle it can actually serve", () => {
+    // corporateCkyc is HDFC-only: Pehchaan is the one vendor kit here with a
+    // separate corporate KYC endpoint (/partner/corporate/kyc).
     expect([...HDFC_OPERATIONS].sort()).toEqual(
-      ["ckyc", "coi", "issuance", "proposal", "quote", "renewal"],
+      ["ckyc", "coi", "corporateCkyc", "issuance", "proposal", "quote", "renewal"],
     );
   });
 

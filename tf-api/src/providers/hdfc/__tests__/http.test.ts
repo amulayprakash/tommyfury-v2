@@ -28,10 +28,20 @@ describe("normalizeHdfcResponse", () => {
     expect(normalizeHdfcResponse({ StatusCode: "1", Error: null })).toEqual({
       statusCode: "1",
       error: null,
+      message: null,
       warning: null,
       data: { StatusCode: "1", Error: null },
     });
     expect(normalizeHdfcResponse({ statusCode: 200, error: "boom" }).error).toBe("boom");
+  });
+
+  it("reads Message, which HDFC sends but never documented", () => {
+    // Live: CalculatePremium answers "Premium Calculated", CreateProposal
+    // "Proposal Generated". Neither appears in the kit's response sheets.
+    expect(normalizeHdfcResponse({ StatusCode: 200, Message: "Premium Calculated" }).message).toBe(
+      "Premium Calculated",
+    );
+    expect(normalizeHdfcResponse({ msg: "lowercase variant" }).message).toBe("lowercase variant");
   });
 
   it("tolerates a non-object body", () => {
@@ -74,6 +84,13 @@ describe("carriesHdfcEnvelope", () => {
     expect(carriesHdfcEnvelope({ statusCode: 200 })).toBe(true);
     expect(carriesHdfcEnvelope({ Status: "SUCCESS" })).toBe(true);
     expect(carriesHdfcEnvelope({ Error: "boom" })).toBe(true);
+  });
+
+  it("recognises a body carrying only a Message, which assertHdfcSuccess can judge", () => {
+    // HDFC's undocumented diagnostic channel. If this returned false, a non-2xx
+    // response explaining itself only through Message would be discarded.
+    expect(carriesHdfcEnvelope({ Message: "Proposal Generated" })).toBe(true);
+    expect(carriesHdfcEnvelope({ message: "lowercase variant" })).toBe(true);
   });
 
   it("rejects a body with no judgeable field", () => {
@@ -130,5 +147,85 @@ describe("FetchTransport non-2xx handling", () => {
     fetchMock.mockResolvedValue(res(500, { fault: {} }));
     await call().catch(() => undefined);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * HDFC returns StatusCode 0 with "Proposal Generated" on a SUCCESSFUL
+ * CreateProposal — captured live on 21/08/2026, proposal 202608210000216.
+ *
+ * This cost real money to find. `isHdfcSuccess` accepts only 1/200/TRUE/SUCCESS,
+ * so a completed proposal was reported to the tester as
+ * "HDFC createProposal failed: status 0" — a FALSE NEGATIVE on a write. HDFC had
+ * already minted the proposal; every retry minted another (…216, …219), and the
+ * numbers were discarded because the throw happened before the code that reads
+ * them. The reason read "status 0" rather than anything useful because HDFC put
+ * its text in `Message`, which `normalizeHdfcResponse` never looked at.
+ *
+ * Two rules follow, and they are deliberately narrow:
+ *   1. `Message` is read as a diagnostic, after `Error`.
+ *   2. Positive evidence that a write LANDED — a proposal or policy number —
+ *      outranks an unrecognised status code. HDFC does not mint either for a
+ *      rejected request. Nothing else is relaxed: a body with a bad status and
+ *      no such artifact still throws.
+ */
+describe("assertHdfcSuccess — a completed write outranks an unrecognised status", () => {
+  /** Verbatim from the live 21/08/2026 rejection, trimmed to the envelope. */
+  const proposalGenerated = {
+    StatusCode: 0,
+    Message: "Proposal Generated",
+    Policy_Details: {
+      ProposalNumber: "202608210000216",
+      Customer_Id: "100007375165",
+      SumInsured: 478000,
+      NetPremium: 8449,
+      ServiceTax: 1521,
+      TotalPremium: 9970,
+    },
+    TransactionID: "QT178730216708876CDC520",
+  };
+
+  it("accepts StatusCode 0 when HDFC returned a proposal number", () => {
+    expect(() => assertHdfcSuccess(proposalGenerated, "createProposal")).not.toThrow();
+  });
+
+  it("accepts StatusCode 0 when HDFC returned a policy number", () => {
+    expect(() =>
+      assertHdfcSuccess(
+        { StatusCode: 0, Message: "Policy Generated", Policy_Details: { PolicyNumber: "2302201225648600000" } },
+        "submitPaymentDetails",
+      ),
+    ).not.toThrow();
+  });
+
+  it("still throws on a bad status with no completed write to show for it", () => {
+    expect(() =>
+      assertHdfcSuccess({ StatusCode: 0, Message: "Proposal rejected" }, "createProposal"),
+    ).toThrow(/Proposal rejected/);
+  });
+
+  it("reports HDFC's Message when there is no Error field", () => {
+    // The whole point: the old code said "status 0" and threw the reason away.
+    expect(() =>
+      assertHdfcSuccess({ StatusCode: 0, Message: "Break-in ID required" }, "createProposal"),
+    ).toThrow("HDFC createProposal failed: Break-in ID required");
+  });
+
+  it("still prefers Error over Message when HDFC sends both", () => {
+    expect(() =>
+      assertHdfcSuccess(
+        { StatusCode: 0, Error: "BUSINESS EXCEPTION: bad payload", Message: "Proposal rejected" },
+        "createProposal",
+      ),
+    ).toThrow(/BUSINESS EXCEPTION: bad payload/);
+  });
+
+  it("does not treat an empty proposal number as a completed write", () => {
+    expect(() =>
+      assertHdfcSuccess(
+        { StatusCode: 0, Message: "Proposal rejected", Policy_Details: { ProposalNumber: "" } },
+        "createProposal",
+      ),
+    ).toThrow(/Proposal rejected/);
   });
 });

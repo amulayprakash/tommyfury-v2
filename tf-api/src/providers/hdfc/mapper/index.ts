@@ -5,7 +5,12 @@ import { reqPvtCarFor } from "./req-pvtcar.ts";
 import { policyDetailsFor } from "./policy-details.ts";
 import { buildCustomerDetails } from "./customer.ts";
 
-export { toHdfcRequest, resolveBusinessType, applyRolloverDateSanity } from "./canonical.ts";
+export {
+  toHdfcRequest,
+  resolveBusinessType,
+  applyRolloverDateSanity,
+  assertAccessorySiWithinCap,
+} from "./canonical.ts";
 
 /**
  * Step 02 — GetCalculateIDV.

@@ -13,12 +13,14 @@ import type { PolicyType } from "../../vehicle/api/types";
 import type { MmvItem, RtoItem } from "../../vehicle/api/vehicle-api";
 import {
   AccessoryFields,
+  AdvancedGroup,
   CheckField,
   CpaFields,
   Field,
   NcbClaimFields,
   NomineeFields,
   PresetWarning,
+  PreviousInsurerFields,
   PreviousPolicyFields,
   PreviousTpFields,
   SELECT_CLASS,
@@ -368,7 +370,7 @@ export function HdfcVehiclePage() {
 
       <section className="space-y-3 rounded-md border p-3">
         <h2 className="text-sm font-semibold">Business</h2>
-        <div className="grid gap-3 sm:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Business type">
             <select
               value={conditions.businessType}
@@ -410,39 +412,48 @@ export function HdfcVehiclePage() {
               ))}
             </select>
           </Field>
-          <Field label="IDV override (optional)">
-            <Input
-              type="number"
-              inputMode="numeric"
-              value={conditions.idvValue === undefined ? "" : String(conditions.idvValue)}
-              onChange={(e) =>
-                patch({ idvValue: e.target.value === "" ? undefined : Number(e.target.value) })
-              }
-              placeholder="Blank for HDFC's default"
-            />
-          </Field>
         </div>
-        {/* HDFC's Used Car product is a separate flag, not a business type — a
-            rollover on a just-bought second-hand car is still a rollover. */}
-        <CheckField
-          label="Used-vehicle purchase (HDFC's Used Car product)"
-          checked={conditions.isUsedVehiclePurchase}
-          onChange={(isUsedVehiclePurchase) => patch({ isUsedVehiclePurchase })}
-        />
         <p className="text-xs text-muted-foreground">
           On new business HDFC derives the statutory 3-year third-party leg itself — a 1-year
           own-damage tenure is what &ldquo;1+3&rdquo; means here.
         </p>
       </section>
 
+      {/* Everything a policy number actually needs, in the order a tester fills
+          it in. The collapsed groups below carry the certification-only inputs —
+          see AdvancedGroup in components/condition-fields.tsx. */}
       <CpaFields conditions={conditions} onChange={patch} />
       <PreviousPolicyFields conditions={conditions} onChange={patch} />
+      <NcbClaimFields conditions={conditions} onChange={patch} />
+      <NomineeFields proposer={proposer} onChange={patchProposer} />
+
+      <AdvancedGroup title="Vehicle purchase & IDV" hint="optional — HDFC defaults apply">
+        <Field label="IDV override">
+          <Input
+            type="number"
+            inputMode="numeric"
+            value={conditions.idvValue === undefined ? "" : String(conditions.idvValue)}
+            onChange={(e) =>
+              patch({ idvValue: e.target.value === "" ? undefined : Number(e.target.value) })
+            }
+            placeholder="Blank for HDFC's default"
+          />
+        </Field>
+        {/* HDFC's Used Car product is a separate flag, not a business type — a
+            rollover on a just-bought second-hand car is still a rollover. HDFC
+            refuses the product for our UAT channel (blocker 3), so it cannot
+            bind today. */}
+        <CheckField
+          label="Used-vehicle purchase (HDFC's Used Car product)"
+          checked={conditions.isUsedVehiclePurchase}
+          onChange={(isUsedVehiclePurchase) => patch({ isUsedVehiclePurchase })}
+        />
+      </AdvancedGroup>
+      <PreviousInsurerFields conditions={conditions} onChange={patch} />
       {conditions.planType === "standAloneOD" ? (
         <PreviousTpFields conditions={conditions} onChange={patch} />
       ) : null}
-      <NcbClaimFields conditions={conditions} onChange={patch} />
       <AccessoryFields conditions={conditions} onChange={patch} />
-      <NomineeFields proposer={proposer} onChange={patchProposer} />
 
       <Button size="lg" className="w-full" onClick={onContinue} disabled={!canContinue}>
         Continue <ArrowRight />

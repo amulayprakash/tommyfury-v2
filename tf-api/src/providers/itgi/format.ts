@@ -41,6 +41,16 @@ export function makeUniqueQuoteId(requestId: string): string {
   return (alnum + Date.now().toString()).slice(0, 20).padEnd(12, "0");
 }
 
+/**
+ * `<policyHeader><messageId>` is ITGI's per-call correlation id — the samples
+ * send a short number. Derived from our requestId so their logs line up with
+ * ours; digits only, because the vendor's samples never use anything else.
+ */
+export function makeMessageId(requestId: string): string {
+  const digits = requestId.replace(/\D/g, "");
+  return digits.length >= 4 ? digits.slice(0, 12) : `${digits}0000`.slice(0, 4);
+}
+
 /** Canonical vehicle category → ITGI contract type. */
 export function itgiContractType(category: VehicleCategory): "PCP" | "TWP" {
   return category === "twoWheeler" ? "TWP" : "PCP";

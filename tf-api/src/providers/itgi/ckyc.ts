@@ -1,5 +1,5 @@
 import type { ItgiConfig } from "./config.ts";
-import { ITGI_ENDPOINTS } from "./config.ts";
+import { ITGI_ENDPOINTS, itgiBasicAuth } from "./config.ts";
 import type { ItgiTransport } from "./http.ts";
 
 /**
@@ -73,7 +73,10 @@ export async function itgiKycFetch(
   transport: ItgiTransport,
   requestId: string,
 ): Promise<ItgiKycResult> {
-  const raw = await transport.json(ITGI_ENDPOINTS.kycFetch(cfg), req, { requestId });
+  const raw = await transport.json(ITGI_ENDPOINTS.kycFetch(cfg), req, {
+    requestId,
+    basicAuth: itgiBasicAuth(cfg),
+  });
   return toResult(readResult(raw));
 }
 
@@ -103,7 +106,10 @@ export async function itgiKycValidateOtp(
     cersaiDownloadOTP: resend ? "" : (req.otp ?? ""),
     resendOTPFlag: resend ? "Y" : "N",
   };
-  const raw = await transport.json(ITGI_ENDPOINTS.kycValidateOtp(cfg), body, { requestId });
+  const raw = await transport.json(ITGI_ENDPOINTS.kycValidateOtp(cfg), body, {
+    requestId,
+    basicAuth: itgiBasicAuth(cfg),
+  });
   const result = readResult(raw);
   const status = String(result.status ?? "").trim();
   return {
@@ -160,6 +166,9 @@ export async function itgiKycCreate(
   transport: ItgiTransport,
   requestId: string,
 ): Promise<ItgiKycResult> {
-  const raw = await transport.json(ITGI_ENDPOINTS.kycCreate(cfg), req, { requestId });
+  const raw = await transport.json(ITGI_ENDPOINTS.kycCreate(cfg), req, {
+    requestId,
+    basicAuth: itgiBasicAuth(cfg),
+  });
   return toResult(readResult(raw));
 }
