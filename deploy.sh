@@ -35,11 +35,17 @@ step "Preflight"
 branch="$(git rev-parse --abbrev-ref HEAD)"
 [ "$branch" = "main" ] || fail "on branch '$branch', expected 'main'"
 
-# A dirty tree means someone hand-edited the box. Deploying over it would either
-# lose their change or conflict halfway through, leaving a half-deployed server.
-if [ -n "$(git status --porcelain)" ]; then
-  git status
-  fail "working tree is dirty — commit, stash or revert on the server first"
+# A dirty tree means someone hand-edited TRACKED files on the box. Deploying over
+# that would either lose their change or conflict halfway through, leaving a
+# half-deployed server.
+#
+# Untracked files are deliberately NOT counted. A server legitimately accumulates
+# them — tf-web/.env.production (which this script requires below), database
+# dumps, logs — and an earlier version of this check counted them, so creating the
+# very env file the script demands made the script refuse to run.
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+  git status --untracked-files=no
+  fail "tracked files are modified — commit, stash or revert on the server first"
 fi
 
 [ -f tf-api/.env ]            || fail "tf-api/.env is missing (see docs/deployment.md)"

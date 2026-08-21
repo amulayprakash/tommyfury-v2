@@ -11,6 +11,11 @@ build/
 .env
 .env.local
 .env.*.local
+# Per-environment files are written ON the machine that runs there and must never
+# be committed. tf-web/.env.production in particular is required by deploy.sh, so
+# leaving it untracked-but-visible made `git status` dirty and blocked every deploy.
+.env.production
+.env.development
 
 # ---- Prisma generated client (regenerated via prisma generate) ----
 **/prisma/generated/

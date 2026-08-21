@@ -93,7 +93,26 @@ VITE_VENDOR_API_URL=http://103.127.167.212/api/v1
 `.env`. Vite bakes these values into the bundle, so **a change here needs a
 rebuild** — `./deploy.sh` — not a restart.
 
-### 3. First run — get tf-api up before touching Apache
+### 3. Make `deploy.sh` executable — without dirtying the tree
+
+The file was first committed from Windows, where the filesystem has no exec bit,
+so git recorded mode `644`. Running `chmod +x` on the server then shows up as a
+tracked modification (`M deploy.sh`) and the deploy's own preflight refuses.
+
+Tell this checkout to ignore permission bits, once:
+
+```bash
+cd /var/www/Yash/tommyfury-v2
+git config core.fileMode false
+chmod +x deploy.sh
+git status --short          # must be empty
+```
+
+`bash deploy.sh` also works and needs neither. The permanent fix is to record
+mode `755` in the repo — from any checkout: `git update-index --chmod=+x deploy.sh`,
+then commit.
+
+### 4. First run — get tf-api up before touching Apache
 
 Apache's proxy is useless until something is listening on 4000, and the steps
 below ask you to curl through it. So run the deploy once now:
@@ -123,7 +142,7 @@ pm2 startup    # prints a sudo command; run what it prints
 pm2 save
 ```
 
-### 4. Apache
+### 5. Apache
 
 Enable the proxy modules once:
 
@@ -170,7 +189,7 @@ sudo apache2ctl configtest    # must print "Syntax OK"
 sudo systemctl reload apache2
 ```
 
-### 5. Close port 4000
+### 6. Close port 4000
 
 Only after the proxy is verified working:
 
@@ -182,7 +201,7 @@ sudo ufw deny 4000
 `tf-api` binds all interfaces, so until this is done the API is directly
 reachable on `:4000`, bypassing the proxy.
 
-### 6. Database baseline
+### 7. Database baseline
 
 Take a dump before the first `--with-data` run. It is the only undo for the
 truncate.
@@ -196,10 +215,12 @@ Root login is denied on this box for both `-p` and `sudo`; `debian.cnf` is the
 reliable admin path. Table names are snake_case (`mmv_master`, `rto_master`,
 `provider_mmv_codes`), not the Prisma model names.
 
-### 7. Disk
+### 8. Disk
 
-Root was **90% full** on 19/08/2026 (80 G free of 823 G). `npm ci` across two
-projects plus a ~25 MB tracked snapshot needs headroom.
+Root was 90% full on 19/08/2026 (80 G free of 823 G) and **94% full on
+21/08/2026 (49 G free of 823 G)** — it lost 31 G in two days. `npm ci` across two
+projects plus a ~25 MB tracked snapshot fits comfortably in 49 G, so this does
+not block a deploy, but the trend does need looking at before it does.
 
 ```bash
 df -h /
@@ -266,7 +287,7 @@ SHA and rename, or temporarily run the four inner commands by hand:
 `pm2 restart tf-api`.
 
 Migrations do not roll back automatically. If the bad deploy included one,
-restore from the dump in step 6.
+restore from the dump in step 7.
 
 ### Restoring the database — read this before you run it
 
@@ -275,7 +296,7 @@ sudo mysql --defaults-file=/etc/mysql/debian.cnf tf_api_dev < ~/tf_api_dev-<date
 ```
 
 > ⚠️ **This is a full-database point-in-time restore, not a master-data restore.**
-> The baseline dump in step 6 covers *every* table, so replaying it also reverts
+> The baseline dump in step 7 covers *every* table, so replaying it also reverts
 > `quotes`, `health_quotes` and anything else written since the dump was taken.
 > Every quote and proposal created in that window is lost.
 
