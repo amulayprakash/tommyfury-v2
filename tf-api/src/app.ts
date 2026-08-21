@@ -30,6 +30,12 @@ registerHdfcProvider();
 export function createApp(): express.Application {
   const app = express();
 
+  // Apache reverse-proxies /api/v1 to this process (see docs/deployment.md), so
+  // req.ip must come from X-Forwarded-For. `1` trusts exactly that one hop:
+  // without it express-rate-limit keys every user in the world on 127.0.0.1 and
+  // pino-http logs the proxy as the client on every request.
+  app.set("trust proxy", 1);
+
   // Security headers
   app.use(helmet());
 

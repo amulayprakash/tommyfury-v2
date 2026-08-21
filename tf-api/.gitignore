@@ -8,8 +8,10 @@ dist/
 *.tsbuildinfo
 prisma/generated/
 coverage/
-# Portable data snapshot — distributed to the team out-of-band, not via git.
-prisma/data-snapshot.json
+# NOTE: prisma/data-snapshot.json IS tracked. The master importers hardcode
+# absolute Windows paths and cannot run on the server, so the snapshot is the
+# only way master data reaches a deployment. Refresh it with `npm run db:export`
+# on the machine that holds the source spreadsheets.
 # Regenerable script artifacts (import sidecars, live-matrix outputs/logs).
 scripts/_*
 # ...but the _* glob above also matches scripts/__tests__ (starts with "_") — keep the
